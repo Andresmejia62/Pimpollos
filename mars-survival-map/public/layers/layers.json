@@ -55,15 +55,87 @@
         "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_009650_1755_PSP_009716_1755/DTEEC_009650_1755_009716_1755_U01.tif",
         "stac": "https://stac.astrogeology.usgs.gov/api/collections/mro_hirise_socet_dtms/items/DTEEC_009650_1755_009716_1755_U01",
         "source": null
+      },
+      {
+        "file": "themis_ti.tif",
+        "collection": null,
+        "item": null,
+        "asset": null,
+        "href": "https://asc-astropedia.s3.us-west-2.amazonaws.com/Mars/Odyssey/THEMIS-Global-Thermal-Inertia-Mosaic/Quantitative-32-Bit/THEMIS_TI_Mosaic_Quant_30S120E_100mpp.cub",
+        "stac": null,
+        "source": "https://astrogeology.usgs.gov/search/map/themis_thermal_inertia_mosaic_quantitative_30s120e_100mpp"
+      },
+      {
+        "file": "crism/FRT000058A3_su.tif",
+        "collection": null,
+        "item": null,
+        "asset": null,
+        "href": "https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-mptargeted-v1/mrocr_4001/mtrdr/2007/2007_112/frt000058a3/frt000058a3_07_su165j_mtr3.lbl",
+        "stac": null,
+        "source": null
+      },
+      {
+        "file": "crism/FRT0000B6F1_su.tif",
+        "collection": null,
+        "item": null,
+        "asset": null,
+        "href": "https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-mptargeted-v1/mrocr_4001/mtrdr/2008/2008_191/frt0000b6f1/frt0000b6f1_07_su165j_mtr3.lbl",
+        "stac": null,
+        "source": null
+      },
+      {
+        "file": "crism/HRL0000BABA_su.tif",
+        "collection": null,
+        "item": null,
+        "asset": null,
+        "href": "https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-mptargeted-v1/mrocr_4001/mtrdr/2008/2008_202/hrl0000baba/hrl0000baba_07_su182j_mtr3.lbl",
+        "stac": null,
+        "source": null
+      },
+      {
+        "file": "crism/FRT0000C518_su.tif",
+        "collection": null,
+        "item": null,
+        "asset": null,
+        "href": "https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-mptargeted-v1/mrocr_4001/mtrdr/2008/2008_246/frt0000c518/frt0000c518_07_su165j_mtr3.lbl",
+        "stac": null,
+        "source": null
+      },
+      {
+        "file": "crism/FRT0001BBA1_su.tif",
+        "collection": null,
+        "item": null,
+        "asset": null,
+        "href": "https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-mptargeted-v1/mrocr_4001/mtrdr/2010/2010_310/frt0001bba1/frt0001bba1_07_su165j_mtr3.lbl",
+        "stac": null,
+        "source": null
+      },
+      {
+        "file": "crism/FRT0001CA91_su.tif",
+        "collection": null,
+        "item": null,
+        "asset": null,
+        "href": "https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-mptargeted-v1/mrocr_4001/mtrdr/2010/2010_365/frt0001ca91/frt0001ca91_07_su165j_mtr3.lbl",
+        "stac": null,
+        "source": null
+      },
+      {
+        "file": "crism/FRT00021C92_su.tif",
+        "collection": null,
+        "item": null,
+        "asset": null,
+        "href": "https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-mptargeted-v1/mrocr_4001/mtrdr/2011/2011_342/frt00021c92/frt00021c92_07_su164j_mtr3.lbl",
+        "stac": null,
+        "source": null
       }
     ],
     "accessed_utc": "2026-11-14T17:16:06Z",
     "methods": {
-      "spectral_method": "Estratigrafia de la traza de Curiosity: arcillas entre -4165.0 y -4078.0 m, sulfatos por encima; boxwork = crestas locales cerca de los sols 4540-4990; dunas = zonas mas oscuras de la ortoimagen CTX. No es CRISM.",
-      "thermal_inertia_method": "Aproximada desde el albedo CTX (230-520 TIU). Pendiente: mosaico THEMIS."
+      "spectral_method": "CRISM MTRDR (MRO), parametros de Viviano-Beck et al. 2014: phyllo: D2300 > 0.002 y BD2290 > 0 (filosilicatos Fe/Mg); sulfate: SINDEX2 > 0.008 y (BD1900_2 > 0.002 o BD2100_2 > 0.002) (sulfatos poli/monohidratados); mafic: OLINDEX3 > percentil 90 del recorte y albedo bajo (arena basaltica). Mediana por pixel de los productos que lo cubren. Boxwork = crestas locales cerca de la traza 2025 (morfologia, no espectral); dunas = arena mafica CRISM o zonas mas oscuras de CTX.",
+      "thermal_inertia_method": "THEMIS cuantitativa (mosaico global USGS/ASU 30S120E, 100 m), remuestreada a 6 m y suavizada. Exactitud absoluta ~20%."
     }
   },
-  "generated_unix": 1794677349,
+  "generated_unix": 1794680545,
   "region": "region.json",
   "rules": "rules.json",
   "image_orientation": "fila 0 = norte, columna 0 = oeste; ver region.json -> world",
@@ -168,7 +240,7 @@
           "color": "#5C6BC0"
         }
       },
-      "description": "Clases minerales (indice = valor del pixel). Estratigrafia de la traza de Curiosity: arcillas entre -4165.0 y -4078.0 m, sulfatos por encima; boxwork = crestas locales cerca de los sols 4540-4990; dunas = zonas mas oscuras de la ortoimagen CTX. No es CRISM."
+      "description": "Clases minerales (indice = valor del pixel). CRISM MTRDR (MRO), parametros de Viviano-Beck et al. 2014: phyllo: D2300 > 0.002 y BD2290 > 0 (filosilicatos Fe/Mg); sulfate: SINDEX2 > 0.008 y (BD1900_2 > 0.002 o BD2100_2 > 0.002) (sulfatos poli/monohidratados); mafic: OLINDEX3 > percentil 90 del recorte y albedo bajo (arena basaltica). Mediana por pixel de los productos que lo cubren. Boxwork = crestas locales cerca de la traza 2025 (morfologia, no espectral); dunas = arena mafica CRISM o zonas mas oscuras de CTX."
     },
     "cost": {
       "file": "cost.png",
@@ -181,6 +253,37 @@
       "file": "optical.png",
       "kind": "rgb",
       "description": "Ortoimagen CTX (MRO) reproyectada al recorte, coloreada en tonos marcianos y combinada con un sombreado suave del DEM. Resolucion nativa 20 m: para detalle cercano M1 usa textura de suelo."
+    },
+    "binary": {
+      "dem": {
+        "file": "dem.bin",
+        "dtype": "uint16 little-endian",
+        "shape": [
+          1024,
+          1024
+        ],
+        "decode": "elevacion_m = y_ref_m + v/65535 * (dem.decode.max - y_ref_m)"
+      },
+      "grid": {
+        "file": "grid.bin",
+        "dtype": "uint8",
+        "layout": "planar [capa][fila][col]",
+        "shape": [
+          6,
+          1024,
+          1024
+        ],
+        "order": [
+          "slope",
+          "radiation",
+          "thermal",
+          "thermal_night",
+          "spectral",
+          "cost"
+        ],
+        "decode": "slope/radiation/thermal/thermal_night: min + v/255*(max-min) (ver cada capa); spectral: clase; cost: 0 = intransitable, costo = v/25"
+      },
+      "_doc": "Para el motor web: valores exactos sin pasar por la decodificacion de PNG del navegador."
     }
   },
   "overlays": {
@@ -190,5 +293,6 @@
       "caution": "#FFC23D",
       "danger": "#FF4D4D"
     }
-  }
+  },
+  "traverse": "traverse.json"
 }

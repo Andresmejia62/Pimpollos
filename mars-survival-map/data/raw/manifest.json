@@ -95,6 +95,192 @@
       ],
       "valid_fraction": 0.818,
       "bytes": 3927447
+    },
+    {
+      "file": "themis_ti.tif",
+      "href": "https://asc-astropedia.s3.us-west-2.amazonaws.com/Mars/Odyssey/THEMIS-Global-Thermal-Inertia-Mosaic/Quantitative-32-Bit/THEMIS_TI_Mosaic_Quant_30S120E_100mpp.cub",
+      "source": "https://astrogeology.usgs.gov/search/map/themis_thermal_inertia_mosaic_quantitative_30s120e_100mpp",
+      "description": "Inercia termica cuantitativa THEMIS (J m-2 K-1 s-1/2), mosaico global USGS/ASU.",
+      "native_res_m": 100.0,
+      "saved_res_m": 100.0,
+      "shape": [
+        67,
+        68
+      ],
+      "valid_fraction": 1.0,
+      "bytes": 17048
+    },
+    {
+      "file": "crism/FRT000058A3_su.tif",
+      "pdsid": "frt000058a3_07_if165j_mtr3",
+      "href": "https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-mptargeted-v1/mrocr_4001/mtrdr/2007/2007_112/frt000058a3/frt000058a3_07_su165j_mtr3.lbl",
+      "ode_query": "https://oderest.rsl.wustl.edu/live2/?query=product&results=fp&target=mars&ihid=MRO&iid=CRISM&pt=MTRDR&westernlon=137.343&easternlon=137.447&minlat=-4.8218&maxlat=-4.7182&output=JSON",
+      "bands": [
+        "D2300",
+        "BD2290",
+        "BD1900_2",
+        "SINDEX2",
+        "BD2100_2",
+        "MIN2295_2480",
+        "OLINDEX3",
+        "LCPINDEX2"
+      ],
+      "native_res_m": 18.0,
+      "saved_res_m": 18.0,
+      "shape": [
+        375,
+        376
+      ],
+      "valid_fraction": 0.903,
+      "bytes": 2688489
+    },
+    {
+      "file": "crism/FRT0000B6F1_su.tif",
+      "pdsid": "frt0000b6f1_07_if165j_mtr3",
+      "href": "https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-mptargeted-v1/mrocr_4001/mtrdr/2008/2008_191/frt0000b6f1/frt0000b6f1_07_su165j_mtr3.lbl",
+      "ode_query": "https://oderest.rsl.wustl.edu/live2/?query=product&results=fp&target=mars&ihid=MRO&iid=CRISM&pt=MTRDR&westernlon=137.343&easternlon=137.447&minlat=-4.8218&maxlat=-4.7182&output=JSON",
+      "bands": [
+        "D2300",
+        "BD2290",
+        "BD1900_2",
+        "SINDEX2",
+        "BD2100_2",
+        "MIN2295_2480",
+        "OLINDEX3",
+        "LCPINDEX2"
+      ],
+      "native_res_m": 18.0,
+      "saved_res_m": 18.0,
+      "shape": [
+        375,
+        376
+      ],
+      "valid_fraction": 1.0,
+      "bytes": 2695881
+    },
+    {
+      "file": "crism/HRL0000BABA_su.tif",
+      "pdsid": "hrl0000baba_07_if182j_mtr3",
+      "href": "https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-mptargeted-v1/mrocr_4001/mtrdr/2008/2008_202/hrl0000baba/hrl0000baba_07_su182j_mtr3.lbl",
+      "ode_query": "https://oderest.rsl.wustl.edu/live2/?query=product&results=fp&target=mars&ihid=MRO&iid=CRISM&pt=MTRDR&westernlon=137.343&easternlon=137.447&minlat=-4.8218&maxlat=-4.7182&output=JSON",
+      "bands": [
+        "D2300",
+        "BD2290",
+        "BD1900_2",
+        "SINDEX2",
+        "BD2100_2",
+        "MIN2295_2480",
+        "OLINDEX3",
+        "LCPINDEX2"
+      ],
+      "native_res_m": 36.0,
+      "saved_res_m": 36.0,
+      "shape": [
+        187,
+        188
+      ],
+      "valid_fraction": 0.998,
+      "bytes": 846893
+    },
+    {
+      "file": "crism/FRT0000C518_su.tif",
+      "pdsid": "frt0000c518_07_if165j_mtr3",
+      "href": "https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-mptargeted-v1/mrocr_4001/mtrdr/2008/2008_246/frt0000c518/frt0000c518_07_su165j_mtr3.lbl",
+      "ode_query": "https://oderest.rsl.wustl.edu/live2/?query=product&results=fp&target=mars&ihid=MRO&iid=CRISM&pt=MTRDR&westernlon=137.343&easternlon=137.447&minlat=-4.8218&maxlat=-4.7182&output=JSON",
+      "bands": [
+        "D2300",
+        "BD2290",
+        "BD1900_2",
+        "SINDEX2",
+        "BD2100_2",
+        "MIN2295_2480",
+        "OLINDEX3",
+        "LCPINDEX2"
+      ],
+      "native_res_m": 18.0,
+      "saved_res_m": 18.0,
+      "shape": [
+        140,
+        103
+      ],
+      "valid_fraction": 0.176,
+      "bytes": 33987
+    },
+    {
+      "file": "crism/FRT0001BBA1_su.tif",
+      "pdsid": "frt0001bba1_07_if165j_mtr3",
+      "href": "https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-mptargeted-v1/mrocr_4001/mtrdr/2010/2010_310/frt0001bba1/frt0001bba1_07_su165j_mtr3.lbl",
+      "ode_query": "https://oderest.rsl.wustl.edu/live2/?query=product&results=fp&target=mars&ihid=MRO&iid=CRISM&pt=MTRDR&westernlon=137.343&easternlon=137.447&minlat=-4.8218&maxlat=-4.7182&output=JSON",
+      "bands": [
+        "D2300",
+        "BD2290",
+        "BD1900_2",
+        "SINDEX2",
+        "BD2100_2",
+        "MIN2295_2480",
+        "OLINDEX3",
+        "LCPINDEX2"
+      ],
+      "native_res_m": 18.0,
+      "saved_res_m": 18.0,
+      "shape": [
+        363,
+        177
+      ],
+      "valid_fraction": 0.527,
+      "bytes": 556857
+    },
+    {
+      "file": "crism/FRT0001CA91_su.tif",
+      "pdsid": "frt0001ca91_07_if165j_mtr3",
+      "href": "https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-mptargeted-v1/mrocr_4001/mtrdr/2010/2010_365/frt0001ca91/frt0001ca91_07_su165j_mtr3.lbl",
+      "ode_query": "https://oderest.rsl.wustl.edu/live2/?query=product&results=fp&target=mars&ihid=MRO&iid=CRISM&pt=MTRDR&westernlon=137.343&easternlon=137.447&minlat=-4.8218&maxlat=-4.7182&output=JSON",
+      "bands": [
+        "D2300",
+        "BD2290",
+        "BD1900_2",
+        "SINDEX2",
+        "BD2100_2",
+        "MIN2295_2480",
+        "OLINDEX3",
+        "LCPINDEX2"
+      ],
+      "native_res_m": 18.0,
+      "saved_res_m": 18.0,
+      "shape": [
+        375,
+        205
+      ],
+      "valid_fraction": 0.451,
+      "bytes": 532287
+    },
+    {
+      "file": "crism/FRT00021C92_su.tif",
+      "pdsid": "frt00021c92_07_if164j_mtr3",
+      "href": "https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-mptargeted-v1/mrocr_4001/mtrdr/2011/2011_342/frt00021c92/frt00021c92_07_su164j_mtr3.lbl",
+      "ode_query": "https://oderest.rsl.wustl.edu/live2/?query=product&results=fp&target=mars&ihid=MRO&iid=CRISM&pt=MTRDR&westernlon=137.343&easternlon=137.447&minlat=-4.8218&maxlat=-4.7182&output=JSON",
+      "bands": [
+        "D2300",
+        "BD2290",
+        "BD1900_2",
+        "SINDEX2",
+        "BD2100_2",
+        "MIN2295_2480",
+        "OLINDEX3",
+        "LCPINDEX2"
+      ],
+      "native_res_m": 18.0,
+      "saved_res_m": 18.0,
+      "shape": [
+        222,
+        376
+      ],
+      "valid_fraction": 0.896,
+      "bytes": 1484445
     }
-  ]
+  ],
+  "accessed_utc_by_group": {
+    "themis": "2026-11-14T18:15:29Z",
+    "crism": "2026-11-14T18:15:29Z"
+  }
 }

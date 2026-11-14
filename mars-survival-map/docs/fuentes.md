@@ -22,16 +22,19 @@ Catálogo STAC: https://stac.astrogeology.usgs.gov/api · Bucket: `astrogeo-ard.
 - **Pendiente:** el 95 % de las paradas de Curiosity están en pendientes de 21° o menos según el DEM. Eso respalda el umbral de bloqueo de 25°.
 - **Objetivos:** cada uno está sobre una parada real del rover (`msl_sol` en `data/objectives.json`).
 
-## Aproximaciones (pendientes de reemplazar)
-| Capa | Hoy | Producto real pendiente |
-|---|---|---|
-| Espectral | Estratigrafía confirmada por Curiosity: arcillas entre −4165 y −4078 m (Glen Torridon), sulfatos por encima; boxwork = crestas cerca de los sols 4540–4990; dunas = zonas oscuras de CTX | Índices CRISM (D2300/BD2290 filosilicatos, SINDEX2/BD1900 sulfatos), PDS Geosciences Node (ODE). Pasar con `--spectral` |
-| Inercia térmica | Aproximada desde el albedo de CTX (230–520 TIU) | Mosaico cuantitativo de THEMIS (ASU/USGS). Pasar con `--ti` |
-| Óptico | CTX a 20 m | Ortoimágenes HiRISE (25 cm) para la textura de detalle de M1 |
+## Minerales (CRISM) e inercia térmica (THEMIS)
+| Capa | Producto | Fuente | Método |
+|---|---|---|---|
+| Espectral | 7 productos CRISM MTRDR con parámetros espectrales (FRT000058A3, FRT0000B6F1, HRL0000BABA, FRT00021C92, FRT0001BBA1, FRT0001CA91, FRT0000C518). Se leyeron solo 8 de sus 60 bandas, en la ventana del recorte (~9 MB) | PDS Geosciences Node (API ODE) | Mediana por píxel de los productos que lo cubren. Arcillas: D2300 > 0,002 y BD2290 > 0. Sulfatos: SINDEX2 > 0,008 y BD1900_2 o BD2100_2 > 0,002. Arena basáltica: OLINDEX3 alto y albedo bajo. Los umbrales están por debajo de los de Viviano-Beck et al. (2014) porque el polvo de Gale atenúa la señal |
+| Inercia térmica | THEMIS, mosaico global cuantitativo 30S120E (100 m) | USGS Astropedia (S3 `asc-astropedia`) | Remuestreada a 6 m y suavizada. Exactitud absoluta ~20 %. En el recorte: 301–528 TIU (mediana 403), coherente con Fergason et al. (2012) |
+
+**Validación independiente:** el 96 % de las arcillas que detecta CRISM caen en la banda de altura de Glen Torridon, donde Curiosity confirmó arcillas, y el 97 % de los sulfatos caen por encima de −4078 m, en la unidad de sulfatos que recorrió el rover. El boxwork no tiene una firma espectral propia: se marca por su forma (crestas cerca de la traza de 2025).
+
+**Pendiente:** la textura de detalle. CTX tiene 20 m; las ortoimágenes HiRISE (25 cm) servirían para que M1 haga el suelo cercano.
 
 ## Reproducir
 ```bash
 python3 -m pip install rasterio
-python3 data/scripts/fetch_nasa.py      # descarga solo el recorte (~23 MB)
+python3 data/scripts/fetch_nasa.py      # descarga solo el recorte: DTM, CTX, THEMIS y CRISM (~32 MB)
 python3 data/scripts/build_layers.py    # genera public/layers/ y data/processed/report.json
 ```

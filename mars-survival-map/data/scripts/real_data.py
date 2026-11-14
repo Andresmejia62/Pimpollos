@@ -108,6 +108,92 @@ def traverse_points(raw: Path, region):
     return pts
 
 
+# ---------------------------------------------------------------------------
+# CRISM (MTRDR, parametros de Viviano-Beck et al. 2014)
+# ---------------------------------------------------------------------------
+# Umbrales calibrados en Gale (superficie con polvo: senales mas debiles que en la literatura,
+# Viviano-Beck et al. 2014 usan ~0.010). Se validan contra la estratigrafia de Curiosity:
+# ~96% de las arcillas caen en la banda de Glen Torridon y ~97% de los sulfatos sobre -4078 m.
+CRISM_RULES = {
+    "phyllo": "D2300 > 0.002 y BD2290 > 0 (filosilicatos Fe/Mg)",
+    "sulfate": "SINDEX2 > 0.008 y (BD1900_2 > 0.002 o BD2100_2 > 0.002) (sulfatos poli/monohidratados)",
+    "mafic": "OLINDEX3 > percentil 90 del recorte y albedo bajo (arena basaltica)",
+}
+CRISM_PARAMS_USED = ["D2300", "BD2290", "BD1900_2", "SINDEX2", "BD2100_2", "OLINDEX3"]
+
+
+def _crism_params(path: Path):
+    """Parametros suavizados 3x3 en la grilla nativa (ignorando nodata)."""
+    import rasterio
+    with rasterio.open(path) as src:
+        a = src.read().astype(np.float32)
+        names = list(src.descriptions)
+        nod = src.nodata
+    valid = a[0] != nod
+    w = smooth(valid.astype(np.float32), 1, passes=1)
+    p = {}
+    for i, k in enumerate(names):
+        b = np.where(valid, a[i], 0.0)
+        p[k] = np.where(w > 0, smooth(b, 1, passes=1) / np.maximum(w, 1e-6), 0.0)
+    return valid, p
+
+
+def _to_grid_array(arr: np.ndarray, src_path: Path, region, nodata=-1.0) -> np.ndarray:
+    import rasterio
+    from rasterio.transform import from_origin
+    from rasterio.warp import Resampling, reproject
+    dst_crs = (f"+proj=eqc +lat_ts={region.lat0} +lat_0={region.lat0} +lon_0={region.lon0} "
+               f"+x_0=0 +y_0=0 +R={region.R} +units=m +no_defs")
+    h = region.size / 2
+    dst = np.full((region.n, region.n), nodata, dtype=np.float32)
+    with rasterio.open(src_path) as src:
+        reproject(source=arr.astype(np.float32), destination=dst, src_transform=src.transform, src_crs=src.crs,
+                  src_nodata=nodata, dst_nodata=nodata,
+                  dst_transform=from_origin(-h, h, region.px, region.px), dst_crs=dst_crs,
+                  resampling=Resampling.bilinear)
+    return dst
+
+
+def crism_classes(region, raw: Path, log: dict, albedo=None):
+    """Clases 1 (arcillas), 2 (sulfatos), 4 (arena mafica) desde la mediana de los
+    productos CRISM que cubren cada pixel. Devuelve (None, None) si no hay datos."""
+    files = sorted((raw / "crism").glob("*_su.tif"))
+    if not files:
+        return None, None
+    n = region.n
+    stacks = {k: [] for k in CRISM_PARAMS_USED}
+    covers, per_product = [], []
+    for f in files:
+        valid, p = _crism_params(f)
+        inside = _to_grid_array(np.where(valid, 1.0, -1.0), f, region) > 0.5
+        covers.append(inside)
+        per_product.append({"file": f.name, "coverage": round(float(inside.mean()), 3)})
+        for k in CRISM_PARAMS_USED:
+            g = _to_grid_array(np.where(valid, p[k], -1e3), f, region, nodata=-1e3)
+            stacks[k].append(np.where(inside & (g > -999), g, np.nan))
+    covered = np.any(covers, axis=0)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        M = {k: np.nanmedian(np.stack(v), axis=0) for k, v in stacks.items()}
+    M = {k: np.nan_to_num(v, nan=-1.0) for k, v in M.items()}
+    phyllo = (M["D2300"] > 0.002) & (M["BD2290"] > 0)
+    sulfate = (M["SINDEX2"] > 0.008) & ((M["BD1900_2"] > 0.002) | (M["BD2100_2"] > 0.002)) & ~phyllo
+    ol90 = np.percentile(M["OLINDEX3"][covered], 90) if covered.any() else 1e9
+    mafic = (M["OLINDEX3"] > ol90) & ~phyllo & ~sulfate
+    if albedo is not None:
+        mafic &= albedo < np.percentile(albedo, 35)
+    classes = np.zeros((n, n), np.uint8)
+    classes[mafic] = 4
+    classes[sulfate] = 2
+    classes[phyllo] = 1
+    log["crism"] = {"products": per_product, "rules": CRISM_RULES, "combine": "mediana por pixel de los productos que lo cubren",
+                    "coverage_pct": round(100 * float(covered.mean()), 1),
+                    "class_pct": {k: round(100 * float((classes == v).mean()), 2)
+                                  for k, v in (("arcillas", 1), ("sulfatos", 2), ("mafico", 4))}}
+    return classes, covered
+
+
 def paint_objectives(classes: np.ndarray, objectives, px: float) -> None:
     """El objetivo cientifico esta sobre su mineral: pinta su clase en el radio del objetivo."""
     n = classes.shape[0]
@@ -139,30 +225,64 @@ def build_inputs(region, raw: Path, objectives=()) -> dict:
         "_doc": "DEM menos elevacion del rover (elev_geoid) en cada parada dentro del recorte.",
     }
 
-    # Clases minerales por estratigrafia de la traza
-    classes = np.zeros((n, n), dtype=np.uint8)
-    classes[(dem > CLAY_RANGE_M[0]) & (dem <= CLAY_RANGE_M[1])] = 1
-    classes[dem > SULFATE_ABOVE_M] = 2
+    # Morfologia comun: crestas boxwork cerca de la traza 2025 y arena oscura
     rr, cc = np.mgrid[0:n, 0:n]
     box_zone = np.zeros((n, n), dtype=bool)
     for sol, r, c, _, _, _ in pts:
         if BOXWORK_SOLS[0] <= sol <= BOXWORK_SOLS[1]:
             box_zone |= np.hypot(rr - r, cc - c) * region.px < BOXWORK_RADIUS_M
     ridges = (dem - smooth(dem, 6)) > 0.8  # crestas locales
-    classes[box_zone & ridges] = 3
     dark = albedo < np.percentile(albedo, 8)
     dunes = smooth(dark.astype(np.float32), 3) > 0.6
-    classes[dunes] = 4
-    paint_objectives(classes, objectives, region.px)
-    log["spectral_method"] = ("Estratigrafia de la traza de Curiosity: arcillas entre "
-                              f"{CLAY_RANGE_M[0]} y {CLAY_RANGE_M[1]} m, sulfatos por encima; "
-                              "boxwork = crestas locales cerca de los sols 4540-4990; "
-                              "dunas = zonas mas oscuras de la ortoimagen CTX. No es CRISM.")
+    clay_band = (dem > CLAY_RANGE_M[0]) & (dem <= CLAY_RANGE_M[1])
+    sulfate_band = dem > SULFATE_ABOVE_M
 
-    # Inercia termica aproximada (arena oscura = baja TI; roca clara = alta TI)
-    ti = 260.0 + 260.0 * smooth(albedo, 2)
-    ti = np.where(dunes, 230.0, ti).astype(np.float32)
-    log["thermal_inertia_method"] = "Aproximada desde el albedo CTX (230-520 TIU). Pendiente: mosaico THEMIS."
+    crism, crism_cover = crism_classes(region, raw, log, albedo)
+    if crism is not None:
+        classes = crism.copy()
+        classes[dunes & (classes == 0)] = 4
+        classes[box_zone & ridges] = 3
+        ph, su = crism == 1, crism == 2
+        log["crism"]["agreement_with_curiosity_stratigraphy"] = {
+            "arcillas_en_banda_Glen_Torridon_pct": round(100 * float((ph & clay_band).sum() / max(ph.sum(), 1)), 1),
+            "sulfatos_sobre_-4078m_pct": round(100 * float((su & sulfate_band).sum() / max(su.sum(), 1)), 1),
+            "_doc": "Que fraccion de las detecciones CRISM cae donde Curiosity confirmo cada unidad.",
+        }
+        spectral_method = ("CRISM MTRDR (MRO), parametros de Viviano-Beck et al. 2014: " +
+                           "; ".join(f"{k}: {v}" for k, v in CRISM_RULES.items()) +
+                           ". Mediana por pixel de los productos que lo cubren. "
+                           "Boxwork = crestas locales cerca de la traza 2025 (morfologia, no espectral); "
+                           "dunas = arena mafica CRISM o zonas mas oscuras de CTX.")
+    else:
+        classes = np.zeros((n, n), dtype=np.uint8)
+        classes[clay_band] = 1
+        classes[sulfate_band] = 2
+        classes[box_zone & ridges] = 3
+        classes[dunes] = 4
+        spectral_method = ("Estratigrafia de la traza de Curiosity: arcillas entre "
+                           f"{CLAY_RANGE_M[0]} y {CLAY_RANGE_M[1]} m, sulfatos por encima; "
+                           "boxwork = crestas locales cerca de los sols 4540-4990; "
+                           "dunas = zonas mas oscuras de la ortoimagen CTX. No es CRISM.")
+    paint_objectives(classes, objectives, region.px)
+    log["spectral_method"] = spectral_method
+
+    # Inercia termica: THEMIS si esta descargada; si no, aproximada desde el albedo
+    themis = raw / "themis_ti.tif"
+    if themis.exists():
+        ti = load_to_grid(themis, region, fill=False)
+        bad = ~np.isfinite(ti) | (ti <= 0) | (ti > 3000)
+        if bad.any():
+            ti = np.where(bad, np.nanmedian(np.where(bad, np.nan, ti)), ti)
+        ti = smooth(ti.astype(np.float32), 4, passes=2)  # 100 m nativo: suavizar el remuestreo
+        log["thermal_inertia_method"] = ("THEMIS cuantitativa (mosaico global USGS/ASU 30S120E, 100 m), "
+                                         "remuestreada a 6 m y suavizada. Exactitud absoluta ~20%.")
+        log["thermal_inertia_tiu"] = {k: round(float(v), 0) for k, v in
+                                      zip(("p05", "p50", "p95"), np.percentile(ti, [5, 50, 95]))}
+    else:
+        ti = 260.0 + 260.0 * smooth(albedo, 2)
+        ti = np.where(dunes, 230.0, ti)
+        log["thermal_inertia_method"] = "Aproximada desde el albedo CTX (230-520 TIU). Pendiente: mosaico THEMIS."
+    ti = ti.astype(np.float32)
 
     return {"dem": dem, "thermal_inertia": ti, "spectral": classes, "albedo": albedo,
             "optical_gray": albedo, "log": log, "traverse": pts}

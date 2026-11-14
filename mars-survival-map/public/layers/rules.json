@@ -3,8 +3,8 @@
   "version": 1,
 
   "time": {
-    "time_scale": 20,
-    "_time_scale": "1 s real = 20 s en Marte. Una EVA de 6 h dura 18 min reales.",
+    "time_scale": 14,
+    "_time_scale": "1 s real = 14 s en Marte. El traje de 8 h dura ~34 min reales; la campana completa toma ~20-25 min.",
     "start_local_time_h": 9.0,
     "_clock": "Hora solar local (LMST). thermal.png corresponde a ~10:00. Si se implementa el ciclo dia/noche, interpolar entre thermal.png y thermal_night.png con day_curve."
   },
@@ -17,22 +17,22 @@
   "movement": {
     "walk_speed_mps": 7.0,
     "slow_walk_speed_mps": 3.5,
-    "_doc": "Velocidad en el mundo por segundo real (comprimida, como el tiempo). El recorrido completo mide ~6,4 km en linea recta (~9 km por terreno): a 7 m/s son ~20 min reales, justo dentro del oxigeno del traje (24 min). Ver docs/reglas.md."
+    "_doc": "Velocidad en el mundo por segundo real (comprimida, como el tiempo). El recorrido completo mide ~6,4 km en linea recta (~9 km por terreno): a 7 m/s son ~20 min reales, dentro del oxigeno del traje (~34 min) si se usan los refugios con criterio. Balance probado con una partida automatica por la ruta A*. Ver docs/reglas.md."
   },
 
   "resources": {
     "oxygen": {
       "start": 100,
-      "base_drain_per_s": 0.0694,
-      "_base": "Traje de 8 h: 100 / (8*3600/20).",
+      "base_drain_per_s": 0.0486,
+      "_base": "Traje de 8 h: 100 / (8*3600/14).",
       "exertion": "drain *= 1 + slope_deg / 25 mientras el jugador camina",
       "zero_effect": "fail",
       "fail_id": "fail_oxygen"
     },
     "energy": {
       "start": 100,
-      "base_drain_per_s": 0.0556,
-      "_base": "Bateria de 10 h: 100 / (10*3600/20).",
+      "base_drain_per_s": 0.0389,
+      "_base": "Bateria de 10 h: 100 / (10*3600/14).",
       "cold": { "comfort_c": -20, "extra_per_deg": 0.015, "_formula": "drain *= 1 + extra_per_deg * max(0, comfort_c - T)" },
       "scanner_cost": 2.0,
       "_scanner": "Costo unico al escanear un objetivo.",
@@ -101,9 +101,9 @@
   "scoring": {
     "science_points": "por mision, ver missions.json -> points",
     "safety_bonus": "round(100 * (oxygen + energy + integrity) / 300) al terminar",
-    "time_bonus": "max(0, 200 - minutos_reales * 10)",
+    "time_bonus": "max(0, round(10 * (30 - minutos_reales)))",
     "storm_bonus": 50,
-    "_storm": "+50 si se pasa una tormenta solar dentro de un refugio."
+    "_storm": "+50 si se pasa al menos la mitad de la tormenta activa dentro de un refugio."
   },
 
   "pathfinding": {

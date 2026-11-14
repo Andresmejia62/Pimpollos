@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "README.md",
+                "file": "docs/reglas.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "README"
+              "title": "reglas"
             }
           }
         ]
@@ -41,7 +41,7 @@
               "type": "file-explorer",
               "state": {
                 "sortOrder": "alphabetical",
-                "autoReveal": false,
+                "autoReveal": true,
                 "showSearch": false,
                 "searchQuery": ""
               },
@@ -187,18 +187,51 @@
   },
   "active": "93453c7a3d68f103",
   "lastOpenFiles": [
-    "docs/guion_video.md",
-    "docs/wireframes/index.html",
-    "data/scripts/real_data.py",
-    "data/raw/manifest.json",
-    "data/raw/hirise_dtm_009650.tif",
-    "data/raw/hirise_dtm_019698.tif",
-    "data/raw/hirise_dtm_009149.tif",
-    "data/raw/ctx_ortho.tif",
-    "data/raw/ctx_dem.tif",
-    "data/raw/MSL_waypoints.json",
-    "data/scripts/fetch_nasa.py",
-    "docs/preview_capas.png",
-    "README.md"
+    "dist/index.html",
+    "dist/assets/index-Di280CJY.css",
+    "dist/assets/index-BUxml2Fk.js",
+    "dist/assets",
+    "dist/assets/index-DZqo7F1v.js",
+    "dist/assets/index-BdZC5Ob1.js",
+    "dist/assets/index-D157YBfl.js",
+    "dist/textures",
+    "dist/story/missions.json",
+    "dist/story/facts.json",
+    "dist/story/dialogs.json",
+    "dist/layers/thermal_overlay.png",
+    "dist/layers/thermal_night.png",
+    "dist/layers/thermal.png",
+    "dist/layers/spectral_overlay.png",
+    "dist/layers/spectral.png",
+    "dist/layers/slope_overlay.png",
+    "dist/layers/slope_blocked.png",
+    "dist/layers/slope.png",
+    "dist/layers/radiation_overlay.png",
+    "dist/layers/radiation.png",
+    "node_modules/three/README.md",
+    "node_modules/three/examples/jsm/libs/draco/README.md",
+    "node_modules/three/examples/jsm/libs/basis/README.md",
+    "node_modules/three/examples/fonts/ttf/README.md",
+    "node_modules/three/examples/fonts/README.md",
+    "node_modules/three/src/nodes/materialx/DISCLAIMER.md",
+    "node_modules/@esbuild/darwin-arm64/README.md",
+    "node_modules/rollup/README.md",
+    "node_modules/rollup/LICENSE.md",
+    "node_modules/vite/LICENSE.md",
+    "node_modules/vite/README.md",
+    "node_modules/postcss/README.md",
+    "node_modules/esbuild/README.md",
+    "node_modules/esbuild/LICENSE.md",
+    "node_modules/@rollup/rollup-darwin-arm64/README.md",
+    "node_modules/source-map-js/README.md",
+    "node_modules/nanoid/README.md",
+    "node_modules/picomatch/README.md",
+    "node_modules/fdir/README.md",
+    "node_modules/tinyglobby/README.md",
+    "node_modules/picocolors/README.md",
+    "node_modules/fsevents/README.md",
+    "node_modules/@types/estree/README.md",
+    "docs/pruebas_usabilidad.md",
+    "docs/entrega_nasa.md"
   ]
 }

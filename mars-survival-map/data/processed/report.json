@@ -1,6 +1,6 @@
 {
   "source": "real",
-  "seconds": 10.5,
+  "seconds": 14.7,
   "elevation_m": {
     "min": -4329.79,
     "p05": -4187.34,
@@ -30,18 +30,18 @@
     "max": 9.42
   },
   "temperature_10h_c": {
-    "min": -102.44,
-    "p05": -49.19,
-    "p50": -24.2,
-    "p95": -12.77,
-    "max": 5.77
+    "min": -101.66,
+    "p05": -49.39,
+    "p50": -25.45,
+    "p95": -13.91,
+    "max": 6.99
   },
   "temperature_night_c": {
-    "min": -99.4,
-    "p05": -99.4,
-    "p50": -87.01,
-    "p95": -83.28,
-    "max": -81.18
+    "min": -101.07,
+    "p05": -92.57,
+    "p50": -86.09,
+    "p95": -80.89,
+    "max": -76.71
   },
   "percent_blocked": 12.0,
   "hazard_share_percent": {
@@ -56,17 +56,17 @@
       21.5
     ],
     "temperature": [
-      55.3,
-      37.8,
+      46.7,
+      46.4,
       6.9
     ]
   },
   "spectral_share_percent": {
-    "0": 5.6,
-    "1": 12.0,
-    "2": 74.9,
-    "3": 1.2,
-    "4": 6.2
+    "0": 58.6,
+    "1": 2.7,
+    "2": 28.5,
+    "3": 1.3,
+    "4": 8.8
   },
   "reachable_from_habitat": {
     "habitat": true,
@@ -82,25 +82,25 @@
     "habitat": {
       "slope_deg": 7.1,
       "radiation_ugy_h": 8.43,
-      "temperature_c": -20.0,
-      "spectral_class": 1
+      "temperature_c": -24.9,
+      "spectral_class": 0
     },
     "obj_arcillas": {
       "slope_deg": 7.7,
       "radiation_ugy_h": 8.43,
-      "temperature_c": -21.8,
+      "temperature_c": -25.6,
       "spectral_class": 1
     },
     "rover": {
       "slope_deg": 17.2,
       "radiation_ugy_h": 8.57,
-      "temperature_c": -19.8,
+      "temperature_c": -20.7,
       "spectral_class": 2
     },
     "obj_sulfatos": {
       "slope_deg": 6.2,
       "radiation_ugy_h": 8.49,
-      "temperature_c": -18.1,
+      "temperature_c": -18.7,
       "spectral_class": 2
     },
     "obj_azufre": {
@@ -112,13 +112,13 @@
     "refugio_sur": {
       "slope_deg": 5.5,
       "radiation_ugy_h": 8.88,
-      "temperature_c": -17.8,
+      "temperature_c": -17.7,
       "spectral_class": 3
     },
     "obj_boxwork": {
       "slope_deg": 9.0,
       "radiation_ugy_h": 8.76,
-      "temperature_c": -17.1,
+      "temperature_c": -17.7,
       "spectral_class": 3
     }
   },
@@ -168,8 +168,62 @@
     "p95_abs_diff_m": 10.85,
     "_doc": "DEM menos elevacion del rover (elev_geoid) en cada parada dentro del recorte."
   },
-  "spectral_method": "Estratigrafia de la traza de Curiosity: arcillas entre -4165.0 y -4078.0 m, sulfatos por encima; boxwork = crestas locales cerca de los sols 4540-4990; dunas = zonas mas oscuras de la ortoimagen CTX. No es CRISM.",
-  "thermal_inertia_method": "Aproximada desde el albedo CTX (230-520 TIU). Pendiente: mosaico THEMIS.",
+  "crism": {
+    "products": [
+      {
+        "file": "FRT000058A3_su.tif",
+        "coverage": 0.951
+      },
+      {
+        "file": "FRT0000B6F1_su.tif",
+        "coverage": 1.0
+      },
+      {
+        "file": "FRT0000C518_su.tif",
+        "coverage": 0.006
+      },
+      {
+        "file": "FRT0001BBA1_su.tif",
+        "coverage": 0.228
+      },
+      {
+        "file": "FRT0001CA91_su.tif",
+        "coverage": 0.222
+      },
+      {
+        "file": "FRT00021C92_su.tif",
+        "coverage": 0.533
+      },
+      {
+        "file": "HRL0000BABA_su.tif",
+        "coverage": 1.0
+      }
+    ],
+    "rules": {
+      "phyllo": "D2300 > 0.002 y BD2290 > 0 (filosilicatos Fe/Mg)",
+      "sulfate": "SINDEX2 > 0.008 y (BD1900_2 > 0.002 o BD2100_2 > 0.002) (sulfatos poli/monohidratados)",
+      "mafic": "OLINDEX3 > percentil 90 del recorte y albedo bajo (arena basaltica)"
+    },
+    "combine": "mediana por pixel de los productos que lo cubren",
+    "coverage_pct": 100.0,
+    "class_pct": {
+      "arcillas": 2.74,
+      "sulfatos": 29.12,
+      "mafico": 4.59
+    },
+    "agreement_with_curiosity_stratigraphy": {
+      "arcillas_en_banda_Glen_Torridon_pct": 96.1,
+      "sulfatos_sobre_-4078m_pct": 96.7,
+      "_doc": "Que fraccion de las detecciones CRISM cae donde Curiosity confirmo cada unidad."
+    }
+  },
+  "spectral_method": "CRISM MTRDR (MRO), parametros de Viviano-Beck et al. 2014: phyllo: D2300 > 0.002 y BD2290 > 0 (filosilicatos Fe/Mg); sulfate: SINDEX2 > 0.008 y (BD1900_2 > 0.002 o BD2100_2 > 0.002) (sulfatos poli/monohidratados); mafic: OLINDEX3 > percentil 90 del recorte y albedo bajo (arena basaltica). Mediana por pixel de los productos que lo cubren. Boxwork = crestas locales cerca de la traza 2025 (morfologia, no espectral); dunas = arena mafica CRISM o zonas mas oscuras de CTX.",
+  "thermal_inertia_method": "THEMIS cuantitativa (mosaico global USGS/ASU 30S120E, 100 m), remuestreada a 6 m y suavizada. Exactitud absoluta ~20%.",
+  "thermal_inertia_tiu": {
+    "p05": 301.0,
+    "p50": 403.0,
+    "p95": 528.0
+  },
   "curiosity_traverse_slope_deg": {
     "points": 857,
     "p50": 8.6,

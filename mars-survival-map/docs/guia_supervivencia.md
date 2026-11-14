@@ -16,8 +16,8 @@ Si el oxígeno o la integridad llegan a cero, la misión falla. Si la energía l
 |---|---|---|---|
 | 1 | **Pendiente** | Liso = fácil · puntos = lento · **rayas = no se puede pasar (>25°)** | Modelo de elevación HiRISE + CTX (MRO), alineado con Curiosity |
 | 2 | **Radiación** | Liso = más protegido · rayas = expuesto | Dosis medida por RAD (Curiosity) + cuánto cielo ves |
-| 3 | **Temperatura** | Liso = templado · rayas = muy frío (< −45 °C) | Rango diario de REMS (Curiosity) + tipo de suelo (arena o roca) |
-| 4 | **Espectral** | Colores = minerales: cian arcillas, lila sulfatos, blanco vetas boxwork, azul dunas | Capas de roca que Curiosity analizó en su camino |
+| 3 | **Temperatura** | Liso = templado · rayas = muy frío (< −45 °C) | Rango diario de REMS (Curiosity) + inercia térmica de THEMIS (arena o roca) |
+| 4 | **Espectral** | Colores = minerales: cian arcillas, lila sulfatos, blanco vetas boxwork, azul dunas | Mapas minerales CRISM (MRO), confirmados por Curiosity |
 | R | **Ruta sugerida** | Línea en el minimapa: el camino más seguro, no el más corto | Algoritmo A* sobre todas las capas |
 
 ## Cinco reglas para volver vivo
@@ -28,7 +28,7 @@ Si el oxígeno o la integridad llegan a cero, la misión falla. Si la energía l
 5. **La Tierra no te va a salvar.** Sus mensajes tardan 14 minutos. Decide con tus capas.
 
 ## ¿Es realista?
-- **Radiación:** en la superficie de Marte, RAD midió unos 0,21 mGy/día (≈0,64 mSv/día de dosis equivalente), del orden de 100 veces la radiación natural promedio en la Tierra (≈0,007 mSv/día). **En el juego la exageramos** para que se note en una partida de 18 minutos; en la realidad el riesgo es acumulativo durante meses. Las tormentas solares sí pueden multiplicar la dosis de forma brusca, y por eso los planes reales incluyen refugios.
+- **Radiación:** en la superficie de Marte, RAD midió unos 0,21 mGy/día (≈0,64 mSv/día de dosis equivalente), del orden de 100 veces la radiación natural promedio en la Tierra (≈0,007 mSv/día). **En el juego la exageramos** para que se note en una partida de 20 minutos; en la realidad el riesgo es acumulativo durante meses. Las tormentas solares sí pueden multiplicar la dosis de forma brusca, y por eso los planes reales incluyen refugios.
 - **Temperatura:** REMS registró en el cráter Gale cambios de temperatura del suelo de más de 80 °C en un solo sol.
 - **Pendientes:** los rovers y los astronautas evitan pendientes de más de ~25–30°, donde la arena suelta hace resbalar.
-- **Tiempo:** el juego corre 20 veces más rápido que la realidad: 1 segundo real = 20 segundos en Marte.
+- **Tiempo:** el juego corre 14 veces más rápido que la realidad: 1 segundo real = 14 segundos en Marte.

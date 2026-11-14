@@ -30,8 +30,8 @@
       "at_point": {
         "slope_deg": 7.1,
         "radiation_ugy_h": 8.43,
-        "temperature_c": -20.0,
-        "spectral_class": 1
+        "temperature_c": -24.9,
+        "spectral_class": 0
       }
     },
     {
@@ -63,7 +63,7 @@
       "at_point": {
         "slope_deg": 7.7,
         "radiation_ugy_h": 8.43,
-        "temperature_c": -21.8,
+        "temperature_c": -25.6,
         "spectral_class": 1
       }
     },
@@ -95,7 +95,7 @@
       "at_point": {
         "slope_deg": 17.2,
         "radiation_ugy_h": 8.57,
-        "temperature_c": -19.8,
+        "temperature_c": -20.7,
         "spectral_class": 2
       }
     },
@@ -128,7 +128,7 @@
       "at_point": {
         "slope_deg": 6.2,
         "radiation_ugy_h": 8.49,
-        "temperature_c": -18.1,
+        "temperature_c": -18.7,
         "spectral_class": 2
       }
     },
@@ -193,7 +193,7 @@
       "at_point": {
         "slope_deg": 5.5,
         "radiation_ugy_h": 8.88,
-        "temperature_c": -17.8,
+        "temperature_c": -17.7,
         "spectral_class": 3
       }
     },
@@ -226,7 +226,7 @@
       "at_point": {
         "slope_deg": 9.0,
         "radiation_ugy_h": 8.76,
-        "temperature_c": -17.1,
+        "temperature_c": -17.7,
         "spectral_class": 3
       }
     }

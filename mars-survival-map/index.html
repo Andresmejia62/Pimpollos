@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mars Survival Map</title>
+  <meta name="description" content="Simulador web 3D de supervivencia en el Monte Sharp (cráter Gale) con datos reales de NASA.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+  <canvas id="view" tabindex="0" aria-label="Vista 3D del Monte Sharp"></canvas>
+
+  <div id="hud" hidden>
+    <div class="visor"></div>
+    <div class="storm-tint" id="stormTint" hidden></div>
+
+    <section class="panel res" aria-label="Recursos del traje">
+      <div class="row o2"><svg><use href="#i-o2"/></svg><div class="bar"><i id="barO2"></i></div><span class="pct" id="pctO2">100%</span></div>
+      <div class="row energy"><svg><use href="#i-battery"/></svg><div class="bar"><i id="barEn"></i></div><span class="pct" id="pctEn">100%</span></div>
+      <div class="row integrity"><svg><use href="#i-shield"/></svg><div class="bar"><i id="barIn"></i></div><span class="pct" id="pctIn">100%</span></div>
+      <div class="env" id="envLine"></div>
+    </section>
+
+    <section class="panel compass" aria-label="Brújula">
+      <div class="strip" id="compassStrip"></div>
+      <div class="tgt" id="compassTgt"><svg><use href="#i-target"/></svg><span id="compassDist"></span></div>
+      <div class="center"></div>
+    </section>
+
+    <section class="panel minimap" id="minimapPanel" aria-label="Minimapa">
+      <canvas id="minimap" width="512" height="512"></canvas>
+      <div class="cap"><span id="mapScale">6,1 km</span><span class="trav">━ Curiosity</span></div>
+    </section>
+
+    <section class="panel legend" id="legend" hidden></section>
+
+    <section class="panel mission">
+      <div class="lbl" id="missionLbl"></div>
+      <div class="t" id="missionTitle"></div>
+      <div class="obj"><svg><use href="#i-target"/></svg><span id="missionObj"></span></div>
+    </section>
+
+    <section class="panel tutorial" id="tutorial" hidden></section>
+
+    <nav class="panel layers" id="layerbar" aria-label="Capas de datos">
+      <button data-layer="slope" aria-pressed="false"><kbd>1</kbd><span data-ui="layers.slope"></span></button>
+      <button data-layer="radiation" aria-pressed="false"><kbd>2</kbd><span data-ui="layers.radiation"></span></button>
+      <button data-layer="thermal" aria-pressed="false"><kbd>3</kbd><span data-ui="layers.thermal"></span></button>
+      <button data-layer="spectral" aria-pressed="false"><kbd>4</kbd><span data-ui="layers.spectral"></span></button>
+      <button data-layer="route" aria-pressed="false"><kbd>R</kbd><span data-ui="layers.route"></span></button>
+    </nav>
+
+    <div class="alerts" id="alerts" aria-live="assertive"></div>
+    <section class="panel dialog" id="dialog" hidden aria-live="polite">
+      <div class="who" id="dialogWho"></div>
+      <div class="tx" id="dialogText"></div>
+    </section>
+
+    <div class="scanring" id="scanring" hidden><div class="ring" id="scanRingFill"></div><div class="lbl" id="scanLbl"></div></div>
+    <div class="countdown" id="countdown" hidden><div class="n" id="countN"></div><div class="l" id="countL"></div></div>
+    <div class="hint" id="lockHint"></div>
+    <div class="clock" id="clock"></div>
+    <div class="fps" id="fps" hidden></div>
+  </div>
+
+  <!-- Pantallas -->
+  <div class="screen" id="scrLoading">
+    <div class="loading"><div class="eyebrow">Mars Survival Map</div><div class="loadbar"><i id="loadBar"></i></div><div class="muted" id="loadText">Cargando…</div></div>
+  </div>
+
+  <div class="screen title-screen" id="scrTitle" hidden>
+    <div class="title-wrap">
+      <div class="eyebrow">NASA Space Apps · <span id="campaignName"></span></div>
+      <h1 class="title">MARS<br>SURVIVAL MAP</h1>
+      <p class="subtitle" data-ui="tagline"></p>
+      <div class="btnrow">
+        <button class="btn primary" id="btnStart" data-ui="start"></button>
+        <button class="btn" id="btnGuide" data-ui="guide"></button>
+        <button class="btn" id="btnLang">ES · EN</button>
+      </div>
+      <p class="controls-line" data-ui="controlsList"></p>
+    </div>
+    <div class="credits" data-ui="credits"></div>
+  </div>
+
+  <div class="screen dim" id="scrBriefing" hidden>
+    <div class="card briefing">
+      <div class="eyebrow" id="briefNum"></div>
+      <h2 id="briefTitle"></h2>
+      <p class="body" id="briefText"></p>
+      <div class="chips" id="briefChips"></div>
+      <div class="btnrow"><button class="btn primary" id="btnBegin" data-ui="startMission"></button></div>
+    </div>
+  </div>
+
+  <div class="screen dim" id="scrCard" hidden>
+    <div class="card factcard">
+      <div class="fc-head"><div class="eyebrow ok"><svg><use href="#i-check"/></svg><span data-ui="completed"></span></div><div class="pts" id="cardPts"></div></div>
+      <h2 id="cardTitle"></h2>
+      <div class="layercard">
+        <h3 id="cardFactTitle"></h3>
+        <p class="fact" id="cardFact"></p>
+        <p class="muted small" id="cardSource"></p>
+      </div>
+      <p class="muted small" id="cardSol"></p>
+      <div class="btnrow"><button class="btn primary" id="btnCardContinue" data-ui="continue"></button></div>
+    </div>
+  </div>
+
+  <div class="screen dim" id="scrEnd" hidden>
+    <div class="card endcard" id="endCard"></div>
+  </div>
+
+  <div class="screen dim" id="scrPause" hidden>
+    <div class="card">
+      <h2 data-ui="paused"></h2>
+      <p class="body" data-ui="controlsList"></p>
+      <div class="btnrow"><button class="btn primary" id="btnResume" data-ui="resume"></button><button class="btn" id="btnPauseGuide" data-ui="guide"></button><button class="btn" id="btnPauseLang">ES · EN</button></div>
+    </div>
+  </div>
+
+  <div class="screen dim" id="scrGuide" hidden>
+    <div class="card guide">
+      <div class="eyebrow" data-ui="guide"></div>
+      <div class="legend-row">
+        <span><span class="sw safe"></span><b id="gSafe"></b></span>
+        <span><span class="sw caution"></span><b id="gCaution"></b></span>
+        <span><span class="sw danger"></span><b id="gDanger"></b></span>
+      </div>
+      <div class="guide-grid" id="guideGrid"></div>
+      <div class="btnrow"><button class="btn primary" id="btnGuideClose" data-ui="continue"></button></div>
+    </div>
+  </div>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-o2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><text x="12" y="15.5" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor" font-family="Rajdhani, sans-serif">O₂</text></symbol>
+      <symbol id="i-battery" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="17" height="10" rx="2"/><path d="M22 11v2"/><path d="M11 9l-2 3h4l-2 3"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+      <symbol id="i-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></symbol>
+      <symbol id="i-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+      <symbol id="i-octagon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+      <symbol id="i-antenna" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4.9 16.1a10 10 0 0 1 0-14.2"/><path d="M7.8 13.2a6 6 0 0 1 0-8.4"/><circle cx="12" cy="9" r="2"/><path d="M16.2 4.8a6 6 0 0 1 0 8.4"/><path d="M19.1 1.9a10 10 0 0 1 0 14.2"/><path d="M12 11v11"/></symbol>
+      <symbol id="i-helmet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 14a8 8 0 1 1 16 0v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M7 13h10v3H7z"/></symbol>
+      <symbol id="i-earth" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+      <symbol id="i-radiation" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="2"/><path d="M12 2a10 10 0 0 1 8.66 5L15 10.3A3.5 3.5 0 0 0 12 8.5z" transform="rotate(30 12 12)"/><path d="M12 2a10 10 0 0 1 8.66 5L15 10.3A3.5 3.5 0 0 0 12 8.5z" transform="rotate(150 12 12)"/><path d="M12 2a10 10 0 0 1 8.66 5L15 10.3A3.5 3.5 0 0 0 12 8.5z" transform="rotate(270 12 12)"/></symbol>
+      <symbol id="i-thermo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/><path d="M11.5 10v6"/></symbol>
+      <symbol id="i-slope" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18L3 6z"/></symbol>
+      <symbol id="i-shelter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 20V11a9 9 0 0 1 18 0v9z"/><path d="M9 20v-5h6v5"/></symbol>
+      <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></symbol>
+    </defs>
+  </svg>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

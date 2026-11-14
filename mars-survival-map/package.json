@@ -1,0 +1,20 @@
+{
+  "name": "mars-survival-map",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Simulador web 3D de supervivencia en Mount Sharp (crater Gale) con datos reales de NASA.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "layers": "python3 data/scripts/build_layers.py",
+    "fetch": "python3 data/scripts/fetch_nasa.py"
+  },
+  "dependencies": {
+    "three": "0.180.0"
+  },
+  "devDependencies": {
+    "vite": "7.1.12"
+  }
+}

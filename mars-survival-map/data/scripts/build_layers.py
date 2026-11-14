@@ -198,6 +198,16 @@ def main():
     L.save_classes(cost, OUT / "cost.png")
     L.save_classes(cost256, OUT / "cost_256.png")
 
+    # Binarios para el motor web (los PNG de 16 bits pierden precision al decodificarse en el navegador)
+    dem_u16 = np.round(np.clip((dem - y_ref) / (dem_max - y_ref), 0, 1) * 65535).astype("<u2")
+    dem_u16.tofile(OUT / "dem.bin")
+    grid_order = ["slope", "radiation", "thermal", "thermal_night", "spectral", "cost"]
+    def u8(a, lo, hi):
+        return np.round(np.clip((a - lo) / (hi - lo), 0, 1) * 255).astype(np.uint8)
+    planes = [u8(slope, *ranges["slope"]), u8(rad, *ranges["radiation"]), u8(t_day, *ranges["thermal"]),
+              u8(t_night, *ranges["thermal_night"]), spectral.astype(np.uint8), cost]
+    np.stack(planes).astype(np.uint8).tofile(OUT / "grid.bin")
+
     pal = rules["palette"]
     slope_lv = level(slope, lambda a: a < hz["slope"]["safe_below_deg"], lambda a: a > hz["slope"]["blocked_above_deg"])
     rad_lv = level(rad, lambda a: a < hz["radiation"]["safe_below_ugy_h"], lambda a: a > hz["radiation"]["danger_above_ugy_h"])
@@ -290,12 +300,27 @@ def main():
                      "decode": "0 = intransitable; costo = pixel / 25",
                      "description": "Costo de recorrido para A* (ver rules.json -> pathfinding)."},
             "optical": {"file": "optical.png", "kind": "rgb", "description": optical_note},
+            "binary": {
+                "dem": {"file": "dem.bin", "dtype": "uint16 little-endian", "shape": [n, n],
+                        "decode": "elevacion_m = y_ref_m + v/65535 * (dem.decode.max - y_ref_m)"},
+                "grid": {"file": "grid.bin", "dtype": "uint8", "layout": "planar [capa][fila][col]",
+                         "shape": [len(grid_order), n, n], "order": grid_order,
+                         "decode": "slope/radiation/thermal/thermal_night: min + v/255*(max-min) (ver cada capa); spectral: clase; cost: 0 = intransitable, costo = v/25"},
+                "_doc": "Para el motor web: valores exactos sin pasar por la decodificacion de PNG del navegador.",
+            },
         },
         "overlays": {
             "levels": "0 seguro (verde, liso tenue), 1 precaucion (ambar, puntos), 2 peligro (rojo, rayas diagonales)",
             "palette": pal,
         },
     }
+    if traverse:
+        trav = sorted(traverse, key=lambda t: t[0])
+        (OUT / "traverse.json").write_text(json.dumps({
+            "source": "NASA/JPL MMGIS MSL_waypoints.json",
+            "fields": ["sol", "x", "z"],
+            "points": [[t[0], round(t[4], 1), round(t[5], 1)] for t in trav]}, separators=(",", ":")), encoding="utf-8")
+        manifest["traverse"] = "traverse.json"
     (OUT / "layers.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     (OUT / "region.json").write_text(json.dumps(region.to_public(), ensure_ascii=False, indent=2), encoding="utf-8")
     shutil.copyfile(ROOT / "data" / "rules.json", OUT / "rules.json")

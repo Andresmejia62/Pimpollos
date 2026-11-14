@@ -10,11 +10,37 @@ Equipo: Andres Eduardo Mejia Castro (líder), Erick Antonio Arana Espinoza, Jess
 | Parte | Responsable | Estado |
 |---|---|---|
 | Recorte geográfico (`data/region.json`) | M3 | Confirmado con la traza de Curiosity |
-| Capas + reglas + objetivos (`public/layers/`) | M3 | **Datos reales** CTX+HiRISE validados contra Curiosity; espectral e inercia térmica aproximadas (CRISM/THEMIS pendientes) |
+| Capas + reglas + objetivos (`public/layers/`) | M3 | **Datos reales**: DTM CTX+HiRISE validado contra Curiosity, minerales CRISM e inercia térmica THEMIS |
 | Historia, misiones, diálogos, alertas, datos curiosos (`public/story/`, `docs/`) | M4 | v1 lista (ES/EN) |
 | Wireframes del HUD (7 pantallas), guion del video | M4 | v1 lista: `docs/wireframes/index.html`, `docs/guion_video.md` |
 | Terreno y modelos (`public/models/`) | M1 | Pendiente |
-| Motor web (`src/`) | M2 | Pendiente |
+| Motor web (`src/`) | M2 | v1 jugable: terreno 3D real, HUD, 5 misiones, tormenta solar, A*, ES/EN |
+
+## Jugar
+```bash
+npm install
+npm run dev        # http://127.0.0.1:5173  (añade ?debug=1 para FPS y atajos)
+npm run build      # genera dist/ para GitHub Pages o Netlify
+```
+Controles: **W A S D** caminar · **ratón** mirar (clic para capturar o arrastrar) · **rueda** distancia de cámara · **1–4** capas · **R** ruta A* · **H** guía de capas · **M** minimapa grande · **Esc** pausa.
+Atajos con `?debug=1`: **T** tormenta solar · **N** saltar cerca del objetivo · **K** recargar recursos.
+
+### Motor (`src/`)
+| Archivo | Qué hace |
+|---|---|
+| `src/data.js` | Carga capas (`public/layers`) e historia (`public/story`) |
+| `src/engine/world.js` | Cuadrícula de M3: altura (`dem.bin`) y capas (`grid.bin`) por posición |
+| `src/engine/scene.js` | Terreno 3D desde el DEM real (malla 768×768, ~8 m) con shader de capas, cielo, rocas, marcadores y ruta |
+| `src/engine/astronaut.js` | Astronauta: usa `public/models/astronaut.glb` de M1 si existe; si no, un modelo de primitivas |
+| `src/engine/controls.js` | Teclado, ratón y cámara en tercera persona |
+| `src/gameplay/game.js` | Recursos, misiones, escaneo, tormenta, refugios y puntaje según `rules.json` |
+| `src/gameplay/alerts.js` | Condiciones de `alerts.json` |
+| `src/gameplay/pathfinding.js` | A* sobre la cuadrícula de costos (512×512, celdas de 12 m) |
+| `src/ui/hud.js` | HUD de los wireframes, minimapa, brújula, diálogos |
+
+El terreno se genera directo del DEM (plan B del documento de estructura), así que el juego no depende de `terrain.glb`. Si M1 entrega `astronaut.glb` en `public/models/`, el juego lo carga solo.
+
+**Balance probado:** una partida automática siguiendo la ruta A* completa las 5 misiones en ~20 min reales y termina con ~26 % de oxígeno. Un jugador que se desvíe necesita los refugios.
 
 ## Contratos entre miembros
 - **Cuadrícula única:** 1024×1024 px, 6 m/px, 6,144 km de lado (de Glen Torridon a la región boxwork). La fila 0 es el borde norte y la columna 0 el borde oeste. Ver `public/layers/region.json`.
