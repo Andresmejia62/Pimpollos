@@ -1,0 +1,80 @@
+{
+  "_doc": "Objetivos y puntos clave (Miembro 3). Posicion en 'latlon' (planetocentrica, lon Este) tomada de la traza oficial de Curiosity (data/raw/MSL_waypoints.json, JPL MMGIS): cada punto es una parada real del rover, por lo que es transitable. build_layers.py calcula px, coordenadas de mundo (x, y, z) y copia a public/layers/objectives.json. M4 referencia estos 'id' en missions.json.",
+  "status": "real",
+  "objectives": [
+    {
+      "id": "habitat",
+      "type": "base",
+      "name": { "es": "Hábitat Aeolis", "en": "Aeolis Habitat" },
+      "latlon": [-4.72772, 137.38154],
+      "msl_sol": 2320,
+      "radius_m": 25,
+      "shelter": true,
+      "notes": "Inicio de la caminata, en la entrada de Glen Torridon. Refugio contra tormentas solares."
+    },
+    {
+      "id": "obj_arcillas",
+      "type": "science",
+      "name": { "es": "Unidad de arcillas", "en": "Clay-bearing unit" },
+      "latlon": [-4.73031, 137.38354],
+      "msl_sol": 2481,
+      "radius_m": 15,
+      "mineral_class": 1,
+      "analog": "Glen Torridon, perforación 'Glen Etive' (Curiosity, sol ~2486, 2019)",
+      "science": "Los filosilicatos (arcillas) se forman con agua líquida de pH casi neutro: posible ambiente habitable antiguo."
+    },
+    {
+      "id": "rover",
+      "type": "shelter",
+      "name": { "es": "Rover de apoyo Tumbo", "en": "Support rover Tumbo" },
+      "latlon": [-4.75464, 137.39625],
+      "msl_sol": 3489,
+      "radius_m": 12,
+      "shelter": true,
+      "notes": "Refugio intermedio y recarga parcial, junto a la 'marker band' de Mount Sharp."
+    },
+    {
+      "id": "obj_sulfatos",
+      "type": "science",
+      "name": { "es": "Unidad de sulfatos", "en": "Sulfate-bearing unit" },
+      "latlon": [-4.76078, 137.39928],
+      "msl_sol": 3608,
+      "radius_m": 15,
+      "mineral_class": 2,
+      "analog": "Unidad de sulfatos, perforación 'Canaima' (Curiosity, sol ~3612, 2022)",
+      "science": "Los sulfatos registran un clima que se fue secando: el paso de un Marte húmedo a uno árido."
+    },
+    {
+      "id": "obj_azufre",
+      "type": "science",
+      "name": { "es": "Piedras de azufre de Gediz Vallis", "en": "Gediz Vallis sulfur stones" },
+      "latlon": [-4.78571, 137.40886],
+      "msl_sol": 4200,
+      "radius_m": 15,
+      "mineral_class": 2,
+      "analog": "Canal Gediz Vallis (Curiosity, mayo 2024): rocas de azufre elemental casi puro",
+      "science": "Curiosity encontró en 2024 piedras de azufre elemental puro, algo nunca visto antes en Marte."
+    },
+    {
+      "id": "refugio_sur",
+      "type": "shelter",
+      "name": { "es": "Refugio Sur", "en": "South Shelter" },
+      "latlon": [-4.79981, 137.38350],
+      "msl_sol": 4558,
+      "radius_m": 20,
+      "shelter": true,
+      "notes": "Módulo presurizado al borde de la región boxwork. Fin de la caminata (misión 5)."
+    },
+    {
+      "id": "obj_boxwork",
+      "type": "science",
+      "name": { "es": "Formaciones boxwork", "en": "Boxwork formations" },
+      "latlon": [-4.80827, 137.38127],
+      "msl_sol": 4671,
+      "radius_m": 20,
+      "mineral_class": 3,
+      "analog": "Región boxwork de Mount Sharp (Curiosity, panorama del 26-sep-2025)",
+      "science": "Redes de crestas minerales que quedaron donde el agua subterránea cementó fracturas: agua bajo la superficie mucho después de que se secaran los lagos."
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "status": "confirmado",
+  "status_note": "Ajustado a la traza real de Curiosity (MSL_waypoints.json, JPL MMGIS): incluye Glen Torridon (arcillas, sol ~2691), la unidad de sulfatos, las piedras de azufre de Gediz Vallis (sol 4200) y la region boxwork (sol 4671). 6,144 km de lado para que quepan de norte a sur (~4,9 km).",
+  "name": "Mount Sharp - Glen Torridon a Boxwork (traza de Curiosity)",
+  "body": "Mars",
+  "crs": "Equirectangular local (planetocentrico, longitud Este positiva), esfera IAU R = 3396190 m: +proj=eqc +lat_ts=lat0 +lat_0=lat0 +lon_0=lon0 +R=3396190",
+  "mars_radius_m": 3396190,
+  "center": {
+    "lat": -4.77,
+    "lon_east": 137.395
+  },
+  "size_m": 6144,
+  "grid_px": 1024,
+  "pixel_size_m": 6.0,
+  "bounds": {
+    "north_lat": -4.718174,
+    "south_lat": -4.821826,
+    "west_lon_east": 137.342993,
+    "east_lon_east": 137.447007
+  },
+  "grid": {
+    "rows": 1024,
+    "cols": 1024,
+    "pixel_size_m": 6.0,
+    "row0": "borde norte",
+    "col0": "borde oeste"
+  },
+  "world": {
+    "units": "metros",
+    "up": "y",
+    "origin": "centro del recorte",
+    "x": "Este (+)",
+    "z": "Sur (+)",
+    "y": "elevacion_m - y_ref_m (ver layers.json -> dem.y_ref_m)",
+    "pixel_center_to_world": "x = (col+0.5)*pixel_size - size_m/2 ; z = (row+0.5)*pixel_size - size_m/2",
+    "texture_uv": "u = x/size_m + 0.5 (oeste->este); v_imagen = z/size_m + 0.5 (fila 0 = norte). En Three.js usar texture.flipY segun la orientacion del plano."
+  }
+}

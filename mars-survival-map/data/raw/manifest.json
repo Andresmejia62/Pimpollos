@@ -1,0 +1,100 @@
+{
+  "accessed_utc": "2026-11-14T17:16:06Z",
+  "region": {
+    "lat": -4.77,
+    "lon_east": 137.395,
+    "size_m": 6144.0
+  },
+  "products": [
+    {
+      "file": "MSL_waypoints.json",
+      "source": "https://mars.nasa.gov/mmgis-maps/MSL/Layers/json/MSL_waypoints.json",
+      "description": "Posiciones de Curiosity por sol (lat, lon, elevacion sobre el geoide)."
+    },
+    {
+      "file": "ctx_dem.tif",
+      "collection": "mro_ctx_controlled_usgs_dtms",
+      "item": "T01_000815_1749_XN_05S222W__P21_009149_1752_XI_04S222W",
+      "asset": "geoid_adjusted_dem",
+      "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/ctx/controlled/usgs/T01_000815_1749_XN_05S222W__P21_009149_1752_XI_04S222W/T01_000815_1749_XN_05S222W__P21_009149_1752_XI_04S222W-DEM-geoid-adj.tif",
+      "stac": "https://stac.astrogeology.usgs.gov/api/collections/mro_ctx_controlled_usgs_dtms/items/T01_000815_1749_XN_05S222W__P21_009149_1752_XI_04S222W",
+      "item_datetime": "2024-01-01T00:00:00Z",
+      "native_res_m": 20.0,
+      "saved_res_m": 20.0,
+      "shape": [
+        337,
+        338
+      ],
+      "valid_fraction": 1.0,
+      "bytes": 361187
+    },
+    {
+      "file": "ctx_ortho.tif",
+      "collection": "mro_ctx_controlled_usgs_dtms",
+      "item": "T01_000815_1749_XN_05S222W__P21_009149_1752_XI_04S222W",
+      "asset": "orthoimage",
+      "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/ctx/controlled/usgs/T01_000815_1749_XN_05S222W__P21_009149_1752_XI_04S222W/T01_000815_1749_XN_05S222W__P21_009149_1752_XI_04S222W-DRG.tif",
+      "stac": "https://stac.astrogeology.usgs.gov/api/collections/mro_ctx_controlled_usgs_dtms/items/T01_000815_1749_XN_05S222W__P21_009149_1752_XI_04S222W",
+      "item_datetime": "2024-01-01T00:00:00Z",
+      "native_res_m": 20.0,
+      "saved_res_m": 20.0,
+      "shape": [
+        337,
+        338
+      ],
+      "valid_fraction": 1.0,
+      "bytes": 401958
+    },
+    {
+      "file": "hirise_dtm_009149.tif",
+      "collection": "mro_hirise_socet_dtms",
+      "item": "DTEEC_009149_1750_009294_1750_U01",
+      "asset": "dtm",
+      "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_009149_1750_PSP_009294_1750/DTEEC_009149_1750_009294_1750_U01.tif",
+      "stac": "https://stac.astrogeology.usgs.gov/api/collections/mro_hirise_socet_dtms/items/DTEEC_009149_1750_009294_1750_U01",
+      "item_datetime": "2006-09-29T00:00:00Z",
+      "native_res_m": 1.012,
+      "saved_res_m": 3.002,
+      "shape": [
+        2248,
+        1950
+      ],
+      "valid_fraction": 0.898,
+      "bytes": 10978199
+    },
+    {
+      "file": "hirise_dtm_019698.tif",
+      "collection": "mro_hirise_socet_dtms",
+      "item": "DTEEC_019698_1750_019988_1750_U01",
+      "asset": "dtm",
+      "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_019698_1750_ESP_019988_1750/DTEEC_019698_1750_019988_1750_U01.tif",
+      "stac": "https://stac.astrogeology.usgs.gov/api/collections/mro_hirise_socet_dtms/items/DTEEC_019698_1750_019988_1750_U01",
+      "item_datetime": "2006-09-29T00:00:00Z",
+      "native_res_m": 1.012,
+      "saved_res_m": 3.001,
+      "shape": [
+        1932,
+        1996
+      ],
+      "valid_fraction": 0.687,
+      "bytes": 7434619
+    },
+    {
+      "file": "hirise_dtm_009650.tif",
+      "collection": "mro_hirise_socet_dtms",
+      "item": "DTEEC_009650_1755_009716_1755_U01",
+      "asset": "dtm",
+      "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_009650_1755_PSP_009716_1755/DTEEC_009650_1755_009716_1755_U01.tif",
+      "stac": "https://stac.astrogeology.usgs.gov/api/collections/mro_hirise_socet_dtms/items/DTEEC_009650_1755_009716_1755_U01",
+      "item_datetime": "2006-09-29T00:00:00Z",
+      "native_res_m": 1.012,
+      "saved_res_m": 3.001,
+      "shape": [
+        2210,
+        797
+      ],
+      "valid_fraction": 0.818,
+      "bytes": 3927447
+    }
+  ]
+}

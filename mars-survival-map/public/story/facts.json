@@ -1,0 +1,33 @@
+{
+  "_doc": "Datos curiosos (Miembro 4) que aparecen al completar un objetivo o en la pantalla de carga. 'source' para verificar y citar. M3 revisa la precisión científica.",
+  "version": 1,
+  "facts": [
+    { "id": "f_clays", "title": { "es": "Arcillas = agua", "en": "Clays = water" },
+      "text": { "es": "Las arcillas se forman cuando el agua líquida altera la roca durante mucho tiempo. En Glen Torridon, Curiosity midió las mayores cantidades de arcilla de toda su misión.", "en": "Clays form when liquid water alters rock over a long time. At Glen Torridon, Curiosity measured the highest clay amounts of its whole mission." },
+      "source": "NASA/JPL – Curiosity, Glen Torridon (CheMin)" },
+    { "id": "f_sulfur", "title": { "es": "Azufre puro", "en": "Pure sulfur" },
+      "text": { "es": "En mayo de 2024 Curiosity pasó por encima de una roca, la partió y aparecieron cristales amarillos de azufre elemental. Era la primera vez que se veía azufre puro en Marte.", "en": "In May 2024 Curiosity drove over a rock, cracked it open and revealed yellow crystals of elemental sulfur — the first pure sulfur ever seen on Mars." },
+      "source": "NASA/JPL – Curiosity, Gediz Vallis (2024)" },
+    { "id": "f_radiation", "title": { "es": "Sin escudo magnético", "en": "No magnetic shield" },
+      "text": { "es": "Marte no tiene un campo magnético global y su atmósfera es muy delgada. El instrumento RAD de Curiosity midió unos 0,21 mGy por día en la superficie, mucho más que en la Tierra.", "en": "Mars has no global magnetic field and a very thin atmosphere. Curiosity's RAD instrument measured about 0.21 mGy per day at the surface, far more than on Earth." },
+      "source": "Hassler et al. (2014), Science 343 – RAD/MSL" },
+    { "id": "f_boxwork", "title": { "es": "Una telaraña de piedra", "en": "A stone spiderweb" },
+      "text": { "es": "El boxwork se forma cuando el agua subterránea deposita minerales en las grietas. Luego el viento erosiona la roca blanda alrededor y las vetas, más duras, quedan como crestas.", "en": "Boxwork forms when groundwater deposits minerals in cracks. Wind later erodes the softer rock around them, leaving the harder veins standing as ridges." },
+      "source": "NASA/JPL – Curiosity, región boxwork (2025)" },
+    { "id": "f_sol", "title": { "es": "Un día marciano", "en": "A Martian day" },
+      "text": { "es": "Un día en Marte (un «sol») dura 24 horas y 39 minutos. La temperatura del suelo en el cráter Gale puede cambiar más de 80 °C entre el mediodía y el amanecer.", "en": "A day on Mars (a 'sol') lasts 24 hours 39 minutes. Ground temperature in Gale crater can swing by more than 80 °C between noon and dawn." },
+      "source": "NASA/JPL – REMS/MSL" },
+    { "id": "f_gale", "title": { "es": "Un monte dentro de un cráter", "en": "A mountain inside a crater" },
+      "text": { "es": "El cráter Gale mide unos 154 km de diámetro. En su centro está el Monte Sharp (Aeolis Mons), de unos 5 km de alto, hecho de capas de sedimentos que guardan la historia del clima marciano.", "en": "Gale crater is about 154 km across. At its center stands Mount Sharp (Aeolis Mons), about 5 km tall, built from sediment layers that record Mars's climate history." },
+      "source": "NASA/JPL – Mars Science Laboratory" },
+    { "id": "f_gravity", "title": { "es": "Más liviano", "en": "Lighter" },
+      "text": { "es": "La gravedad de Marte es el 38 % de la terrestre. Una persona de 70 kg se sentiría como si pesara unos 27 kg.", "en": "Mars's gravity is 38% of Earth's. A 70 kg person would feel like they weigh about 27 kg." },
+      "source": "NASA – Mars Fact Sheet" },
+    { "id": "f_delay", "title": { "es": "Llamadas con retraso", "en": "Delayed calls" },
+      "text": { "es": "La luz tarda entre 3 y 22 minutos en viajar de Marte a la Tierra, según dónde estén los dos planetas. Por eso los astronautas tendrán que decidir solos.", "en": "Light takes between 3 and 22 minutes to travel from Mars to Earth, depending on where both planets are. That is why astronauts will have to decide on their own." },
+      "source": "NASA – Mars Fact Sheet" },
+    { "id": "f_air", "title": { "es": "Aire de CO₂", "en": "CO₂ air" },
+      "text": { "es": "La atmósfera de Marte es 95 % dióxido de carbono y su presión es menos del 1 % de la terrestre. Sin traje, la saliva y las lágrimas empezarían a hervir.", "en": "Mars's atmosphere is 95% carbon dioxide at less than 1% of Earth's pressure. Without a suit, your saliva and tears would start to boil." },
+      "source": "NASA – Mars Fact Sheet" }
+  ]
+}

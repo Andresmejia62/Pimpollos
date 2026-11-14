@@ -1,0 +1,241 @@
+{
+  "_doc": "Misiones (Miembro 4). objective_id referencia public/layers/objectives.json (M3). Textos en es/en. Los ids de dialogos, alertas y datos estan en dialogs.json, alerts.json y facts.json.",
+  "version": 1,
+  "campaign": {
+    "id": "aeolis-1",
+    "title": {
+      "es": "Expedición Aeolis-1",
+      "en": "Aeolis-1 Expedition"
+    },
+    "intro_dialogs": [
+      "d_intro_1",
+      "d_intro_2",
+      "d_intro_3",
+      "d_intro_4"
+    ],
+    "start_at": "habitat",
+    "outro_dialogs": [
+      "d_outro_1",
+      "d_outro_2"
+    ],
+    "end_at": "refugio_sur"
+  },
+  "missions": [
+    {
+      "id": "m1",
+      "order": 1,
+      "title": {
+        "es": "Primeros pasos en Aeolis",
+        "en": "First steps on Aeolis"
+      },
+      "brief": {
+        "es": "Llega a la unidad de arcillas al este del hábitat y escanéala. Aprende a leer la capa de pendiente para evitar los escalones de roca.",
+        "en": "Reach the clay-bearing unit east of the habitat and scan it. Learn to read the slope layer to avoid the rock ledges."
+      },
+      "objective_id": "obj_arcillas",
+      "action": "scan",
+      "hazard_main": "slope",
+      "layer_hint": "slope",
+      "points": 100,
+      "dialogs_start": [
+        "d_m1_start_1",
+        "d_m1_start_2"
+      ],
+      "dialogs_complete": [
+        "d_m1_done"
+      ],
+      "fact_id": "f_clays",
+      "tutorial": [
+        {
+          "id": "t_move",
+          "text": {
+            "es": "Camina con W A S D. Mira con el ratón.",
+            "en": "Walk with W A S D. Look around with the mouse."
+          },
+          "done_when": "player_moved_m >= 10"
+        },
+        {
+          "id": "t_hud",
+          "text": {
+            "es": "Tus barras: O₂ (oxígeno), ⚡ energía y ⛨ integridad. Si una llega a cero, la misión falla.",
+            "en": "Your bars: O₂ oxygen, ⚡ energy and ⛨ integrity. If one hits zero, the mission fails."
+          },
+          "done_when": "seconds >= 6"
+        },
+        {
+          "id": "t_layers",
+          "text": {
+            "es": "Pulsa 1 para ver la capa de PENDIENTE. Rayas rojas = demasiado empinado, no se puede pasar.",
+            "en": "Press 1 to show the SLOPE layer. Red stripes = too steep, you cannot pass."
+          },
+          "done_when": "layer_active == 'slope'"
+        },
+        {
+          "id": "t_route",
+          "text": {
+            "es": "Pulsa R para ver la ruta sugerida en el minimapa.",
+            "en": "Press R to show the suggested route on the minimap."
+          },
+          "done_when": "route_visible"
+        },
+        {
+          "id": "t_scan",
+          "text": {
+            "es": "Al llegar al marcador, quédate dentro del círculo para escanear.",
+            "en": "At the marker, stay inside the circle to scan."
+          },
+          "done_when": "mission_complete('m1')"
+        }
+      ],
+      "next": "m2"
+    },
+    {
+      "id": "m2",
+      "order": 2,
+      "title": {
+        "es": "Tormenta en el horizonte",
+        "en": "Storm on the horizon"
+      },
+      "brief": {
+        "es": "Sube a la unidad de sulfatos y toma la lectura. Ojo: el Sol está muy activo. Si llega una tormenta de partículas, corre al refugio más cercano.",
+        "en": "Climb to the sulfate unit and take the reading. Careful: the Sun is very active. If a particle storm arrives, run to the nearest shelter."
+      },
+      "objective_id": "obj_sulfatos",
+      "action": "scan",
+      "hazard_main": "radiation",
+      "layer_hint": "radiation",
+      "points": 200,
+      "events": [
+        {
+          "on": "scan_complete",
+          "event": "solar_particle_event"
+        }
+      ],
+      "complete_when": "scan_complete && event_survived('solar_particle_event')",
+      "dialogs_start": [
+        "d_m3_start_1",
+        "d_m3_start_2"
+      ],
+      "dialogs_complete": [
+        "d_m3_done"
+      ],
+      "fact_id": "f_radiation",
+      "next": "m3"
+    },
+    {
+      "id": "m3",
+      "order": 3,
+      "title": {
+        "es": "Piedras amarillas",
+        "en": "Yellow stones"
+      },
+      "brief": {
+        "es": "Baja al canal Gediz Vallis y analiza las piedras de azufre. Las paredes del canal son muy empinadas: usa la capa de pendiente para encontrar una rampa.",
+        "en": "Descend into the Gediz Vallis channel and analyze the sulfur stones. The channel walls are steep: use the slope layer to find a ramp."
+      },
+      "objective_id": "obj_azufre",
+      "action": "scan",
+      "hazard_main": "temperature",
+      "layer_hint": "thermal",
+      "points": 150,
+      "dialogs_start": [
+        "d_m2_start_1",
+        "d_m2_start_2"
+      ],
+      "dialogs_complete": [
+        "d_m2_done"
+      ],
+      "fact_id": "f_sulfur",
+      "next": "m4"
+    },
+    {
+      "id": "m4",
+      "order": 4,
+      "title": {
+        "es": "La red bajo la piedra",
+        "en": "The network beneath the stone"
+      },
+      "brief": {
+        "es": "Llega a las formaciones boxwork, el punto más lejano de la caminata. Usa la capa ESPECTRAL para encontrar las vetas minerales. Vigila tu oxígeno: el Refugio Sur está cerca, pero el rover quedó muy atrás.",
+        "en": "Reach the boxwork formations, the farthest point of the walk. Use the SPECTRAL layer to find the mineral veins. Watch your oxygen: the South Shelter is close, but the rover is far behind."
+      },
+      "objective_id": "obj_boxwork",
+      "action": "scan",
+      "hazard_main": "oxygen",
+      "layer_hint": "spectral",
+      "points": 250,
+      "dialogs_start": [
+        "d_m4_start_1",
+        "d_m4_start_2"
+      ],
+      "dialogs_complete": [
+        "d_m4_done"
+      ],
+      "fact_id": "f_boxwork",
+      "next": "m5"
+    },
+    {
+      "id": "m5",
+      "order": 5,
+      "title": {
+        "es": "Refugio Sur",
+        "en": "South Shelter"
+      },
+      "brief": {
+        "es": "Lleva las muestras al Refugio Sur antes de quedarte sin oxígeno. La ruta más corta no siempre es la más segura.",
+        "en": "Bring the samples to the South Shelter before your oxygen runs out. The shortest route is not always the safest."
+      },
+      "objective_id": "refugio_sur",
+      "action": "reach",
+      "hazard_main": "oxygen",
+      "layer_hint": "route",
+      "points": 100,
+      "dialogs_start": [
+        "d_m5_start"
+      ],
+      "dialogs_complete": [
+        "d_m5_done"
+      ],
+      "fact_id": "f_sol",
+      "next": null
+    }
+  ],
+  "end_screens": {
+    "success": {
+      "title": {
+        "es": "Misión completada",
+        "en": "Mission complete"
+      },
+      "body": {
+        "es": "Las muestras de Aeolis-1 cuentan la historia del agua en Marte: lagos, canales y agua subterránea a lo largo de cientos de millones de años.",
+        "en": "The Aeolis-1 samples tell the story of water on Mars: lakes, channels and groundwater over hundreds of millions of years."
+      },
+      "score_breakdown": [
+        "science",
+        "safety_bonus",
+        "time_bonus",
+        "storm_bonus"
+      ]
+    },
+    "fail_oxygen": {
+      "title": {
+        "es": "Sin oxígeno",
+        "en": "Out of oxygen"
+      },
+      "body": {
+        "es": "El traje activó el rescate automático y el rover vino por ti. Consejo: planifica la vuelta antes de bajar del 40 % de O₂.",
+        "en": "The suit triggered an automatic rescue and the rover came for you. Tip: plan your return before O₂ drops below 40%."
+      }
+    },
+    "fail_integrity": {
+      "title": {
+        "es": "Traje comprometido",
+        "en": "Suit compromised"
+      },
+      "body": {
+        "es": "La radiación y los resbalones dañaron el traje. Consejo: durante una tormenta solar, el refugio es lo primero.",
+        "en": "Radiation and slips damaged the suit. Tip: during a solar storm, shelter comes first."
+      }
+    }
+  }
+}

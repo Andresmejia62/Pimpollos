@@ -1,0 +1,61 @@
+{
+  "_doc": "Alertas del HUD (Miembro 4). 'when' es la condición para que M2 la dispare; usa los umbrales de public/layers/rules.json. severity: info | caution | danger. Cada severidad tiene un ícono y un borde distinto (no depende solo del color). cooldown_s evita repetir la misma alerta. 'dialog' (opcional) muestra además un diálogo de dialogs.json.",
+  "version": 1,
+  "severity_style": {
+    "info":    { "color": "#7FD1FF", "icon": "info-circle",   "border": "solid",  "sound": "blip" },
+    "caution": { "color": "#FFC23D", "icon": "warn-triangle", "border": "dashed", "sound": "chime" },
+    "danger":  { "color": "#FF4D4D", "icon": "alert-octagon", "border": "double", "sound": "klaxon", "blink": true }
+  },
+  "alerts": [
+    { "id": "a_o2_low", "severity": "caution", "when": "oxygen < 40", "cooldown_s": 60, "icon": "o2",
+      "text": { "es": "Oxígeno al 40 %. Planifica tu regreso.", "en": "Oxygen at 40%. Plan your way back." } },
+    { "id": "a_o2_critical", "severity": "danger", "when": "oxygen < 15", "cooldown_s": 20, "icon": "o2",
+      "text": { "es": "¡Oxígeno crítico! Ve al refugio más cercano.", "en": "Oxygen critical! Go to the nearest shelter." } },
+
+    { "id": "a_energy_low", "severity": "caution", "when": "energy < 30", "cooldown_s": 60, "icon": "battery",
+      "text": { "es": "Energía baja. El frío la gasta más rápido: busca zonas al sol.", "en": "Low energy. Cold drains it faster: look for sunny ground." } },
+    { "id": "a_energy_zero", "severity": "danger", "when": "energy <= 0", "cooldown_s": 30, "icon": "battery",
+      "text": { "es": "Sin energía: modo mínimo. Caminas más lento y gastas más oxígeno.", "en": "No power: minimal mode. You walk slower and use more oxygen." } },
+
+    { "id": "a_integrity_low", "severity": "caution", "when": "integrity < 50", "cooldown_s": 60, "icon": "shield",
+      "text": { "es": "Integridad del traje al 50 %. Evita radiación y pendientes resbaladizas.", "en": "Suit integrity at 50%. Avoid radiation and slippery slopes." } },
+    { "id": "a_integrity_critical", "severity": "danger", "when": "integrity < 20", "cooldown_s": 20, "icon": "shield",
+      "text": { "es": "¡Integridad crítica! Regresa al hábitat.", "en": "Integrity critical! Return to the habitat." } },
+
+    { "id": "a_slope_slow", "severity": "info", "when": "slope_deg > 12 && moving", "cooldown_s": 30, "icon": "slope",
+      "text": { "es": "Pendiente pronunciada: avanzas más lento y gastas más oxígeno.", "en": "Steep ground: you move slower and use more oxygen." } },
+    { "id": "a_slope_slip", "severity": "caution", "when": "slope_deg > 18 && moving", "cooldown_s": 20, "icon": "slope",
+      "text": { "es": "Terreno resbaladizo: el traje se está dañando.", "en": "Slippery ground: the suit is taking damage." } },
+    { "id": "a_slope_blocked", "severity": "caution", "when": "blocked_ahead", "cooldown_s": 10, "icon": "wall",
+      "text": { "es": "Demasiado empinado (más de 25°). Busca otro camino.", "en": "Too steep (over 25°). Find another way." } },
+
+    { "id": "a_rad_exposed", "severity": "info", "when": "radiation_ugy_h > 8.7 && !spe_active", "cooldown_s": 90, "icon": "radiation",
+      "text": { "es": "Zona expuesta: recibes algo más de radiación cósmica.", "en": "Exposed area: slightly more cosmic radiation here." } },
+    { "id": "a_cold", "severity": "caution", "when": "temperature_c < -45", "cooldown_s": 45, "icon": "thermometer",
+      "text": { "es": "Suelo muy frío (menos de −45 °C). La calefacción consume energía extra.", "en": "Very cold ground (below −45 °C). Heating uses extra power." } },
+
+    { "id": "a_spe_warning", "severity": "danger", "when": "event('solar_particle_event').warning", "cooldown_s": 0, "icon": "sun-storm", "dialog": "d_m3_spe_warning",
+      "text": { "es": "TORMENTA SOLAR EN {s} s · Ve a un refugio", "en": "SOLAR STORM IN {s} s · Get to shelter" } },
+    { "id": "a_spe_active", "severity": "danger", "when": "event('solar_particle_event').active && !in_shelter", "cooldown_s": 15, "icon": "sun-storm", "dialog": "d_m3_spe_hint",
+      "text": { "es": "Tormenta solar activa · Radiación ×40", "en": "Solar storm active · Radiation ×40" } },
+    { "id": "a_spe_sheltered", "severity": "info", "when": "event('solar_particle_event').active && in_shelter", "cooldown_s": 30, "icon": "shelter",
+      "text": { "es": "Estás a salvo en el refugio. Espera a que pase.", "en": "You are safe in the shelter. Wait it out." } },
+    { "id": "a_spe_end", "severity": "info", "when": "event('solar_particle_event').ended", "cooldown_s": 0, "icon": "sun", "dialog": "d_m3_spe_end",
+      "text": { "es": "La tormenta terminó.", "en": "The storm is over." } },
+
+    { "id": "a_shelter_enter", "severity": "info", "when": "entered_shelter", "cooldown_s": 10, "icon": "shelter",
+      "text": { "es": "Refugio: recargando.", "en": "Shelter: recharging." } },
+
+    { "id": "a_target_near", "severity": "info", "when": "distance_to_objective_m < 60", "cooldown_s": 60, "icon": "target",
+      "text": { "es": "Objetivo cerca. Entra al círculo para escanear.", "en": "Target nearby. Step into the circle to scan." } },
+    { "id": "a_scan_start", "severity": "info", "when": "scan_started", "cooldown_s": 3, "icon": "scan",
+      "text": { "es": "Escaneando… no te muevas.", "en": "Scanning… hold still." } },
+    { "id": "a_scan_lost", "severity": "caution", "when": "scan_interrupted", "cooldown_s": 3, "icon": "scan",
+      "text": { "es": "Escaneo interrumpido. Vuelve al círculo.", "en": "Scan interrupted. Return to the circle." } },
+    { "id": "a_scan_done", "severity": "info", "when": "scan_complete", "cooldown_s": 0, "icon": "check",
+      "text": { "es": "Escaneo completo. Datos enviados a la base.", "en": "Scan complete. Data sent to base." } },
+
+    { "id": "a_out_of_bounds", "severity": "caution", "when": "distance_to_edge_m < 40", "cooldown_s": 20, "icon": "map",
+      "text": { "es": "Límite de la zona de exploración.", "en": "Edge of the exploration zone." } }
+  ]
+}

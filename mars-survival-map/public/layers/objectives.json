@@ -1,0 +1,234 @@
+{
+  "status": "real",
+  "source": "real",
+  "objectives": [
+    {
+      "id": "habitat",
+      "type": "base",
+      "name": {
+        "es": "Hábitat Aeolis",
+        "en": "Aeolis Habitat"
+      },
+      "latlon": [
+        -4.727739,
+        137.381541
+      ],
+      "msl_sol": 2320,
+      "radius_m": 25,
+      "shelter": true,
+      "notes": "Inicio de la caminata, en la entrada de Glen Torridon. Refugio contra tormentas solares.",
+      "px": [
+        94,
+        379
+      ],
+      "world": {
+        "x": -795.0,
+        "y": 176.44,
+        "z": -2505.0
+      },
+      "elevation_m": -4153.6,
+      "at_point": {
+        "slope_deg": 7.1,
+        "radiation_ugy_h": 8.43,
+        "temperature_c": -20.0,
+        "spectral_class": 1
+      }
+    },
+    {
+      "id": "obj_arcillas",
+      "type": "science",
+      "name": {
+        "es": "Unidad de arcillas",
+        "en": "Clay-bearing unit"
+      },
+      "latlon": [
+        -4.73027,
+        137.383573
+      ],
+      "msl_sol": 2481,
+      "radius_m": 15,
+      "mineral_class": 1,
+      "analog": "Glen Torridon, perforación 'Glen Etive' (Curiosity, sol ~2486, 2019)",
+      "science": "Los filosilicatos (arcillas) se forman con agua líquida de pH casi neutro: posible ambiente habitable antiguo.",
+      "px": [
+        119,
+        399
+      ],
+      "world": {
+        "x": -675.0,
+        "y": 193.7,
+        "z": -2355.0
+      },
+      "elevation_m": -4136.3,
+      "at_point": {
+        "slope_deg": 7.7,
+        "radiation_ugy_h": 8.43,
+        "temperature_c": -21.8,
+        "spectral_class": 1
+      }
+    },
+    {
+      "id": "rover",
+      "type": "shelter",
+      "name": {
+        "es": "Rover de apoyo Tumbo",
+        "en": "Support rover Tumbo"
+      },
+      "latlon": [
+        -4.754665,
+        137.39627
+      ],
+      "msl_sol": 3489,
+      "radius_m": 12,
+      "shelter": true,
+      "notes": "Refugio intermedio y recarga parcial, junto a la 'marker band' de Mount Sharp.",
+      "px": [
+        360,
+        524
+      ],
+      "world": {
+        "x": 75.0,
+        "y": 416.2,
+        "z": -909.0
+      },
+      "elevation_m": -3913.8,
+      "at_point": {
+        "slope_deg": 17.2,
+        "radiation_ugy_h": 8.57,
+        "temperature_c": -19.8,
+        "spectral_class": 2
+      }
+    },
+    {
+      "id": "obj_sulfatos",
+      "type": "science",
+      "name": {
+        "es": "Unidad de sulfatos",
+        "en": "Sulfate-bearing unit"
+      },
+      "latlon": [
+        -4.760738,
+        137.399317
+      ],
+      "msl_sol": 3608,
+      "radius_m": 15,
+      "mineral_class": 2,
+      "analog": "Unidad de sulfatos, perforación 'Canaima' (Curiosity, sol ~3612, 2022)",
+      "science": "Los sulfatos registran un clima que se fue secando: el paso de un Marte húmedo a uno árido.",
+      "px": [
+        420,
+        554
+      ],
+      "world": {
+        "x": 255.0,
+        "y": 456.02,
+        "z": -549.0
+      },
+      "elevation_m": -3874.0,
+      "at_point": {
+        "slope_deg": 6.2,
+        "radiation_ugy_h": 8.49,
+        "temperature_c": -18.1,
+        "spectral_class": 2
+      }
+    },
+    {
+      "id": "obj_azufre",
+      "type": "science",
+      "name": {
+        "es": "Piedras de azufre de Gediz Vallis",
+        "en": "Gediz Vallis sulfur stones"
+      },
+      "latlon": [
+        -4.78574,
+        137.408865
+      ],
+      "msl_sol": 4200,
+      "radius_m": 15,
+      "mineral_class": 2,
+      "analog": "Canal Gediz Vallis (Curiosity, mayo 2024): rocas de azufre elemental casi puro",
+      "science": "Curiosity encontró en 2024 piedras de azufre elemental puro, algo nunca visto antes en Marte.",
+      "px": [
+        667,
+        648
+      ],
+      "world": {
+        "x": 819.0,
+        "y": 644.84,
+        "z": 933.0
+      },
+      "elevation_m": -3685.2,
+      "at_point": {
+        "slope_deg": 10.4,
+        "radiation_ugy_h": 8.56,
+        "temperature_c": -32.3,
+        "spectral_class": 2
+      }
+    },
+    {
+      "id": "refugio_sur",
+      "type": "shelter",
+      "name": {
+        "es": "Refugio Sur",
+        "en": "South Shelter"
+      },
+      "latlon": [
+        -4.79981,
+        137.383471
+      ],
+      "msl_sol": 4558,
+      "radius_m": 20,
+      "shelter": true,
+      "notes": "Módulo presurizado al borde de la región boxwork. Fin de la caminata (misión 5).",
+      "px": [
+        806,
+        398
+      ],
+      "world": {
+        "x": -681.0,
+        "y": 687.14,
+        "z": 1767.0
+      },
+      "elevation_m": -3642.9,
+      "at_point": {
+        "slope_deg": 5.5,
+        "radiation_ugy_h": 8.88,
+        "temperature_c": -17.8,
+        "spectral_class": 3
+      }
+    },
+    {
+      "id": "obj_boxwork",
+      "type": "science",
+      "name": {
+        "es": "Formaciones boxwork",
+        "en": "Boxwork formations"
+      },
+      "latlon": [
+        -4.808313,
+        137.381237
+      ],
+      "msl_sol": 4671,
+      "radius_m": 20,
+      "mineral_class": 3,
+      "analog": "Región boxwork de Mount Sharp (Curiosity, panorama del 26-sep-2025)",
+      "science": "Redes de crestas minerales que quedaron donde el agua subterránea cementó fracturas: agua bajo la superficie mucho después de que se secaran los lagos.",
+      "px": [
+        890,
+        376
+      ],
+      "world": {
+        "x": -813.0,
+        "y": 721.64,
+        "z": 2271.0
+      },
+      "elevation_m": -3608.4,
+      "at_point": {
+        "slope_deg": 9.0,
+        "radiation_ugy_h": 8.76,
+        "temperature_c": -17.1,
+        "spectral_class": 3
+      }
+    }
+  ]
+}

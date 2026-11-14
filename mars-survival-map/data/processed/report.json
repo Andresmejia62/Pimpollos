@@ -1,0 +1,180 @@
+{
+  "source": "real",
+  "seconds": 10.5,
+  "elevation_m": {
+    "min": -4329.79,
+    "p05": -4187.34,
+    "p50": -3828.04,
+    "p95": -3390.4,
+    "max": -3057.3
+  },
+  "slope_deg": {
+    "min": 0.02,
+    "p05": 3.01,
+    "p50": 9.72,
+    "p95": 32.73,
+    "max": 70.04
+  },
+  "sky_view_factor": {
+    "min": 0.35,
+    "p05": 0.89,
+    "p50": 0.97,
+    "p95": 1.0,
+    "max": 1.0
+  },
+  "radiation_ugy_h": {
+    "min": 4.27,
+    "p05": 8.1,
+    "p50": 8.48,
+    "p95": 9.02,
+    "max": 9.42
+  },
+  "temperature_10h_c": {
+    "min": -102.44,
+    "p05": -49.19,
+    "p50": -24.2,
+    "p95": -12.77,
+    "max": 5.77
+  },
+  "temperature_night_c": {
+    "min": -99.4,
+    "p05": -99.4,
+    "p50": -87.01,
+    "p95": -83.28,
+    "max": -81.18
+  },
+  "percent_blocked": 12.0,
+  "hazard_share_percent": {
+    "slope": [
+      61.0,
+      27.0,
+      12.0
+    ],
+    "radiation": [
+      14.7,
+      63.9,
+      21.5
+    ],
+    "temperature": [
+      55.3,
+      37.8,
+      6.9
+    ]
+  },
+  "spectral_share_percent": {
+    "0": 5.6,
+    "1": 12.0,
+    "2": 74.9,
+    "3": 1.2,
+    "4": 6.2
+  },
+  "reachable_from_habitat": {
+    "habitat": true,
+    "obj_arcillas": true,
+    "rover": true,
+    "obj_sulfatos": true,
+    "obj_azufre": true,
+    "refugio_sur": true,
+    "obj_boxwork": true
+  },
+  "reachable_area_percent": 85.7,
+  "objectives_at_point": {
+    "habitat": {
+      "slope_deg": 7.1,
+      "radiation_ugy_h": 8.43,
+      "temperature_c": -20.0,
+      "spectral_class": 1
+    },
+    "obj_arcillas": {
+      "slope_deg": 7.7,
+      "radiation_ugy_h": 8.43,
+      "temperature_c": -21.8,
+      "spectral_class": 1
+    },
+    "rover": {
+      "slope_deg": 17.2,
+      "radiation_ugy_h": 8.57,
+      "temperature_c": -19.8,
+      "spectral_class": 2
+    },
+    "obj_sulfatos": {
+      "slope_deg": 6.2,
+      "radiation_ugy_h": 8.49,
+      "temperature_c": -18.1,
+      "spectral_class": 2
+    },
+    "obj_azufre": {
+      "slope_deg": 10.4,
+      "radiation_ugy_h": 8.56,
+      "temperature_c": -32.3,
+      "spectral_class": 2
+    },
+    "refugio_sur": {
+      "slope_deg": 5.5,
+      "radiation_ugy_h": 8.88,
+      "temperature_c": -17.8,
+      "spectral_class": 3
+    },
+    "obj_boxwork": {
+      "slope_deg": 9.0,
+      "radiation_ugy_h": 8.76,
+      "temperature_c": -17.1,
+      "spectral_class": 3
+    }
+  },
+  "dem_merge": [
+    {
+      "file": "ctx_dem.tif",
+      "role": "base",
+      "offset_removed_m": -18.72,
+      "rover_points": 857,
+      "mad_vs_rover_m": 3.98
+    },
+    {
+      "file": "hirise_dtm_009149.tif",
+      "role": "detalle",
+      "coverage": 0.807,
+      "aligned_to": "rover",
+      "offset_removed_m": 7.22,
+      "rover_points": 857,
+      "mad_vs_rover_m": 3.48,
+      "std_vs_ctx_m": 9.64
+    },
+    {
+      "file": "hirise_dtm_019698.tif",
+      "role": "detalle",
+      "coverage": 0.547,
+      "aligned_to": "rover",
+      "offset_removed_m": 13.9,
+      "rover_points": 593,
+      "mad_vs_rover_m": 2.39,
+      "std_vs_ctx_m": 15.64
+    },
+    {
+      "file": "hirise_dtm_009650.tif",
+      "role": "detalle",
+      "coverage": 0.276,
+      "aligned_to": "rover",
+      "offset_removed_m": 13.3,
+      "rover_points": 29,
+      "mad_vs_rover_m": 0.88,
+      "std_vs_ctx_m": 10.78
+    }
+  ],
+  "validation_vs_curiosity": {
+    "points": 857,
+    "median_diff_m": -0.25,
+    "mad_m": 2.01,
+    "p95_abs_diff_m": 10.85,
+    "_doc": "DEM menos elevacion del rover (elev_geoid) en cada parada dentro del recorte."
+  },
+  "spectral_method": "Estratigrafia de la traza de Curiosity: arcillas entre -4165.0 y -4078.0 m, sulfatos por encima; boxwork = crestas locales cerca de los sols 4540-4990; dunas = zonas mas oscuras de la ortoimagen CTX. No es CRISM.",
+  "thermal_inertia_method": "Aproximada desde el albedo CTX (230-520 TIU). Pendiente: mosaico THEMIS.",
+  "curiosity_traverse_slope_deg": {
+    "points": 857,
+    "p50": 8.6,
+    "p95": 21.3,
+    "percent_on_blocked": 3.5,
+    "_doc": "Pendiente del DEM donde se detuvo Curiosity: sirve para validar el umbral de bloqueo."
+  }
+}

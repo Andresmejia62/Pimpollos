@@ -1,0 +1,13 @@
+{
+  "_doc": "FUENTE DE VERDAD del recorte geografico (Miembro 3). M1 y M3 usan EXACTAMENTE este recorte. Si cambia, correr data/scripts/fetch_nasa.py y build_layers.py y avisar al equipo.",
+  "status": "confirmado",
+  "status_note": "Ajustado a la traza real de Curiosity (MSL_waypoints.json, JPL MMGIS): incluye Glen Torridon (arcillas, sol ~2691), la unidad de sulfatos, las piedras de azufre de Gediz Vallis (sol 4200) y la region boxwork (sol 4671). 6,144 km de lado para que quepan de norte a sur (~4,9 km).",
+  "name": "Mount Sharp - Glen Torridon a Boxwork (traza de Curiosity)",
+  "body": "Mars",
+  "crs": "Equirectangular local (planetocentrico, longitud Este positiva), esfera IAU R = 3396190 m: +proj=eqc +lat_ts=lat0 +lat_0=lat0 +lon_0=lon0 +R=3396190",
+  "mars_radius_m": 3396190,
+  "center": { "lat": -4.770, "lon_east": 137.395 },
+  "size_m": 6144,
+  "grid_px": 1024,
+  "pixel_size_m": 6.0
+}

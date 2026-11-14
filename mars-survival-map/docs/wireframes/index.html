@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wireframes HUD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===== Tokens (docs/sistema_visual.md) ===== */
+:root {
+  --hud-bg: rgba(12, 10, 14, 0.62);
+  --hud-bg-solid: #16121a;
+  --hud-border: rgba(255, 236, 220, 0.22);
+  --hud-text: #F6EDE4;
+  --hud-text-dim: #BFAFA3;
+  --safe: #3DDC97; --caution: #FFC23D; --danger: #FF4D4D; --info: #7FD1FF;
+  --o2: #7FD1FF; --energy: #FFC23D; --integrity: #E8E8F0;
+  --clay: #4FC3F7; --sulfate: #C792EA; --boxwork: #FFFFFF; --dunes: #5C6BC0;
+  --mars: #C1440E; --mars-dust: #DEA070;
+  --page: #0d0b0f; --page-2: #17131a; --ink: #F6EDE4; --ink-dim: #a99c92; --line: rgba(255,236,220,.12);
+  --font-hud: "Rajdhani", system-ui, sans-serif;
+  --font-text: "Inter", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--font-text); }
+body { padding: 24px 16px 64px; }
+a { color: var(--info); }
+.wrap { max-width: 1320px; margin: 0 auto; }
+header.top h1 { font-family: var(--font-hud); font-weight: 700; font-size: 28px; margin: 0 0 4px; letter-spacing: .02em; }
+header.top p { margin: 0 0 16px; color: var(--ink-dim); font-size: 14px; max-width: 75ch; }
+nav.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 18px; }
+nav.tabs button {
+  font: 600 14px var(--font-hud); letter-spacing: .04em; text-transform: uppercase;
+  color: var(--ink-dim); background: var(--page-2); border: 1px solid var(--line);
+  border-radius: 6px; padding: 7px 12px; cursor: pointer;
+}
+nav.tabs button[aria-selected="true"] { color: var(--page); background: var(--mars-dust); border-color: var(--mars-dust); }
+section.screen { display: none; }
+section.screen.active { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+@media (max-width: 980px) { section.screen.active { grid-template-columns: minmax(0,1fr); } }
+.notes { background: var(--page-2); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; line-height: 1.5; }
+.notes h2 { font: 700 18px var(--font-hud); margin: 0 0 6px; letter-spacing: .02em; }
+.notes ol { padding-left: 20px; margin: 8px 0 0; }
+.notes li { margin: 0 0 8px; }
+.notes code { font-size: 12px; background: rgba(255,255,255,.06); padding: 1px 4px; border-radius: 4px; }
+.notes .k { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--mars-dust); color: var(--page); font: 700 11px var(--font-hud); margin-right: 4px; vertical-align: 1px; }
+
+/* ===== Marco 16:9 que escala todo con cqw ===== */
+.frame {
+  position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 10px;
+  border: 1px solid var(--line); background: #2a160d; container-type: inline-size;
+  font-family: var(--font-hud); color: var(--hud-text); isolation: isolate;
+}
+.callout {
+  position: absolute; z-index: 50; width: 2.2cqw; height: 2.2cqw; border-radius: 50%;
+  background: var(--mars-dust); color: #1a0f0a; font: 700 1.25cqw var(--font-hud);
+  display: grid; place-items: center; box-shadow: 0 0 0 .25cqw rgba(0,0,0,.45);
+}
+body.hide-callouts .callout { display: none; }
+
+/* Escena: cielo + suelo en perspectiva hecho con la ortoimagen real */
+.sky { position: absolute; inset: 0; background: linear-gradient(#c79a6f 0%, #d9b08a 34%, #e0b894 44%, #9b6b4a 46%); }
+.ground {
+  position: absolute; left: -60%; right: -60%; top: 44%; height: 160%;
+  background: url(../../public/layers/optical.png) 52% 38% / 130% auto;
+  transform: perspective(28cqw) rotateX(64deg); transform-origin: 50% 0;
+  filter: saturate(1.05) contrast(1.05);
+}
+.ground .ov { position: absolute; inset: 0; background-size: inherit; background-position: inherit; opacity: 0; transition: opacity .25s; }
+.ground .ov.on { opacity: .9; }
+.haze { position: absolute; inset: 0; background: linear-gradient(transparent 40%, rgba(222,160,112,.25) 46%, transparent 60%); pointer-events: none; }
+.visor { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 9cqw 2cqw rgba(0,0,0,.55); border-radius: 3cqw; }
+.dim { position: absolute; inset: 0; background: rgba(10,8,12,.55); backdrop-filter: blur(.4cqw); }
+
+/* Paneles HUD */
+.panel {
+  position: absolute; background: var(--hud-bg); border: 1px solid var(--hud-border);
+  border-radius: .7cqw; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.res { left: 2cqw; top: 2cqw; padding: .9cqw 1.1cqw; width: 22cqw; display: grid; gap: .55cqw; }
+.res .row { display: grid; grid-template-columns: 2cqw 1fr 3.6cqw; align-items: center; gap: .7cqw; }
+.res svg { width: 1.7cqw; height: 1.7cqw; }
+.bar { height: 1.1cqw; border-radius: .3cqw; background: rgba(255,255,255,.1); overflow: hidden; position: relative; }
+.bar i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; }
+.bar.low i { background-image: repeating-linear-gradient(135deg, rgba(0,0,0,.45) 0 .35cqw, transparent .35cqw .8cqw) !important; background-color: var(--caution) !important; }
+.res .pct { font-size: 1.45cqw; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+
+.compass { left: 50%; transform: translateX(-50%); top: 2cqw; width: 30cqw; height: 3.4cqw; overflow: hidden; }
+.compass .ticks { position: absolute; inset: 0; display: flex; justify-content: space-between; align-items: center; padding: 0 2cqw; font-size: 1.3cqw; color: var(--hud-text-dim); font-weight: 600; }
+.compass .ticks b { color: var(--hud-text); }
+.compass .tgt { position: absolute; top: .2cqw; left: 58%; transform: translateX(-50%); text-align: center; font-size: 1cqw; color: var(--safe); line-height: 1; }
+.compass .tgt svg { width: 1.3cqw; height: 1.3cqw; display: block; margin: 0 auto .1cqw; }
+.compass .center { position: absolute; left: 50%; bottom: 0; width: 1px; height: .9cqw; background: var(--hud-text); }
+
+.minimap { right: 2cqw; top: 2cqw; width: 19cqw; padding: .6cqw; }
+.minimap .map { position: relative; width: 100%; aspect-ratio: 1; border-radius: .4cqw; overflow: hidden; background: #2a160d; }
+.minimap img, .minimap svg.trace { position: absolute; inset: 0; width: 100%; height: 100%; }
+.minimap img.ov { opacity: 0; transition: opacity .25s; }
+.minimap img.ov.on { opacity: .95; }
+.minimap .cap { display: flex; justify-content: space-between; font-size: 1.05cqw; color: var(--hud-text-dim); margin-top: .4cqw; }
+.mk { position: absolute; transform: translate(-50%, -50%); width: 1.2cqw; height: 1.2cqw; }
+.mk.sci { border: .22cqw solid #fff; border-radius: 50%; }
+.mk.shel { border: .22cqw solid var(--safe); border-radius: .2cqw; }
+.mk.target { box-shadow: 0 0 0 .3cqw rgba(61,220,151,.35); border-color: var(--safe); }
+.mk.player { width: 0; height: 0; border-left: .7cqw solid transparent; border-right: .7cqw solid transparent; border-bottom: 1.4cqw solid var(--info); filter: drop-shadow(0 0 .3cqw #000); }
+.north { position: absolute; left: .5cqw; top: .3cqw; font-size: 1.1cqw; font-weight: 700; text-shadow: 0 0 .3cqw #000; }
+
+.mission { right: 2cqw; bottom: 8.4cqw; width: 26cqw; padding: .9cqw 1.1cqw; }
+.mission .lbl { font-size: 1.05cqw; color: var(--hud-text-dim); letter-spacing: .08em; text-transform: uppercase; }
+.mission .t { font-size: 1.75cqw; font-weight: 700; margin: .15cqw 0 .3cqw; }
+.mission .obj { font-size: 1.3cqw; display: flex; align-items: center; gap: .5cqw; }
+.mission .obj svg { width: 1.4cqw; height: 1.4cqw; color: var(--safe); }
+
+.layers { right: 2cqw; bottom: 2cqw; padding: .5cqw; display: flex; gap: .4cqw; }
+.layers button {
+  font: 600 1.15cqw var(--font-hud); color: var(--hud-text); background: rgba(255,255,255,.06);
+  border: 1px solid var(--hud-border); border-radius: .4cqw; padding: .45cqw .7cqw; cursor: pointer; display: flex; align-items: center; gap: .4cqw;
+}
+.layers button kbd { font: 700 1cqw var(--font-hud); background: rgba(255,255,255,.14); border-radius: .25cqw; padding: .05cqw .4cqw; }
+.layers button[aria-pressed="true"] { background: var(--hud-text); color: #120e10; border-color: var(--hud-text); }
+.layers button[aria-pressed="true"] kbd { background: rgba(0,0,0,.15); }
+
+.legend { right: 2cqw; bottom: 17.6cqw; width: 26cqw; padding: .8cqw 1cqw; font-size: 1.15cqw; display: none; }
+.legend.on { display: block; }
+.legend .h { font-weight: 700; font-size: 1.3cqw; margin-bottom: .4cqw; }
+.legend .li { display: flex; align-items: center; gap: .6cqw; margin: .25cqw 0; font-family: var(--font-text); font-size: 1.05cqw; }
+.sw { width: 2.2cqw; height: 1.3cqw; border-radius: .2cqw; border: 1px solid rgba(255,255,255,.25); flex: none; }
+.sw.safe { background: rgba(61,220,151,.35); }
+.sw.caution { background: radial-gradient(circle, var(--caution) 28%, rgba(255,194,61,.3) 30%) 0 0 / .55cqw .55cqw; }
+.sw.danger { background: repeating-linear-gradient(135deg, var(--danger) 0 .25cqw, rgba(255,77,77,.35) .25cqw .75cqw); }
+
+.alert { left: 2cqw; bottom: 12.6cqw; width: 34cqw; padding: .8cqw 1cqw; display: flex; gap: .8cqw; align-items: flex-start; }
+.alert svg { width: 2.2cqw; height: 2.2cqw; flex: none; }
+.alert .tt { font-size: 1.15cqw; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; }
+.alert .tx { font-family: var(--font-text); font-size: 1.2cqw; line-height: 1.35; }
+.alert.caution { border: .15cqw dashed var(--caution); }
+.alert.caution .tt, .alert.caution svg { color: var(--caution); }
+.alert.danger { border: .35cqw double var(--danger); animation: blink 1s steps(2) infinite; }
+.alert.danger .tt, .alert.danger svg { color: var(--danger); }
+.alert.info { border: .15cqw solid var(--info); }
+.alert.info .tt, .alert.info svg { color: var(--info); }
+@keyframes blink { 50% { border-color: rgba(255,77,77,.35); } }
+@media (prefers-reduced-motion: reduce) { .alert.danger { animation: none; } }
+
+.dialog { left: 2cqw; bottom: 2cqw; width: 40cqw; padding: .8cqw 1.1cqw; }
+.dialog .who { font-size: 1.15cqw; font-weight: 700; display: flex; align-items: center; gap: .5cqw; }
+.dialog .who svg { width: 1.4cqw; height: 1.4cqw; }
+.dialog .tx { font-family: var(--font-text); font-size: 1.3cqw; line-height: 1.4; margin-top: .25cqw; }
+
+.reticle { position: absolute; left: 50%; top: 56%; width: 6cqw; height: 6cqw; transform: translate(-50%,-50%); border: .2cqw solid rgba(61,220,151,.9); border-radius: 50%; }
+.reticle::after { content: ""; position: absolute; inset: 1.6cqw; border: .2cqw dashed rgba(61,220,151,.9); border-radius: 50%; }
+.scanring { position: absolute; left: 50%; top: 60%; transform: translate(-50%,-50%); text-align: center; }
+.scanring .ring { width: 9cqw; height: 9cqw; border-radius: 50%; margin: 0 auto; background: conic-gradient(var(--safe) 0 72%, rgba(255,255,255,.15) 72% 100%); -webkit-mask: radial-gradient(circle, transparent 3.6cqw, #000 3.7cqw); mask: radial-gradient(circle, transparent 3.6cqw, #000 3.7cqw); }
+.scanring .lbl { font-size: 1.4cqw; font-weight: 700; margin-top: .6cqw; text-shadow: 0 0 .4cqw #000; }
+
+/* Pantallas de menú / tarjetas */
+.center { position: absolute; inset: 0; display: grid; place-items: center; }
+.card { background: var(--hud-bg-solid); border: 1px solid var(--hud-border); border-radius: 1cqw; padding: 2.2cqw 2.6cqw; }
+.btn { display: inline-flex; align-items: center; gap: .6cqw; font: 700 1.55cqw var(--font-hud); letter-spacing: .05em; text-transform: uppercase; padding: .9cqw 1.8cqw; border-radius: .6cqw; border: 1px solid var(--hud-border); background: rgba(255,255,255,.06); color: var(--hud-text); }
+.btn.primary { background: var(--mars-dust); color: #1a0f0a; border-color: var(--mars-dust); }
+.title { font-size: 6.2cqw; font-weight: 700; letter-spacing: .03em; line-height: .95; margin: 0; text-shadow: 0 .3cqw 2cqw rgba(0,0,0,.6); }
+.subtitle { font-family: var(--font-text); font-size: 1.6cqw; color: var(--hud-text); opacity: .9; margin: 1cqw 0 2.4cqw; }
+.eyebrow { font-size: 1.2cqw; letter-spacing: .2em; text-transform: uppercase; color: var(--mars-dust); font-weight: 700; }
+.chip { display: inline-flex; align-items: center; gap: .5cqw; font-size: 1.2cqw; font-weight: 600; padding: .35cqw .8cqw; border-radius: 99px; border: 1px solid var(--hud-border); }
+.chip svg { width: 1.4cqw; height: 1.4cqw; }
+.muted { color: var(--hud-text-dim); }
+.body { font-family: var(--font-text); font-size: 1.35cqw; line-height: 1.5; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 2cqw; }
+.score td { padding: .45cqw 0; font-size: 1.5cqw; }
+.score td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.score tr.total td { border-top: 1px solid var(--hud-border); font-size: 2cqw; padding-top: .8cqw; }
+.layercard { background: rgba(255,255,255,.04); border: 1px solid var(--hud-border); border-radius: .7cqw; padding: 1cqw; }
+.layercard .thumb { width: 100%; aspect-ratio: 1.6; border-radius: .4cqw; background: url(../../public/layers/optical.png) 50% 40% / 170% auto; position: relative; overflow: hidden; margin-bottom: .7cqw; }
+.layercard .thumb img { position: absolute; inset: 0; width: 170%; left: -35%; top: -35%; height: auto; }
+.layercard h3 { margin: 0 0 .3cqw; font-size: 1.6cqw; display: flex; align-items: center; gap: .5cqw; }
+.layercard h3 kbd { font: 700 1.1cqw var(--font-hud); background: var(--hud-text); color: #120e10; border-radius: .25cqw; padding: .05cqw .45cqw; }
+.layercard p { font-family: var(--font-text); font-size: 1.05cqw; line-height: 1.45; margin: .3cqw 0 0; color: var(--hud-text-dim); }
+.storm-tint { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 0%, rgba(255,77,77,.28), transparent 60%); mix-blend-mode: screen; animation: pulse 2s ease-in-out infinite; pointer-events: none; }
+@keyframes pulse { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .storm-tint { animation: none; } }
+.countdown { position: absolute; left: 50%; top: 14cqw; transform: translateX(-50%); text-align: center; }
+.countdown .n { font-size: 7cqw; font-weight: 700; color: var(--danger); line-height: 1; text-shadow: 0 0 1.5cqw rgba(0,0,0,.7); font-variant-numeric: tabular-nums; }
+.countdown .l { font-size: 1.6cqw; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; text-shadow: 0 0 .5cqw #000; }
+.arrow { position: absolute; left: 50%; top: 34cqw; transform: translateX(-50%) rotate(-28deg); color: var(--safe); text-align: center; }
+.arrow svg { width: 5cqw; height: 5cqw; filter: drop-shadow(0 0 .5cqw #000); }
+.arrowlbl { position: absolute; left: 50%; top: 41cqw; transform: translateX(-50%); font-size: 1.5cqw; font-weight: 700; color: var(--safe); text-shadow: 0 0 .5cqw #000; white-space: nowrap; }
+.toolbar { display: flex; gap: 10px; align-items: center; margin: 0 0 12px; font-size: 13px; color: var(--ink-dim); }
+.toolbar label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-o2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><text x="12" y="15.5" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor" font-family="Rajdhani, sans-serif">O₂</text></symbol>
+    <symbol id="i-battery" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="17" height="10" rx="2"/><path d="M22 11v2"/><path d="M11 9l-2 3h4l-2 3"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="i-slope" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18L3 6z"/><path d="M8 20a5 5 0 0 0-1.5-3.6"/></symbol>
+    <symbol id="i-radiation" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="2"/><path d="M12 2a10 10 0 0 1 8.66 5L15 10.3A3.5 3.5 0 0 0 12 8.5z" transform="rotate(30 12 12)"/><path d="M12 2a10 10 0 0 1 8.66 5L15 10.3A3.5 3.5 0 0 0 12 8.5z" transform="rotate(150 12 12)"/><path d="M12 2a10 10 0 0 1 8.66 5L15 10.3A3.5 3.5 0 0 0 12 8.5z" transform="rotate(270 12 12)"/></symbol>
+    <symbol id="i-thermo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/><path d="M11.5 10v6"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></symbol>
+    <symbol id="i-route" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H16"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+    <symbol id="i-octagon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+    <symbol id="i-antenna" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4.9 16.1a10 10 0 0 1 0-14.2"/><path d="M7.8 13.2a6 6 0 0 1 0-8.4"/><circle cx="12" cy="9" r="2"/><path d="M16.2 4.8a6 6 0 0 1 0 8.4"/><path d="M19.1 1.9a10 10 0 0 1 0 14.2"/><path d="M12 11v11"/></symbol>
+    <symbol id="i-helmet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 14a8 8 0 1 1 16 0v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M7 13h10v3H7z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-shelter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 20V11a9 9 0 0 1 18 0v9z"/><path d="M9 20v-5h6v5"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 4 14h5v8h6v-8h5z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Mars Survival Map — Wireframes del HUD</h1>
+    <p>Miembro 4 · v1. Usan los datos reales del proyecto: <code>public/layers/optical.png</code>, los overlays de cada capa y las posiciones de <code>objectives.json</code>. Cada número del marco corresponde a una nota de la derecha. En la pantalla de juego, las teclas <b>1–4</b> y <b>R</b> funcionan.</p>
+  </header>
+  <div class="toolbar"><label><input type="checkbox" id="toggleCallouts" checked> Mostrar números de anotación</label></div>
+  <nav class="tabs" role="tablist" aria-label="Pantallas"></nav>
+
+  <!-- 1. INICIO -->
+  <section class="screen" data-title="1 · Inicio">
+    <div class="frame">
+      <div class="sky"></div><div class="ground"></div><div class="haze"></div>
+      <div class="dim" style="background:linear-gradient(90deg, rgba(10,8,12,.85) 0%, rgba(10,8,12,.35) 60%, transparent)"></div>
+      <div style="position:absolute;left:6cqw;top:12cqw;max-width:52cqw">
+        <div class="eyebrow">NASA Space Apps · Expedición Aeolis-1</div>
+        <h2 class="title" style="margin-top:1cqw">MARS<br>SURVIVAL MAP</h2>
+        <p class="subtitle">Camina por donde va Curiosity. Lee los datos de NASA. Vuelve con vida.</p>
+        <div style="display:flex;gap:1cqw;flex-wrap:wrap">
+          <span class="btn primary">Comenzar EVA</span>
+          <span class="btn">Guía de supervivencia</span>
+          <span class="btn" style="padding-inline:1.2cqw">ES · EN</span>
+        </div>
+      </div>
+      <div style="position:absolute;left:6cqw;bottom:3cqw;font-family:var(--font-text);font-size:1.05cqw;color:var(--hud-text-dim)">Datos: NASA/JPL-Caltech (Curiosity: traza, RAD, REMS) · MRO HiRISE y CTX vía USGS Astrogeology</div>
+      <span class="callout" style="left:4cqw;top:10.5cqw">1</span>
+      <span class="callout" style="left:4cqw;top:39.5cqw">2</span>
+      <span class="callout" style="left:4cqw;bottom:2.6cqw">3</span>
+    </div>
+    <aside class="notes">
+      <h2>Inicio</h2>
+      Fondo: el mismo terreno real del juego, en movimiento lento (paneo de la cámara de 20 s, sin pausa). Debe cargar en menos de 2 s; mientras tanto, se ve la imagen fija.
+      <ol>
+        <li><b>Título y promesa</b> en una línea: qué haces (caminar), con qué (datos NASA) y el objetivo (sobrevivir).</li>
+        <li><b>Acción principal</b> en color marca. «Guía» abre <code>docs/guia_supervivencia.md</code> como pantalla. El idioma cambia todos los textos <code>{es,en}</code> de <code>public/story/</code>.</li>
+        <li><b>Créditos de datos</b> siempre visibles (requisito para citar a NASA).</li>
+      </ol>
+    </aside>
+  </section>
+
+  <!-- 2. BRIEFING -->
+  <section class="screen" data-title="2 · Briefing">
+    <div class="frame">
+      <div class="sky"></div><div class="ground"></div><div class="dim"></div>
+      <div class="center">
+        <div class="card" style="width:64cqw;display:grid;grid-template-columns:1fr 20cqw;gap:2.4cqw;align-items:start">
+          <div>
+            <div class="eyebrow">Misión 2 de 5</div>
+            <h2 style="font-size:3.4cqw;margin:.4cqw 0 1cqw">Tormenta en el horizonte</h2>
+            <p class="body" style="margin:0 0 1.6cqw">Sube a la unidad de sulfatos y toma la lectura. Ojo: el Sol está muy activo. Si llega una tormenta de partículas, corre al refugio más cercano.</p>
+            <div style="display:flex;flex-wrap:wrap;gap:.8cqw;margin-bottom:2cqw">
+              <span class="chip" style="color:var(--danger);border-color:var(--danger)"><svg><use href="#i-radiation"/></svg>Peligro: radiación</span>
+              <span class="chip"><svg><use href="#i-layers"/></svg>Capa recomendada: <kbd style="font:700 1.1cqw var(--font-hud)">2</kbd> Radiación</span>
+              <span class="chip"><svg><use href="#i-target"/></svg>2,0 km · +260 m de subida</span>
+              <span class="chip" style="color:var(--safe);border-color:var(--safe)"><svg><use href="#i-shelter"/></svg>Refugio: rover Tumbo a 400 m</span>
+            </div>
+            <div style="display:flex;gap:1cqw"><span class="btn primary">Iniciar misión</span><span class="btn">Ver guía</span></div>
+          </div>
+          <div class="minimap panel" style="position:relative;inset:auto;width:100%;padding:.5cqw" data-minimap data-target="obj_sulfatos" data-player="obj_arcillas" data-layer="radiation"></div>
+        </div>
+      </div>
+      <span class="callout" style="left:18cqw;top:13.5cqw">1</span>
+      <span class="callout" style="left:18cqw;top:32.5cqw">2</span>
+      <span class="callout" style="right:16cqw;top:13.5cqw">3</span>
+    </div>
+    <aside class="notes">
+      <h2>Briefing de misión</h2>
+      Datos de <code>missions.json</code>: <code>title</code>, <code>brief</code>, <code>hazard_main</code>, <code>layer_hint</code>. La distancia y el desnivel se calculan con <code>objectives.json → world</code>.
+      <ol>
+        <li><b>Título y objetivo</b>: máximo 2 frases. El jugador debe saber a dónde va y por qué.</li>
+        <li><b>Chips</b>: peligro (color + ícono + texto), capa recomendada con su tecla, distancia y el refugio más cercano. Así el briefing enseña a usar el HUD antes de jugar.</li>
+        <li><b>Minimapa previo</b> con la capa recomendada ya activa y el objetivo resaltado.</li>
+      </ol>
+    </aside>
+  </section>
+
+  <!-- 3. JUEGO -->
+  <section class="screen" data-title="3 · Juego (HUD)">
+    <div class="frame" id="game">
+      <div class="sky"></div>
+      <div class="ground" id="ground">
+        <div class="ov" data-layer="slope" style="background-image:url(../../public/layers/slope_overlay.png)"></div>
+        <div class="ov" data-layer="radiation" style="background-image:url(../../public/layers/radiation_overlay.png)"></div>
+        <div class="ov" data-layer="thermal" style="background-image:url(../../public/layers/thermal_overlay.png)"></div>
+        <div class="ov" data-layer="spectral" style="background-image:url(../../public/layers/spectral_overlay.png)"></div>
+      </div>
+      <div class="haze"></div>
+      <div class="visor"></div>
+
+      <div class="panel res">
+        <div class="row" style="color:var(--o2)"><svg><use href="#i-o2"/></svg><div class="bar"><i style="width:68%;background:var(--o2)"></i></div><span class="pct">68%</span></div>
+        <div class="row" style="color:var(--energy)"><svg><use href="#i-battery"/></svg><div class="bar low"><i style="width:34%"></i></div><span class="pct" style="color:var(--caution)">34%</span></div>
+        <div class="row" style="color:var(--integrity)"><svg><use href="#i-shield"/></svg><div class="bar"><i style="width:91%;background:var(--integrity)"></i></div><span class="pct">91%</span></div>
+      </div>
+
+      <div class="panel compass">
+        <div class="ticks"><span>NO</span><b>N</b><span>NE</span><span>E</span><span>SE</span><b>S</b><span>SO</span></div>
+        <div class="tgt"><svg><use href="#i-target"/></svg>260 m</div>
+        <div class="center"></div>
+      </div>
+
+      <div class="panel minimap" data-minimap data-target="obj_sulfatos" data-player="player" data-route="1"></div>
+
+      <div class="panel legend" id="legend"></div>
+
+      <div class="panel mission">
+        <div class="lbl">Misión 2/5</div>
+        <div class="t">Tormenta en el horizonte</div>
+        <div class="obj"><svg><use href="#i-target"/></svg>Unidad de sulfatos · 260 m</div>
+      </div>
+
+      <div class="panel layers" id="layerbar">
+        <button data-layer="slope" aria-pressed="false"><kbd>1</kbd>Pendiente</button>
+        <button data-layer="radiation" aria-pressed="false"><kbd>2</kbd>Radiación</button>
+        <button data-layer="thermal" aria-pressed="false"><kbd>3</kbd>Temp.</button>
+        <button data-layer="spectral" aria-pressed="false"><kbd>4</kbd>Espectral</button>
+        <button data-layer="route" aria-pressed="true"><kbd>R</kbd>Ruta</button>
+      </div>
+
+      <div class="panel alert caution">
+        <svg><use href="#i-warn"/></svg>
+        <div><div class="tt">Precaución · Energía</div><div class="tx">Energía baja. El frío la gasta más rápido: busca zonas al sol.</div></div>
+      </div>
+
+      <div class="panel dialog">
+        <div class="who" style="color:#7FD1FF"><svg><use href="#i-antenna"/></svg>Yara · Base Aeolis</div>
+        <div class="tx">Ve a la unidad de sulfatos. El rover Tumbo está a unos 400 m: ese es tu refugio. Activa la capa de radiación.</div>
+      </div>
+
+      <span class="callout" style="left:1cqw;top:1cqw">1</span>
+      <span class="callout" style="left:34cqw;top:1cqw">2</span>
+      <span class="callout" style="right:1cqw;top:1cqw">3</span>
+      <span class="callout" style="right:27cqw;bottom:13cqw">4</span>
+      <span class="callout" style="right:1cqw;bottom:1cqw">5</span>
+      <span class="callout" style="left:1cqw;bottom:20cqw">6</span>
+      <span class="callout" style="left:1cqw;bottom:8.5cqw">7</span>
+    </div>
+    <aside class="notes">
+      <h2>Juego · HUD del visor</h2>
+      La zona central queda libre. Todo el HUD escala con el ancho de la ventana; en este mockup se usan unidades <code>cqw</code>, y en el juego conviene usar <code>vw</code>.
+      <ol>
+        <li><b>Recursos</b> (O₂, energía, integridad): ícono + barra + %. Por debajo del 40 %, la barra pasa a <b>ámbar con rayas</b>, sin depender solo del color.</li>
+        <li><b>Brújula</b> con el marcador del objetivo y la distancia en metros.</li>
+        <li><b>Minimapa</b>, norte arriba: ortoimagen CTX con la capa activa, objetivos (círculos), refugios (cuadrados verdes), jugador (triángulo) y ruta A* (línea discontinua, tecla R).</li>
+        <li><b>Leyenda flotante</b>: aparece al activar una capa y dice qué significa cada patrón en 1 línea.</li>
+        <li><b>Panel de capas</b> con su tecla visible. Solo una capa a la vez; la ruta R es independiente.</li>
+        <li><b>Alerta</b> (máximo 2): severidad = color + ícono + estilo de borde (sólido / discontinuo / doble con parpadeo). Textos en <code>alerts.json</code>.</li>
+        <li><b>Diálogo</b> con quien habla y su color (<code>dialogs.json → speakers</code>). Siempre con subtítulo.</li>
+      </ol>
+      <p><b>Pruébalo:</b> haz clic en el marco y pulsa 1–4 o R.</p>
+    </aside>
+  </section>
+
+  <!-- 4. CAPAS -->
+  <section class="screen" data-title="4 · Tutorial de capas">
+    <div class="frame">
+      <div class="sky"></div><div class="ground"></div><div class="dim"></div>
+      <div style="position:absolute;inset:3.5cqw 4cqw">
+        <div class="eyebrow">Cómo leer tus capas</div>
+        <h2 style="font-size:3cqw;margin:.4cqw 0 .6cqw">Tres patrones. Siempre significan lo mismo.</h2>
+        <div style="display:flex;gap:2cqw;margin-bottom:1.6cqw;font-family:var(--font-text);font-size:1.25cqw">
+          <span style="display:flex;align-items:center;gap:.6cqw"><span class="sw safe"></span>Liso = seguro</span>
+          <span style="display:flex;align-items:center;gap:.6cqw"><span class="sw caution"></span>Puntos = precaución</span>
+          <span style="display:flex;align-items:center;gap:.6cqw"><span class="sw danger"></span>Rayas = peligro</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1.4cqw">
+          <div class="layercard"><div class="thumb"><img src="../../public/layers/slope_overlay.png" alt=""></div><h3><kbd>1</kbd>Pendiente</h3><p>Rayas = más de 25°: no se puede pasar. Puntos = lento y gasta más O₂.</p><p style="color:var(--hud-text)">Fuente: DTM HiRISE + CTX</p></div>
+          <div class="layercard"><div class="thumb"><img src="../../public/layers/radiation_overlay.png" alt=""></div><h3><kbd>2</kbd>Radiación</h3><p>Liso = el terreno tapa parte del cielo. Rayas = zona expuesta. Importa sobre todo en una tormenta solar.</p><p style="color:var(--hud-text)">Fuente: RAD (Curiosity)</p></div>
+          <div class="layercard"><div class="thumb"><img src="../../public/layers/thermal_overlay.png" alt=""></div><h3><kbd>3</kbd>Temperatura</h3><p>Rayas = suelo bajo −45 °C: la calefacción gasta energía extra. Busca laderas al sol.</p><p style="color:var(--hud-text)">Fuente: REMS (Curiosity)</p></div>
+          <div class="layercard"><div class="thumb"><img src="../../public/layers/spectral_overlay.png" alt=""></div><h3><kbd>4</kbd>Espectral</h3><p><span style="color:var(--clay)">■</span> arcillas · <span style="color:var(--sulfate)">■</span> sulfatos · <span style="color:var(--boxwork)">■</span> boxwork · <span style="color:var(--dunes)">■</span> dunas. Tus objetivos están sobre su mineral.</p><p style="color:var(--hud-text)">Fuente: estratigrafía de Curiosity</p></div>
+        </div>
+        <div style="margin-top:1.6cqw;display:flex;gap:1cqw;align-items:center"><span class="btn primary">Entendido</span><span class="muted" style="font-family:var(--font-text);font-size:1.15cqw">Se muestra la primera vez que pulsas una capa. Se vuelve a abrir con «H».</span></div>
+      </div>
+      <span class="callout" style="left:2cqw;top:9.5cqw">1</span>
+      <span class="callout" style="left:2cqw;top:17cqw">2</span>
+    </div>
+    <aside class="notes">
+      <h2>Leyenda y tutorial de capas</h2>
+      Meta: que alguien entienda las 4 capas <b>en menos de 10 segundos</b>.
+      <ol>
+        <li><b>Una sola regla visual</b> para todas las capas de peligro: liso, puntos o rayas. Así se lee igual en daltonismo y en escala de grises.</li>
+        <li><b>Tarjetas</b> con miniatura del overlay real, una frase de qué hacer y la fuente NASA, para que el dato tenga una consecuencia y un origen.</li>
+      </ol>
+    </aside>
+  </section>
+
+  <!-- 5. TORMENTA -->
+  <section class="screen" data-title="5 · Tormenta solar">
+    <div class="frame">
+      <div class="sky"></div>
+      <div class="ground"><div class="ov on" style="background-image:url(../../public/layers/radiation_overlay.png)"></div></div>
+      <div class="haze"></div><div class="storm-tint"></div><div class="visor"></div>
+      <div class="panel res">
+        <div class="row" style="color:var(--o2)"><svg><use href="#i-o2"/></svg><div class="bar"><i style="width:61%;background:var(--o2)"></i></div><span class="pct">61%</span></div>
+        <div class="row" style="color:var(--energy)"><svg><use href="#i-battery"/></svg><div class="bar"><i style="width:52%;background:var(--energy)"></i></div><span class="pct">52%</span></div>
+        <div class="row" style="color:var(--integrity)"><svg><use href="#i-shield"/></svg><div class="bar"><i style="width:88%;background:var(--integrity)"></i></div><span class="pct">88%</span></div>
+      </div>
+      <div class="countdown"><div class="n">00:18</div><div class="l">Tormenta solar · llega en</div></div>
+      <div class="arrow"><svg><use href="#i-arrow"/></svg></div>
+      <div class="arrowlbl">Rover Tumbo · 400 m</div>
+      <div class="panel minimap" data-minimap data-target="rover" data-player="obj_sulfatos" data-layer="radiation" data-route="1"></div>
+      <div class="panel alert danger">
+        <svg><use href="#i-octagon"/></svg>
+        <div><div class="tt">Peligro · Tormenta solar en 18 s</div><div class="tx">Ve a un refugio. Si no llegas, baja a un canal o cráter.</div></div>
+      </div>
+      <div class="panel dialog">
+        <div class="who" style="color:#FFC23D"><svg><use href="#i-helmet"/></svg>SOMA · IA del traje</div>
+        <div class="tx">¡Alerta! Partículas solares en camino. Llegan en 30 segundos. Busca refugio YA.</div>
+      </div>
+      <span class="callout" style="left:41cqw;top:13cqw">1</span>
+      <span class="callout" style="left:42cqw;top:33cqw">2</span>
+      <span class="callout" style="left:1cqw;bottom:20cqw">3</span>
+      <span class="callout" style="right:1cqw;top:1cqw">4</span>
+    </div>
+    <aside class="notes">
+      <h2>Estado: tormenta solar</h2>
+      Evento <code>rules.json → events.solar_particle_event</code>: aviso de 30 s y luego 75 s con la dosis ×40 (×0,05 dentro de un refugio).
+      <ol>
+        <li><b>Cuenta regresiva</b> grande en el centro superior. Es el único momento en que el HUD ocupa el centro.</li>
+        <li><b>Flecha al refugio más cercano</b> con su distancia, sobre el terreno.</li>
+        <li><b>Alerta de peligro</b> con borde doble y parpadeo de 1 Hz (se desactiva con <code>prefers-reduced-motion</code>) más un sonido de sirena corta.</li>
+        <li>El minimapa activa <b>Radiación</b> automáticamente y traza la ruta al refugio.</li>
+      </ol>
+      Ya en el refugio: alerta info <code>a_spe_sheltered</code> y tinte rojo apagado. Al terminar: <code>d_m3_spe_end</code> y +50 puntos.
+    </aside>
+  </section>
+
+  <!-- 6. ESCANEO -->
+  <section class="screen" data-title="6 · Objetivo escaneado">
+    <div class="frame">
+      <div class="sky"></div><div class="ground" style="background-position:48% 62%"></div><div class="haze"></div><div class="visor"></div>
+      <div class="scanring" style="left:22cqw;top:30cqw"><div class="ring"></div><div class="lbl">Escaneando… 72%</div></div>
+      <div class="center" style="left:30cqw">
+        <div class="card" style="width:52cqw;padding:0;overflow:hidden">
+          <div style="height:17cqw;background:url(../../public/layers/optical.png) 63% 65% / 900% auto;position:relative">
+            <span class="chip" style="position:absolute;left:1.2cqw;top:1.2cqw;background:var(--hud-bg);color:var(--hud-text)">POV · Mastcam / HiRISE</span>
+          </div>
+          <div style="padding:1.6cqw 2cqw 2cqw">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div class="eyebrow" style="color:var(--safe);display:flex;align-items:center;gap:.5cqw"><svg style="width:1.5cqw;height:1.5cqw"><use href="#i-check"/></svg>Objetivo completado</div>
+              <div style="font-size:2.2cqw;font-weight:700;color:var(--safe)">+150</div>
+            </div>
+            <h2 style="font-size:2.6cqw;margin:.3cqw 0 .8cqw">Piedras de azufre de Gediz Vallis</h2>
+            <div class="layercard" style="margin-bottom:1.2cqw">
+              <h3 style="font-size:1.4cqw">Dato curioso · Azufre puro</h3>
+              <p style="color:var(--hud-text);font-size:1.2cqw">En mayo de 2024 Curiosity pasó por encima de una roca, la partió y aparecieron cristales amarillos de azufre elemental. Era la primera vez que se veía azufre puro en Marte.</p>
+              <p>Fuente: NASA/JPL – Curiosity, Gediz Vallis (2024) · Sol 4200 de Curiosity, aquí mismo.</p>
+            </div>
+            <div style="display:flex;gap:1cqw"><span class="btn primary">Continuar</span><span class="btn">Ver en el mapa</span></div>
+          </div>
+        </div>
+      </div>
+      <span class="callout" style="left:16cqw;top:24cqw">1</span>
+      <span class="callout" style="left:41cqw;top:9cqw">2</span>
+      <span class="callout" style="left:41cqw;top:35.5cqw">3</span>
+    </div>
+    <aside class="notes">
+      <h2>Escaneo y tarjeta de hallazgo</h2>
+      <ol>
+        <li><b>Anillo de progreso</b> mientras el jugador está dentro del radio (<code>science.scan_time_s</code> = 5 s). Si sale, el anillo se vacía y aparece la alerta <code>a_scan_lost</code>.</li>
+        <li><b>Imagen POV</b>: recorte HiRISE o foto Mastcam del lugar real (M1/M3 eligen la imagen; aquí hay un recorte CTX de ejemplo).</li>
+        <li><b>Dato curioso</b> de <code>facts.json</code> con su fuente, y un recordatorio de que <b>Curiosity estuvo aquí</b> (<code>msl_sol</code> del objetivo). Es el momento educativo de cada misión.</li>
+      </ol>
+      El juego queda en pausa mientras la tarjeta está abierta.
+    </aside>
+  </section>
+
+  <!-- 7. FIN -->
+  <section class="screen" data-title="7 · Completada / Fracaso">
+    <div class="frame">
+      <div class="sky"></div><div class="ground"></div><div class="dim"></div>
+      <div style="position:absolute;inset:4cqw 4cqw" class="grid2">
+        <div class="card">
+          <div class="eyebrow" style="color:var(--safe)">Expedición Aeolis-1</div>
+          <h2 style="font-size:3.2cqw;margin:.3cqw 0 .6cqw">Misión completada</h2>
+          <p class="body muted" style="margin:0 0 1.2cqw">Las muestras cuentan la historia del agua en Marte: lagos, canales y agua subterránea a lo largo de cientos de millones de años.</p>
+          <table class="score" style="width:100%;border-collapse:collapse">
+            <tr><td>Ciencia (5 misiones)</td><td>800</td></tr>
+            <tr><td>Bono de seguridad</td><td>+62</td></tr>
+            <tr><td>Bono de tiempo (19 min)</td><td>+10</td></tr>
+            <tr><td>Tormenta en refugio</td><td>+50</td></tr>
+            <tr class="total"><td>Total</td><td>922</td></tr>
+          </table>
+          <div style="display:flex;gap:1cqw;margin-top:1.4cqw"><span class="btn primary">Jugar de nuevo</span><span class="btn">Compartir</span></div>
+        </div>
+        <div class="card" style="border-color:var(--danger)">
+          <div class="eyebrow" style="color:var(--danger);display:flex;align-items:center;gap:.5cqw"><svg style="width:1.5cqw;height:1.5cqw"><use href="#i-octagon"/></svg>Misión fallida</div>
+          <h2 style="font-size:3.2cqw;margin:.3cqw 0 .6cqw">Sin oxígeno</h2>
+          <p class="body" style="margin:0 0 1.2cqw">El traje activó el rescate automático y el rover vino por ti.</p>
+          <div class="layercard" style="border-color:var(--caution);margin-bottom:1.4cqw">
+            <h3 style="font-size:1.4cqw;color:var(--caution)"><svg style="width:1.5cqw;height:1.5cqw"><use href="#i-warn"/></svg>Consejo</h3>
+            <p style="color:var(--hud-text);font-size:1.2cqw">Planifica tu regreso antes de bajar del 40 % de O₂. La ruta R evita las pendientes que más oxígeno gastan.</p>
+          </div>
+          <div style="display:flex;gap:1cqw;flex-wrap:wrap"><span class="btn primary">Reintentar desde el último refugio</span><span class="btn">Menú</span></div>
+        </div>
+      </div>
+      <span class="callout" style="left:2cqw;top:20cqw">1</span>
+      <span class="callout" style="right:46cqw;top:20cqw">2</span>
+    </div>
+    <aside class="notes">
+      <h2>Final: éxito y fracaso</h2>
+      <ol>
+        <li><b>Desglose del puntaje</b> según <code>rules.json → scoring</code>, en el orden de <code>end_screens.success.score_breakdown</code>. Los números usan cifras tabulares.</li>
+        <li><b>Fracaso</b>: causa en el título (<code>fail_oxygen</code> / <code>fail_integrity</code>), un consejo <b>concreto</b> y la opción de reintentar desde el último refugio, sin volver al inicio.</li>
+      </ol>
+      Nunca culpar al jugador: el tono es «esto pasó y así se evita».
+    </aside>
+  </section>
+</div>
+
+<script>
+// Posiciones reales (px sobre la cuadricula 1024) de public/layers/objectives.json
+const OBJ = {
+  habitat: { px: [94, 379], type: "base" },
+  obj_arcillas: { px: [119, 399], type: "science" },
+  rover: { px: [360, 524], type: "shelter" },
+  obj_sulfatos: { px: [420, 554], type: "science" },
+  obj_azufre: { px: [667, 648], type: "science" },
+  refugio_sur: { px: [806, 398], type: "shelter" },
+  obj_boxwork: { px: [890, 376], type: "science" },
+  player: { px: [386, 528], type: "player" }
+};
+// Traza de Curiosity simplificada (fila, col)
+const TRACE = [[0,189],[8,209],[20,215],[30,225],[24,246],[25,256],[33,274],[38,292],[54,292],[70,294],[75,307],[86,309],[99,313],[103,318],[115,327],[91,347],[73,363],[72,380],[63,360],[65,338],[59,337],[72,345],[65,367],[73,345],[93,347],[102,344],[109,360],[101,375],[92,384],[78,400],[74,405],[95,406],[105,400],[117,397],[119,399],[140,398],[141,388],[154,379],[162,369],[177,367],[183,371],[186,371],[167,380],[140,432],[141,457],[109,473],[121,484],[126,496],[146,533],[160,547],[155,584],[152,624],[155,658],[170,684],[174,682],[184,677],[217,637],[233,595],[239,582],[247,560],[256,541],[258,522],[281,511],[291,505],[316,503],[328,501],[326,499],[309,493],[304,482],[301,472],[305,484],[316,498],[340,517],[359,520],[369,529],[388,531],[393,541],[403,549],[414,558],[419,555],[421,548],[424,526],[419,508],[423,526],[448,539],[462,542],[470,543],[482,543],[488,544],[497,545],[496,550],[501,574],[506,563],[518,556],[532,568],[544,567],[560,590],[573,606],[580,610],[583,613],[589,620],[608,621],[612,634],[627,634],[641,633],[649,644],[660,646],[667,648],[680,648],[675,646],[680,641],[678,633],[657,621],[636,607],[635,596],[643,564],[642,540],[655,520],[671,501],[698,477],[717,475],[737,471],[741,451],[769,441],[784,427],[796,404],[819,389],[835,372],[849,361],[862,359],[869,361],[875,358],[883,366],[894,380],[885,374],[880,380],[895,390],[913,380],[944,374],[958,385],[985,394],[1017,403],[1013,418]];
+const LAYERS = {
+  slope: { file: "slope_overlay.png", name: "Pendiente", items: [["safe","Menos de 12°: camino fácil"],["caution","12–25°: lento, gasta O₂"],["danger","Más de 25°: bloqueado"]] },
+  radiation: { file: "radiation_overlay.png", name: "Radiación (µGy/h)", items: [["safe","< 8,3: el terreno te protege"],["caution","8,3–8,7: normal"],["danger","> 8,7: zona expuesta"]] },
+  thermal: { file: "thermal_overlay.png", name: "Temperatura del suelo", items: [["safe","Más de −25 °C"],["caution","−25 a −45 °C"],["danger","Menos de −45 °C: +energía"]] },
+  spectral: { file: "spectral_overlay.png", name: "Minerales", items: [["clay","Arcillas"],["sulfate","Sulfatos"],["boxwork","Vetas boxwork"],["dunes","Dunas"]] }
+};
+const pct = v => (v / 1024 * 100) + "%";
+
+function buildMinimap(el) {
+  const target = el.dataset.target, player = el.dataset.player, layer = el.dataset.layer;
+  const map = document.createElement("div"); map.className = "map";
+  map.innerHTML = `<img src="../../public/layers/optical.png" alt="">` +
+    Object.entries(LAYERS).map(([k, v]) => `<img class="ov${k === layer ? " on" : ""}" data-layer="${k}" src="../../public/layers/${v.file}" alt="">`).join("");
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 1024 1024"); svg.setAttribute("class", "trace");
+  svg.innerHTML = `<polyline points="${TRACE.map(([r, c]) => c + "," + r).join(" ")}" fill="none" stroke="rgba(255,210,80,.55)" stroke-width="5"/>`;
+  if (el.dataset.route) {
+    const a = OBJ[player].px, b = OBJ[target].px;
+    const mid = [(a[0] + b[0]) / 2 + 18, (a[1] + b[1]) / 2 - 22];
+    svg.innerHTML += `<path class="route" d="M${a[1]},${a[0]} Q${mid[1]},${mid[0]} ${b[1]},${b[0]}" fill="none" stroke="#3DDC97" stroke-width="9" stroke-dasharray="22 14" stroke-linecap="round"/>`;
+  }
+  map.appendChild(svg);
+  for (const [id, o] of Object.entries(OBJ)) {
+    if (id === "player" && player !== "player") continue;
+    const m = document.createElement("span");
+    m.className = "mk " + (o.type === "science" ? "sci" : o.type === "player" ? "player" : "shel") + (id === target ? " target" : "");
+    m.style.left = pct(o.px[1]); m.style.top = pct(o.px[0]);
+    m.title = id; map.appendChild(m);
+  }
+  map.insertAdjacentHTML("beforeend", `<span class="north">N ▲</span>`);
+  el.appendChild(map);
+  el.insertAdjacentHTML("beforeend", `<div class="cap"><span>6,1 km</span><span>Curiosity ━ traza</span></div>`);
+}
+document.querySelectorAll("[data-minimap]").forEach(buildMinimap);
+
+// Pestañas
+const screens = [...document.querySelectorAll("section.screen")];
+const tabs = document.querySelector("nav.tabs");
+function show(i) {
+  screens.forEach((s, j) => s.classList.toggle("active", i === j));
+  [...tabs.children].forEach((b, j) => b.setAttribute("aria-selected", String(i === j)));
+  try { localStorage.setItem("wf-tab", i); } catch (e) {}
+}
+screens.forEach((s, i) => {
+  const b = document.createElement("button"); b.role = "tab"; b.textContent = s.dataset.title;
+  b.onclick = () => show(i); tabs.appendChild(b);
+});
+let start = 2; try { const v = parseInt(localStorage.getItem("wf-tab"), 10); if (!isNaN(v) && v < screens.length) start = v; } catch (e) {}
+show(start);
+
+document.getElementById("toggleCallouts").onchange = e => document.body.classList.toggle("hide-callouts", !e.target.checked);
+
+// Capas interactivas en la pantalla de juego
+const game = document.getElementById("game");
+let active = null, routeOn = true;
+function setLayer(k) {
+  active = active === k ? null : k;
+  game.querySelectorAll(".ground .ov").forEach(o => o.classList.toggle("on", o.dataset.layer === active));
+  game.querySelectorAll(".minimap img.ov").forEach(o => o.classList.toggle("on", o.dataset.layer === active));
+  game.querySelectorAll("#layerbar button").forEach(b => { if (b.dataset.layer !== "route") b.setAttribute("aria-pressed", String(b.dataset.layer === active)); });
+  const lg = document.getElementById("legend");
+  if (!active) { lg.classList.remove("on"); return; }
+  const L = LAYERS[active];
+  const sw = t => ["safe","caution","danger"].includes(t) ? `<span class="sw ${t}"></span>` : `<span class="sw" style="background:var(--${t})"></span>`;
+  lg.innerHTML = `<div class="h">${L.name}</div>` + L.items.map(([t, txt]) => `<div class="li">${sw(t)}${txt}</div>`).join("");
+  lg.classList.add("on");
+}
+function toggleRoute() {
+  routeOn = !routeOn;
+  game.querySelectorAll(".route").forEach(r => r.style.display = routeOn ? "" : "none");
+  game.querySelector('#layerbar [data-layer="route"]').setAttribute("aria-pressed", String(routeOn));
+}
+game.querySelectorAll("#layerbar button").forEach(b => b.onclick = () => b.dataset.layer === "route" ? toggleRoute() : setLayer(b.dataset.layer));
+document.addEventListener("keydown", e => {
+  if (!screens[2].classList.contains("active")) return;
+  const map = { "1": "slope", "2": "radiation", "3": "thermal", "4": "spectral" };
+  if (map[e.key]) setLayer(map[e.key]);
+  if (e.key === "r" || e.key === "R") toggleRoute();
+});
+</script>
+</body>
+</html>

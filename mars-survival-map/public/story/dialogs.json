@@ -1,0 +1,257 @@
+{
+  "_doc": "Diálogos (Miembro 4). Se muestran en el panel de comunicaciones del casco. 'speaker' referencia 'speakers'. duration_s = tiempo en pantalla (aprox. 1 s por cada 15 caracteres, mínimo 3 s).",
+  "version": 1,
+  "speakers": {
+    "base": {
+      "name": {
+        "es": "Yara · Base Aeolis",
+        "en": "Yara · Aeolis Base"
+      },
+      "color": "#7FD1FF",
+      "icon": "antenna"
+    },
+    "suit": {
+      "name": {
+        "es": "SOMA · IA del traje",
+        "en": "SOMA · Suit AI"
+      },
+      "color": "#FFC23D",
+      "icon": "helmet"
+    },
+    "earth": {
+      "name": {
+        "es": "Control Tierra (retraso 14 min)",
+        "en": "Earth Control (14 min delay)"
+      },
+      "color": "#B9F6CA",
+      "icon": "earth"
+    }
+  },
+  "dialogs": [
+    {
+      "id": "d_intro_1",
+      "speaker": "base",
+      "duration_s": 6,
+      "text": {
+        "es": "Buenos días, EVA-1. Sol 212 de la Expedición Aeolis-1. Estás en la ladera norte del Monte Sharp, dentro del cráter Gale.",
+        "en": "Good morning, EVA-1. Sol 212 of the Aeolis-1 Expedition. You are on the north slope of Mount Sharp, inside Gale crater."
+      }
+    },
+    {
+      "id": "d_intro_2",
+      "speaker": "base",
+      "duration_s": 7,
+      "text": {
+        "es": "Hace más de 3 mil millones de años aquí hubo lagos. Curiosity nos dejó el mapa; hoy vamos a buscar las pruebas con nuestras propias manos.",
+        "en": "Over 3 billion years ago there were lakes here. Curiosity left us the map; today we gather the evidence with our own hands."
+      }
+    },
+    {
+      "id": "d_intro_3",
+      "speaker": "suit",
+      "duration_s": 6,
+      "text": {
+        "es": "Soy SOMA, el sistema del traje. Vigilaré tu oxígeno, energía e integridad. Te avisaré antes de que algo salga mal.",
+        "en": "I am SOMA, your suit system. I will watch your oxygen, energy and integrity. I will warn you before anything goes wrong."
+      }
+    },
+    {
+      "id": "d_intro_4",
+      "speaker": "earth",
+      "duration_s": 6,
+      "text": {
+        "es": "Aquí Tierra. Nuestros mensajes tardan 14 minutos en llegar: no podremos ayudarte en tiempo real. Confía en tus capas de datos.",
+        "en": "Earth here. Our messages take 14 minutes to reach you: we cannot help in real time. Trust your data layers."
+      }
+    },
+    {
+      "id": "d_m1_start_1",
+      "speaker": "base",
+      "duration_s": 6,
+      "text": {
+        "es": "Primer objetivo: la unidad de arcillas, al este. Las arcillas se forman con agua; son nuestra mejor pista de un ambiente habitable.",
+        "en": "First target: the clay unit, to the east. Clays form with water; they are our best clue to a habitable environment."
+      }
+    },
+    {
+      "id": "d_m1_start_2",
+      "speaker": "suit",
+      "duration_s": 5,
+      "text": {
+        "es": "El monte está hecho de capas, como un pastel. Entre capa y capa hay escalones de roca. Usa la capa de pendiente.",
+        "en": "The mountain is made of layers, like a cake. Between layers there are rock ledges. Use the slope layer."
+      }
+    },
+    {
+      "id": "d_m1_done",
+      "speaker": "base",
+      "duration_s": 5,
+      "text": {
+        "es": "¡Lectura recibida! Arcillas confirmadas. Bien hecho, EVA-1.",
+        "en": "Reading received! Clays confirmed. Well done, EVA-1."
+      }
+    },
+    {
+      "id": "d_m2_start_1",
+      "speaker": "base",
+      "duration_s": 6,
+      "text": {
+        "es": "En 2024 Curiosity aplastó una roca en el canal Gediz Vallis y encontró cristales de azufre puro. Queremos saber cómo llegaron ahí.",
+        "en": "In 2024 Curiosity crushed a rock in the Gediz Vallis channel and found pure sulfur crystals. We want to know how they got there."
+      }
+    },
+    {
+      "id": "d_m2_start_2",
+      "speaker": "suit",
+      "duration_s": 6,
+      "text": {
+        "es": "El fondo del canal recibe menos sol y es más frío. Más frío = más energía para la calefacción. Mira la capa térmica.",
+        "en": "The channel floor gets less sun and is colder. Colder = more energy for heating. Check the thermal layer."
+      }
+    },
+    {
+      "id": "d_m2_done",
+      "speaker": "base",
+      "duration_s": 5,
+      "text": {
+        "es": "Azufre elemental confirmado. Nadie lo esperaba en Marte. ¡Esto va directo al informe!",
+        "en": "Elemental sulfur confirmed. Nobody expected it on Mars. This goes straight into the report!"
+      }
+    },
+    {
+      "id": "d_m3_start_1",
+      "speaker": "earth",
+      "duration_s": 6,
+      "text": {
+        "es": "Aquí Tierra: hace 14 minutos vimos una gran erupción solar. Cuando leas esto, puede que ya venga en camino.",
+        "en": "Earth here: 14 minutes ago we saw a large solar flare. By the time you read this it may already be on its way."
+      }
+    },
+    {
+      "id": "d_m3_start_2",
+      "speaker": "base",
+      "duration_s": 6,
+      "text": {
+        "es": "Ve a la unidad de sulfatos. El rover Tumbo está a unos 400 m: ese es tu refugio. Activa la capa de radiación.",
+        "en": "Head to the sulfate unit. Rover Tumbo is about 400 m away: that is your shelter. Turn on the radiation layer."
+      }
+    },
+    {
+      "id": "d_m3_spe_warning",
+      "speaker": "suit",
+      "duration_s": 5,
+      "text": {
+        "es": "¡Alerta! Partículas solares en camino. Llegan en 30 segundos. Busca refugio YA.",
+        "en": "Alert! Solar particles incoming. Arrival in 30 seconds. Find shelter NOW."
+      }
+    },
+    {
+      "id": "d_m3_spe_hint",
+      "speaker": "suit",
+      "duration_s": 5,
+      "text": {
+        "es": "Si no llegas al refugio, baja a un canal o cráter: el terreno tapa parte del cielo y bloquea algo de radiación.",
+        "en": "If you can't reach shelter, get into a channel or crater: the terrain blocks part of the sky and some radiation."
+      }
+    },
+    {
+      "id": "d_m3_spe_end",
+      "speaker": "base",
+      "duration_s": 5,
+      "text": {
+        "es": "La tormenta pasó. Sigues a salvo. Así se sobrevive en Marte.",
+        "en": "The storm has passed. You are still in one piece. That is how you survive on Mars."
+      }
+    },
+    {
+      "id": "d_m3_done",
+      "speaker": "base",
+      "duration_s": 6,
+      "text": {
+        "es": "Sulfatos registrados. Marcan el momento en que Marte se fue secando: de lagos a desierto.",
+        "en": "Sulfates logged. They mark when Mars was drying out: from lakes to desert."
+      }
+    },
+    {
+      "id": "d_m4_start_1",
+      "speaker": "base",
+      "duration_s": 6,
+      "text": {
+        "es": "Último objetivo científico: las formaciones boxwork, al sureste. Desde órbita parecen una telaraña de crestas.",
+        "en": "Last science target: the boxwork formations, to the southeast. From orbit they look like a spiderweb of ridges."
+      }
+    },
+    {
+      "id": "d_m4_start_2",
+      "speaker": "suit",
+      "duration_s": 5,
+      "text": {
+        "es": "Es el punto más lejano. Si tu oxígeno baja del 50 % antes de llegar, pasa primero por el Refugio Sur.",
+        "en": "It is the farthest point. If your oxygen drops below 50% before you arrive, stop at the South Shelter first."
+      }
+    },
+    {
+      "id": "d_m4_done",
+      "speaker": "base",
+      "duration_s": 6,
+      "text": {
+        "es": "¡Boxwork escaneado! Agua subterránea circuló aquí mucho después de que se secaran los lagos. Ahora, al Refugio Sur.",
+        "en": "Boxwork scanned! Groundwater flowed here long after the lakes dried up. Now, to the South Shelter."
+      }
+    },
+    {
+      "id": "d_m5_start",
+      "speaker": "base",
+      "duration_s": 5,
+      "text": {
+        "es": "Pulsa R para ver la ruta más segura al Refugio Sur. Te esperamos con la escotilla abierta.",
+        "en": "Press R for the safest route to the South Shelter. The hatch is open for you."
+      }
+    },
+    {
+      "id": "d_m5_done",
+      "speaker": "base",
+      "duration_s": 5,
+      "text": {
+        "es": "Estás en el Refugio Sur, EVA-1. Presurizando esclusa. Misión cumplida.",
+        "en": "You are in the South Shelter, EVA-1. Pressurizing airlock. Mission accomplished."
+      }
+    },
+    {
+      "id": "d_outro_1",
+      "speaker": "earth",
+      "duration_s": 6,
+      "text": {
+        "es": "Aquí Tierra. Recibimos tus datos. Arcillas, azufre, sulfatos y boxwork: cuatro capítulos de la historia del agua en Marte.",
+        "en": "Earth here. We received your data. Clays, sulfur, sulfates and boxwork: four chapters in the story of water on Mars."
+      }
+    },
+    {
+      "id": "d_outro_2",
+      "speaker": "base",
+      "duration_s": 5,
+      "text": {
+        "es": "Descansa. Mañana el monte sigue ahí, y quedan 5 kilómetros de capas por leer.",
+        "en": "Rest. Tomorrow the mountain is still there, with 5 kilometers of layers left to read."
+      }
+    },
+    {
+      "id": "d_shelter_rover",
+      "speaker": "suit",
+      "duration_s": 4,
+      "text": {
+        "es": "Conectado al rover Tumbo. Recargando oxígeno y energía (máximo 60 %).",
+        "en": "Docked to rover Tumbo. Recharging oxygen and energy (up to 60%)."
+      }
+    },
+    {
+      "id": "d_shelter_habitat",
+      "speaker": "suit",
+      "duration_s": 4,
+      "text": {
+        "es": "Dentro del refugio presurizado. Recarga completa disponible.",
+        "en": "Inside the pressurized shelter. Full recharge available."
+      }
+    }
+  ]
+}

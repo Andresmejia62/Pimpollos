@@ -1,0 +1,194 @@
+{
+  "source": "real",
+  "provenance": {
+    "products": [
+      {
+        "file": "MSL_waypoints.json",
+        "collection": null,
+        "item": null,
+        "asset": null,
+        "href": null,
+        "stac": null,
+        "source": "https://mars.nasa.gov/mmgis-maps/MSL/Layers/json/MSL_waypoints.json"
+      },
+      {
+        "file": "ctx_dem.tif",
+        "collection": "mro_ctx_controlled_usgs_dtms",
+        "item": "T01_000815_1749_XN_05S222W__P21_009149_1752_XI_04S222W",
+        "asset": "geoid_adjusted_dem",
+        "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/ctx/controlled/usgs/T01_000815_1749_XN_05S222W__P21_009149_1752_XI_04S222W/T01_000815_1749_XN_05S222W__P21_009149_1752_XI_04S222W-DEM-geoid-adj.tif",
+        "stac": "https://stac.astrogeology.usgs.gov/api/collections/mro_ctx_controlled_usgs_dtms/items/T01_000815_1749_XN_05S222W__P21_009149_1752_XI_04S222W",
+        "source": null
+      },
+      {
+        "file": "ctx_ortho.tif",
+        "collection": "mro_ctx_controlled_usgs_dtms",
+        "item": "T01_000815_1749_XN_05S222W__P21_009149_1752_XI_04S222W",
+        "asset": "orthoimage",
+        "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/ctx/controlled/usgs/T01_000815_1749_XN_05S222W__P21_009149_1752_XI_04S222W/T01_000815_1749_XN_05S222W__P21_009149_1752_XI_04S222W-DRG.tif",
+        "stac": "https://stac.astrogeology.usgs.gov/api/collections/mro_ctx_controlled_usgs_dtms/items/T01_000815_1749_XN_05S222W__P21_009149_1752_XI_04S222W",
+        "source": null
+      },
+      {
+        "file": "hirise_dtm_009149.tif",
+        "collection": "mro_hirise_socet_dtms",
+        "item": "DTEEC_009149_1750_009294_1750_U01",
+        "asset": "dtm",
+        "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_009149_1750_PSP_009294_1750/DTEEC_009149_1750_009294_1750_U01.tif",
+        "stac": "https://stac.astrogeology.usgs.gov/api/collections/mro_hirise_socet_dtms/items/DTEEC_009149_1750_009294_1750_U01",
+        "source": null
+      },
+      {
+        "file": "hirise_dtm_019698.tif",
+        "collection": "mro_hirise_socet_dtms",
+        "item": "DTEEC_019698_1750_019988_1750_U01",
+        "asset": "dtm",
+        "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_019698_1750_ESP_019988_1750/DTEEC_019698_1750_019988_1750_U01.tif",
+        "stac": "https://stac.astrogeology.usgs.gov/api/collections/mro_hirise_socet_dtms/items/DTEEC_019698_1750_019988_1750_U01",
+        "source": null
+      },
+      {
+        "file": "hirise_dtm_009650.tif",
+        "collection": "mro_hirise_socet_dtms",
+        "item": "DTEEC_009650_1755_009716_1755_U01",
+        "asset": "dtm",
+        "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_009650_1755_PSP_009716_1755/DTEEC_009650_1755_009716_1755_U01.tif",
+        "stac": "https://stac.astrogeology.usgs.gov/api/collections/mro_hirise_socet_dtms/items/DTEEC_009650_1755_009716_1755_U01",
+        "source": null
+      }
+    ],
+    "accessed_utc": "2026-11-14T17:16:06Z",
+    "methods": {
+      "spectral_method": "Estratigrafia de la traza de Curiosity: arcillas entre -4165.0 y -4078.0 m, sulfatos por encima; boxwork = crestas locales cerca de los sols 4540-4990; dunas = zonas mas oscuras de la ortoimagen CTX. No es CRISM.",
+      "thermal_inertia_method": "Aproximada desde el albedo CTX (230-520 TIU). Pendiente: mosaico THEMIS."
+    }
+  },
+  "generated_unix": 1794677349,
+  "region": "region.json",
+  "rules": "rules.json",
+  "image_orientation": "fila 0 = norte, columna 0 = oeste; ver region.json -> world",
+  "layers": {
+    "dem": {
+      "file": "dem16.png",
+      "kind": "scalar",
+      "bits": 16,
+      "units": "m (elevacion sobre el datum de Marte)",
+      "decode": {
+        "min": -4330.0,
+        "max": -3057.0,
+        "formula": "valor = min + pixel/65535 * (max - min)"
+      },
+      "description": "Elevacion. Para Three.js: y = valor - y_ref_m. Para Blender (Displace): strength = max - min en metros.",
+      "y_ref_m": -4330.0
+    },
+    "slope": {
+      "file": "slope.png",
+      "kind": "scalar",
+      "bits": 8,
+      "units": "grados",
+      "decode": {
+        "min": 0.0,
+        "max": 60.0,
+        "formula": "valor = min + pixel/255 * (max - min)"
+      },
+      "description": "Pendiente del terreno. > 25 grados = bloqueado.",
+      "overlay": "slope_overlay.png"
+    },
+    "slope_blocked": {
+      "file": "slope_blocked.png",
+      "kind": "mask",
+      "description": "Blanco (255) = pendiente intransitable (> 25 grados). M1 lo combina con rocas y crateres para collision_map.png."
+    },
+    "radiation": {
+      "file": "radiation.png",
+      "kind": "scalar",
+      "bits": 8,
+      "units": "uGy/h",
+      "decode": {
+        "min": 5.0,
+        "max": 10.0,
+        "formula": "valor = min + pixel/255 * (max - min)"
+      },
+      "description": "Tasa de dosis GCR modelada: RAD (Curiosity) x fraccion de cielo visible x altitud.",
+      "overlay": "radiation_overlay.png"
+    },
+    "thermal": {
+      "file": "thermal.png",
+      "kind": "scalar",
+      "bits": 8,
+      "units": "C",
+      "decode": {
+        "min": -80.0,
+        "max": 10.0,
+        "formula": "valor = min + pixel/255 * (max - min)"
+      },
+      "description": "Temperatura del suelo ~10:00 LMST (modelo con inercia termica y orientacion al sol).",
+      "overlay": "thermal_overlay.png"
+    },
+    "thermal_night": {
+      "file": "thermal_night.png",
+      "kind": "scalar",
+      "bits": 8,
+      "units": "C",
+      "decode": {
+        "min": -120.0,
+        "max": -40.0,
+        "formula": "valor = min + pixel/255 * (max - min)"
+      },
+      "description": "Temperatura del suelo antes del amanecer (para ciclo dia/noche opcional)."
+    },
+    "spectral": {
+      "file": "spectral.png",
+      "kind": "classes",
+      "overlay": "spectral_overlay.png",
+      "classes": {
+        "0": {
+          "es": "Basalto / polvo (sin firma)",
+          "en": "Basalt / dust (no signature)",
+          "color": "#000000"
+        },
+        "1": {
+          "es": "Arcillas (filosilicatos)",
+          "en": "Clays (phyllosilicates)",
+          "color": "#4FC3F7"
+        },
+        "2": {
+          "es": "Sulfatos",
+          "en": "Sulfates",
+          "color": "#C792EA"
+        },
+        "3": {
+          "es": "Vetas boxwork",
+          "en": "Boxwork veins",
+          "color": "#FFFFFF"
+        },
+        "4": {
+          "es": "Dunas basalticas",
+          "en": "Basaltic dunes",
+          "color": "#5C6BC0"
+        }
+      },
+      "description": "Clases minerales (indice = valor del pixel). Estratigrafia de la traza de Curiosity: arcillas entre -4165.0 y -4078.0 m, sulfatos por encima; boxwork = crestas locales cerca de los sols 4540-4990; dunas = zonas mas oscuras de la ortoimagen CTX. No es CRISM."
+    },
+    "cost": {
+      "file": "cost.png",
+      "kind": "cost",
+      "file_256": "cost_256.png",
+      "decode": "0 = intransitable; costo = pixel / 25",
+      "description": "Costo de recorrido para A* (ver rules.json -> pathfinding)."
+    },
+    "optical": {
+      "file": "optical.png",
+      "kind": "rgb",
+      "description": "Ortoimagen CTX (MRO) reproyectada al recorte, coloreada en tonos marcianos y combinada con un sombreado suave del DEM. Resolucion nativa 20 m: para detalle cercano M1 usa textura de suelo."
+    }
+  },
+  "overlays": {
+    "levels": "0 seguro (verde, liso tenue), 1 precaucion (ambar, puntos), 2 peligro (rojo, rayas diagonales)",
+    "palette": {
+      "safe": "#3DDC97",
+      "caution": "#FFC23D",
+      "danger": "#FF4D4D"
+    }
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "_doc": "Reglas de supervivencia (Miembro 3) para que M2 las implemente tal cual. Tabla explicativa en docs/reglas.md. Recursos en escala 0-100. Tasas en unidades por SEGUNDO REAL de juego.",
+  "version": 1,
+
+  "time": {
+    "time_scale": 20,
+    "_time_scale": "1 s real = 20 s en Marte. Una EVA de 6 h dura 18 min reales.",
+    "start_local_time_h": 9.0,
+    "_clock": "Hora solar local (LMST). thermal.png corresponde a ~10:00. Si se implementa el ciclo dia/noche, interpolar entre thermal.png y thermal_night.png con day_curve."
+  },
+
+  "day_curve": {
+    "_doc": "Fraccion f(h) en [0,1]: T = T_noche + f * (T_dia - T_noche). Interpolar linealmente entre puntos.",
+    "points": [[0, 0.0], [6, 0.0], [8, 0.45], [10, 1.0], [13, 1.25], [16, 0.9], [18, 0.4], [21, 0.1], [24, 0.0]]
+  },
+
+  "movement": {
+    "walk_speed_mps": 7.0,
+    "slow_walk_speed_mps": 3.5,
+    "_doc": "Velocidad en el mundo por segundo real (comprimida, como el tiempo). El recorrido completo mide ~6,4 km en linea recta (~9 km por terreno): a 7 m/s son ~20 min reales, justo dentro del oxigeno del traje (24 min). Ver docs/reglas.md."
+  },
+
+  "resources": {
+    "oxygen": {
+      "start": 100,
+      "base_drain_per_s": 0.0694,
+      "_base": "Traje de 8 h: 100 / (8*3600/20).",
+      "exertion": "drain *= 1 + slope_deg / 25 mientras el jugador camina",
+      "zero_effect": "fail",
+      "fail_id": "fail_oxygen"
+    },
+    "energy": {
+      "start": 100,
+      "base_drain_per_s": 0.0556,
+      "_base": "Bateria de 10 h: 100 / (10*3600/20).",
+      "cold": { "comfort_c": -20, "extra_per_deg": 0.015, "_formula": "drain *= 1 + extra_per_deg * max(0, comfort_c - T)" },
+      "scanner_cost": 2.0,
+      "_scanner": "Costo unico al escanear un objetivo.",
+      "zero_effect": "speed_x0.4_and_oxygen_x1.5",
+      "_zero": "Sin energia: el traje entra en modo minimo (camina al 40%, el oxigeno se gasta 50% mas rapido)."
+    },
+    "integrity": {
+      "start": 100,
+      "radiation": { "k_per_ugy_h": 0.00023, "_formula": "drain = k * dosis_ugy_h * multiplicador_evento * factor_refugio" },
+      "slip": { "from_deg": 18, "to_deg": 25, "drain_per_s": 0.05, "_doc": "Caminar en pendiente entre 18 y 25 grados desgasta el traje (resbalones)." },
+      "zero_effect": "fail",
+      "fail_id": "fail_integrity",
+      "_note": "Integridad = traje + salud del astronauta. La dosis esta EXAGERADA para que se note en 18 minutos de juego; en la realidad 0,21 mGy/dia no es peligroso a corto plazo. Lo explicamos en la guia."
+    },
+    "shelter_refill": {
+      "_doc": "Dentro del radio de un objetivo con shelter=true.",
+      "oxygen_per_s": 1.0,
+      "energy_per_s": 1.0,
+      "integrity_per_s": 0.0,
+      "rover_cap": 60,
+      "_cap": "El rover solo recarga hasta 60; el habitat hasta 100."
+    }
+  },
+
+  "hazards": {
+    "slope": {
+      "safe_below_deg": 12,
+      "slow_above_deg": 12,
+      "blocked_above_deg": 25,
+      "speed": "speed *= clamp(1 - (slope - 12) / 26, 0.5, 1) ; bloqueado si slope > 25",
+      "layer": "slope.png"
+    },
+    "radiation": {
+      "units": "uGy/h (tasa de dosis absorbida GCR)",
+      "safe_below_ugy_h": 8.3,
+      "danger_above_ugy_h": 8.7,
+      "_levels": "Seguro (< 8.3) = terreno que tapa parte del cielo (fondo de canal, pie de acantilado, interior de crater). Peligro (> 8.7) = crestas y llanos altos expuestos. La diferencia real es pequena (unos pocos %); importa sobre todo durante una tormenta solar, cuando la dosis se multiplica.",
+      "layer": "radiation.png"
+    },
+    "temperature": {
+      "units": "C (temperatura del suelo)",
+      "safe_above_c": -25,
+      "danger_below_c": -45,
+      "layer": "thermal.png"
+    }
+  },
+
+  "events": {
+    "solar_particle_event": {
+      "name": { "es": "Tormenta de particulas solares", "en": "Solar particle event" },
+      "warning_s": 30,
+      "duration_s": 75,
+      "dose_multiplier": 40,
+      "shelter_factor": 0.05,
+      "_doc": "Aviso 30 s antes (alerta alert_spe_warning). Durante el evento la dosis se multiplica x40. Dentro de un refugio la dosis se multiplica por 0.05. Fuera, la capa de radiacion indica donde el terreno protege un poco mas.",
+      "trigger": "Se activa en la mision m2 al completar el escaneo, o con probabilidad 0.15 por minuto real a partir del minuto 6 en modo libre."
+    }
+  },
+
+  "science": {
+    "scan_radius_m": 15,
+    "scan_time_s": 5,
+    "_scan": "Mantener la posicion dentro del radio durante scan_time_s. Moverse fuera reinicia el escaneo."
+  },
+
+  "scoring": {
+    "science_points": "por mision, ver missions.json -> points",
+    "safety_bonus": "round(100 * (oxygen + energy + integrity) / 300) al terminar",
+    "time_bonus": "max(0, 200 - minutos_reales * 10)",
+    "storm_bonus": 50,
+    "_storm": "+50 si se pasa una tormenta solar dentro de un refugio."
+  },
+
+  "pathfinding": {
+    "_doc": "cost.png: 0 = intransitable; v>0 -> costo = v / encode_scale. Formula usada para generarlo (por si M2 la recalcula):",
+    "formula": "cost = 1 + w_slope*(slope/25)^2 + w_radiation*clamp((rad-8.3)/(8.7-8.3)) + w_cold*clamp((-25-T)/20)",
+    "w_slope": 4.0,
+    "w_radiation": 1.0,
+    "w_cold": 1.5,
+    "encode_scale": 25,
+    "grid_256": "cost_256.png: misma codificacion reducida a 256x256 (celda = 16 m). Una celda es intransitable si 50% o mas de sus 4x4 celdas finas lo son; si no, su costo es el promedio de las transitables. Recomendado para A* en el navegador.",
+    "neighbors": 8
+  },
+
+  "palette": {
+    "safe": "#3DDC97",
+    "caution": "#FFC23D",
+    "danger": "#FF4D4D"
+  }
+}
