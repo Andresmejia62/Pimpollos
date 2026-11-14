@@ -3,6 +3,7 @@ import { t, ui, getLang, setLang } from "./i18n.js";
 import { World } from "./engine/world.js";
 import { MarsScene } from "./engine/scene.js";
 import { Astronaut } from "./engine/astronaut.js";
+import { buildHabitat, buildRover, buildShelter } from "./engine/props.js";
 import { Controls } from "./engine/controls.js";
 import { Game } from "./gameplay/game.js";
 import { AlertSystem } from "./gameplay/alerts.js";
@@ -35,10 +36,10 @@ async function boot() {
   const beacons = {};
   for (const o of data.objectives.objectives) {
     const { x, z } = o.world;
-    if (o.id === "habitat") scene.addStructure("base", x, z);
-    else if (o.id === "rover") scene.addStructure("rover", x - 4, z);
-    else if (o.type === "shelter") scene.addShelterModule(x, z);
-    beacons[o.id] = scene.addBeacon(x, z, o.shelter ? "#3DDC97" : "#ffffff", game.radiusOf(o), o.shelter ? 120 : 380);
+    if (o.id === "habitat") buildHabitat(scene, x, z);
+    else if (o.id === "rover") buildRover(scene, x - 5, z + 2);
+    else if (o.type === "shelter") buildShelter(scene, x, z);
+    beacons[o.id] = scene.addBeacon(x, z, game.radiusOf(o), o.shelter ? 120 : 380);
   }
   const updateBeacons = () => {
     const tg = game.target;
@@ -46,9 +47,7 @@ async function boot() {
       const o = game.objectives[id];
       const isT = tg && id === tg.id;
       const done = o.type === "science" && game.missions.findIndex((m) => m.objective_id === id) < game.s.missionIndex;
-      b.visible = isT || o.shelter || (!done && o.type === "science");
-      b.userData.beamMat.uniforms.uColor.value.set(isT ? "#3DDC97" : o.shelter ? "#2a9d6c" : "#bfbfbf");
-      b.children[1].visible = isT || o.shelter;
+      scene.setBeacon(b, { visible: !!(isT || o.shelter || (!done && o.type === "science")), target: !!isT, shelter: !!o.shelter });
     }
   };
 
@@ -202,7 +201,7 @@ async function boot() {
       scene.camera.position.set(cx, scene.heightAt(cx, cz) + 45, cz);
       scene.camera.lookAt(titleCenter.x + 200, titleCenter.y + 120, titleCenter.z + 2500);
       scene.setTimeOfDay(9.5);
-      scene.updateRocks(cx, cz);
+      scene.setFocus(cx, scene.heightAt(cx, cz), cz);
     } else {
       if (s.phase === "playing" && !paused && $("scrGuide").hidden) {
         game.update(dt, controls.moveVector());
@@ -214,7 +213,7 @@ async function boot() {
       controls.updateCamera(scene.camera, { x: s.x, y, z: s.z }, (x, z) => scene.heightAt(x, z));
       hud.camYaw = controls.yaw;
       scene.setTimeOfDay(game.hour);
-      scene.updateRocks(s.x, s.z);
+      scene.setFocus(s.x, y, s.z);
       // ruta sugerida (A*) recalculada cada 1,5 s
       if (s.routeOn && now - lastRoute > 1.5) {
         lastRoute = now;
@@ -228,7 +227,7 @@ async function boot() {
       hud.update(now);
       setWind(s.spe && s.spe.phase === "active" ? 0.09 : 0.05);
     }
-    scene.render(now);
+    scene.render(now, dt);
     if (DEBUG) {
       frames++; fpsT += dt;
       if (fpsT > 0.5) { $("fps").textContent = `${Math.round(frames / fpsT)} fps · x ${s.x.toFixed(0)} z ${s.z.toFixed(0)}`; frames = 0; fpsT = 0; }

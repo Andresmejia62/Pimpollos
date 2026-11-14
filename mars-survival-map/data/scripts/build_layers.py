@@ -217,7 +217,14 @@ def main():
     L.hazard_overlay(tmp_lv, pal, OUT / "thermal_overlay.png")
     L.class_overlay(spectral, {k: v["color"] for k, v in SPECTRAL_CLASSES.items()}, OUT / "spectral_overlay.png")
 
-    if source == "real":
+    hd_albedo = ROOT / "public" / "textures" / "albedo_hd.jpg"
+    if source == "real" and hd_albedo.exists():
+        Image.MAX_IMAGE_PIXELS = None
+        g = np.asarray(Image.open(hd_albedo).convert("L").resize((n, n), Image.LANCZOS), dtype=np.float32) / 255
+        rgb = L.mars_tint(np.clip((g - 0.5) * 1.15 + 0.5, 0, 1))
+        optical_note = ("Ortoimagenes HiRISE (2 m) con el tono de CTX, reducidas a la cuadricula y coloreadas. "
+                        "La version de 4096 px para el motor esta en public/textures/albedo_hd.jpg (build_textures.py).")
+    elif source == "real":
         shade = 0.55 + 0.45 * L.hillshade(dem, px)
         rgb = L.mars_tint(np.clip(0.15 + 0.85 * albedo, 0, 1) * shade)
         optical_note = ("Ortoimagen CTX (MRO) reproyectada al recorte, coloreada en tonos marcianos "

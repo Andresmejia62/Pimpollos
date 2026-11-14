@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { assetUrl } from "../data.js";
 
 // Colores de Marte (sRGB) para la rampa de albedo: sombra -> polvo -> roca clara
-const COL_LO = "#2b140c", COL_MID = "#a55f39", COL_HI = "#ecc09a";
+const COL_LO = "#1f0f09", COL_MID = "#8a5536", COL_HI = "#dcb48f";
 const HORIZON_DAY = new THREE.Color("#d2a37c"), ZENITH_DAY = new THREE.Color("#8f6a55");
 const STORM_TINT = new THREE.Color("#8a3b1c");
 
@@ -75,7 +75,7 @@ const TERRAIN_FS = /* glsl */ `
   uniform sampler2D uAO;         // fraccion de cielo visible
   uniform sampler2D uOverlay;
   uniform sampler2D uDetail;
-  uniform float uHasHD, uOverlayOn, uFogDensity, uUseFlat, uStorm;
+  uniform float uHasHD, uOverlayOn, uFogDensity, uUseFlat, uStorm, uSize;
   uniform vec3 uSunDir, uSunColor, uAmbient, uFogColor, uColLo, uColMid, uColHi;
   varying vec2 vUv;
   varying vec3 vNormalW;
@@ -90,35 +90,55 @@ const TERRAIN_FS = /* glsl */ `
     float near = 1.0 - smoothstep(25.0, 320.0, dist);
     float mid = 1.0 - smoothstep(250.0, 2600.0, dist);
 
-    vec3 N = normalize(vNormalW);
-    float g = 0.52;
-    float ao = 1.0;
-    if (uUseFlat < 0.5) {
-      vec3 nm = normalize(texture2D(uNormalMap, vUv).xyz * 2.0 - 1.0);
-      N = normalize(mix(N, nm, uHasHD));
-      vec3 a = texture2D(uAlbedo, vUv).rgb;
-      g = mix(dot(a, vec3(0.35, 0.5, 0.15)) * 1.25, a.r, uHasHD);
-      ao = mix(0.42, 1.0, smoothstep(0.6, 1.0, texture2D(uAO, vUv).r));
-    }
-
     vec4 d1 = texture2D(uDetail, vPosW.xz / 3.3);
     vec4 d2 = texture2D(uDetail, vPosW.xz / 27.0 + 0.37);
     vec4 d3 = texture2D(uDetail, vPosW.xz / 230.0 + 0.11);
+    vec4 d4 = texture2D(uDetail, vPosW.xz / 1900.0 + 0.53);
+
+    vec3 N = normalize(vNormalW);
+    // tono generico para el terreno lejano (fuera del recorte) y para el borde del recorte
+    float gFlat = 0.5 + (d3.r - 0.5) * 0.22 + (d4.a - 0.5) * 0.3;
+    float g = gFlat;
+    float ao = 1.0;
+    if (uUseFlat < 0.5) {
+      float edge = min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y));
+      float inside = smoothstep(0.0, 0.02, edge);         // en el borde se funde con el terreno lejano
+      vec3 nm = normalize(texture2D(uNormalMap, vUv).xyz * 2.0 - 1.0);
+      N = normalize(mix(N, nm, uHasHD * inside));
+      vec3 a = texture2D(uAlbedo, vUv).rgb;
+      float gt = mix(dot(a, vec3(0.35, 0.5, 0.15)) * 1.25, a.r, uHasHD);
+      float gBlur = texture2D(uAlbedo, vUv, 6.0).r;       // version desenfocada (mipmap)
+      g = mix(gBlur, gt, inside);
+      ao = mix(1.0, mix(0.42, 1.0, smoothstep(0.6, 1.0, texture2D(uAO, vUv).r)), inside);
+    } else {
+      // terreno lejano: prolonga el tono del borde del recorte y lo lleva al tono generico
+      vec2 uvw = vec2(vPosW.x / uSize + 0.5, 0.5 - vPosW.z / uSize);
+      vec2 uvc = clamp(uvw, 0.004, 0.996);
+      float outside = length((uvw - uvc) * uSize);
+      g = mix(texture2D(uAlbedo, uvc, 6.0).r, gFlat, smoothstep(0.0, 2200.0, outside) * 0.85 * uHasHD + (1.0 - uHasHD));
+    }
+    g = clamp((g - 0.5) * 1.25 + 0.5, 0.0, 1.0);          // un poco mas de contraste
 
     // roca en las pendientes, arena en lo llano
     float steep = 1.0 - N.y;
     float rock = smoothstep(0.045, 0.15, steep + (d2.r - 0.5) * 0.06);
     float strata = sin(vPosW.y * 1.9 + d2.a * 5.0 + d3.r * 6.0) * 0.5 + 0.5;
     strata = mix(strata, sin(vPosW.y * 7.1 + d1.a * 3.0) * 0.5 + 0.5, 0.3);
-    float ripples = sin((vPosW.x * 0.8 + vPosW.z * 0.55) * 2.2 + d2.r * 7.0) * 0.5 + 0.5;
-    float gSand = g * mix(1.0, 0.84 + 0.2 * d1.r + 0.12 * ripples, near) * mix(1.0, 0.9 + 0.2 * d2.r, mid);
-    float gRock = g * mix(1.0, 0.68 + 0.5 * strata, mid * 0.85) * mix(1.0, 0.78 + 0.44 * d1.a, near);
+    // ondulaciones de arena: solo cerca (lejos formarian un patron de rayas)
+    float close = 1.0 - smoothstep(12.0, 70.0, dist);
+    float ripples = sin((vPosW.x * 0.8 + vPosW.z * 0.55) * 2.6 + d2.r * 9.0 + d3.a * 14.0) * 0.5 + 0.5;
+    float gSand = g * mix(1.0, 0.86 + 0.28 * d1.r, near) * mix(1.0, 0.94 + 0.12 * ripples, close * (1.0 - rock)) * mix(1.0, 0.9 + 0.2 * d2.r, mid);
+    float gRock = g * mix(1.0, 0.55 + 0.7 * smoothstep(0.25, 0.75, strata), mid * 0.9) * mix(1.0, 0.76 + 0.48 * d1.a, near);
     vec3 base = ramp(clamp(mix(gSand, gRock * 0.94, rock), 0.0, 1.0));
-    base = mix(base, base * vec3(0.9, 0.84, 0.8), rock * 0.55);
+    base = mix(base, base * vec3(0.86, 0.78, 0.74), rock * 0.7);
 
     // relieve fino
     vec2 bump = (d1.gb - 0.5) * 1.7 * near + (d2.gb - 0.5) * 1.0 * mid;
+    bump += vec2(0.8, 0.55) * cos((vPosW.x * 0.8 + vPosW.z * 0.55) * 2.6 + d2.r * 9.0 + d3.a * 14.0) * 0.1 * close * (1.0 - rock);
     N = normalize(N + vec3(bump.x, 0.0, bump.y) * mix(0.5, 1.25, rock));
+    // los estratos forman pequenos escalones: oscurecen la cara inferior de cada capa
+    float ledge = smoothstep(0.55, 0.75, strata) - smoothstep(0.75, 0.95, strata);
+    base *= 1.0 - 0.22 * ledge * rock * mid;
 
     float ndl = max(dot(N, uSunDir), 0.0);
     vec3 col = base * (uAmbient * ao + uSunColor * ndl);
@@ -178,7 +198,7 @@ export class MarsScene {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.12;
+    this.renderer.toneMappingExposure = 1.22;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.scene = new THREE.Scene();
@@ -281,8 +301,8 @@ export class MarsScene {
     const st = this.storm;
     if (this.terrainMat) {
       const k = 1 - 0.45 * st;
-      this.terrainMat.uniforms.uSunColor.value.setRGB(1.5 * day * k, (1.36 - 0.25 * low) * day * k, (1.2 - 0.45 * low) * day * k);
-      this.terrainMat.uniforms.uAmbient.value.setRGB(0.26 + 0.2 * day, 0.2 + 0.15 * day, 0.17 + 0.11 * day);
+      this.terrainMat.uniforms.uSunColor.value.setRGB(1.3 * day * k, (1.2 - 0.22 * low) * day * k, (1.08 - 0.4 * low) * day * k);
+      this.terrainMat.uniforms.uAmbient.value.setRGB(0.2 + 0.2 * day, 0.17 + 0.16 * day, 0.15 + 0.13 * day);
     }
     const hz = this.skyMat.uniforms.uHorizon.value.copy(HORIZON_DAY).multiplyScalar(0.3 + 0.7 * day).lerp(STORM_TINT, 0.55 * st);
     this.skyMat.uniforms.uZenith.value.copy(ZENITH_DAY).multiplyScalar(0.22 + 0.78 * day).lerp(STORM_TINT, 0.4 * st);
@@ -305,7 +325,7 @@ export class MarsScene {
     return {
       uAlbedo: { value: T.albedo }, uNormalMap: { value: T.normal }, uAO: { value: T.ao },
       uOverlay: { value: T.empty }, uDetail: { value: T.detail },
-      uHasHD: { value: this.hasHD }, uOverlayOn: { value: 0 }, uUseFlat: { value: flat ? 1 : 0 }, uStorm: { value: 0 },
+      uHasHD: { value: this.hasHD }, uSize: { value: this.world.size }, uOverlayOn: { value: 0 }, uUseFlat: { value: flat ? 1 : 0 }, uStorm: { value: 0 },
       uSunDir: { value: this.sunDir }, uSunColor: { value: new THREE.Color(1.3, 1.2, 1.05) }, uAmbient: { value: new THREE.Color(0.4, 0.32, 0.26) },
       uFogColor: { value: this.fogColor }, uFogDensity: { value: 0.00013 },
       uColLo: { value: new THREE.Color(COL_LO) }, uColMid: { value: new THREE.Color(COL_MID) }, uColHi: { value: new THREE.Color(COL_HI) },
@@ -505,7 +525,7 @@ export class MarsScene {
           float a = fade * (0.22 + 0.2 * pulse) * uPower;
           gl_FragColor = vec4(uColor * a, a); }`,
     });
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2.4, tall, 20, 1, true), beamMat);
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.9, tall, 16, 1, true), beamMat);
     beam.position.set(x, y + tall / 2, z);
     g.add(beam);
     // anillo del radio de escaneo, apoyado en el terreno
@@ -527,7 +547,8 @@ export class MarsScene {
     halo.position.copy(gem.position);
     halo.rotation.x = Math.PI / 2;
     g.add(gem, halo);
-    const b = { group: g, beamMat, ring, ringMat, gem, halo, gemMat, baseY: y + 16, color, target: false };
+    const b = { group: g, beamMat, ring, ringMat, gem, halo, gemMat, baseY: y + 16, color, target: false, power: 1, x, z };
+    g.visible = false;
     this.beacons.push(b);
     this.scene.add(g);
     return b;
@@ -541,7 +562,7 @@ export class MarsScene {
     b.gemMat.color.copy(b.color);
     b.ring.visible = target || shelter;
     b.gem.visible = b.halo.visible = target;
-    b.beamMat.uniforms.uPower.value = target ? 1.25 : 0.55;
+    b.power = target ? 1.6 : shelter ? 0.35 : 0.7;
   }
 
   // ---- ruta sugerida ------------------------------------------------------------------------
@@ -591,6 +612,9 @@ export class MarsScene {
     for (const b of this.beacons) {
       if (!b.group.visible) continue;
       b.beamMat.uniforms.uTime.value = time;
+      // el haz se atenua de cerca para no tapar la vista
+      const dcam = Math.hypot(this.camera.position.x - b.x, this.camera.position.z - b.z);
+      b.beamMat.uniforms.uPower.value = b.power * Math.min(1, Math.max(0.12, (dcam - 10) / 90));
       if (b.target) {
         b.gem.position.y = b.baseY + Math.sin(time * 2.0) * 1.2;
         b.gem.rotation.y = time * 1.4;

@@ -162,7 +162,7 @@
       "thermal_inertia_method": "THEMIS cuantitativa (mosaico global USGS/ASU 30S120E, 100 m), remuestreada a 6 m y suavizada. Exactitud absoluta ~20%."
     }
   },
-  "generated_unix": 1794682561,
+  "generated_unix": 1794689640,
   "region": "region.json",
   "rules": "rules.json",
   "image_orientation": "fila 0 = norte, columna 0 = oeste; ver region.json -> world",
@@ -279,7 +279,7 @@
     "optical": {
       "file": "optical.png",
       "kind": "rgb",
-      "description": "Ortoimagen CTX (MRO) reproyectada al recorte, coloreada en tonos marcianos y combinada con un sombreado suave del DEM. Resolucion nativa 20 m: para detalle cercano M1 usa textura de suelo."
+      "description": "Ortoimagenes HiRISE (2 m) con el tono de CTX, reducidas a la cuadricula y coloreadas. La version de 4096 px para el motor esta en public/textures/albedo_hd.jpg (build_textures.py)."
     },
     "binary": {
       "dem": {
