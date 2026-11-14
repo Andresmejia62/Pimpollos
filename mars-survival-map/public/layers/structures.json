@@ -1,0 +1,1285 @@
+{
+ "_doc": "Estructuras del mapa. Generado por data/scripts/build_structures.mjs a partir de la traza de Curiosity y de las capas del recorte. x = Este, z = Sur (metros, origen en el centro).",
+ "sources": [
+  "NASA/JPL MMGIS MSL_waypoints.json",
+  "MRO HiRISE + CTX (DTM, pendiente)",
+  "MSL RAD (radiación)",
+  "MSL REMS + Odyssey THEMIS (temperatura)",
+  "MRO CRISM (minerales)"
+ ],
+ "structures": [
+  {
+   "id": "pad_aeolis",
+   "type": "landing_pad",
+   "x": -725,
+   "z": -2573,
+   "elevation_m": -4158.9,
+   "at_point": {
+    "slope_deg": 3.5,
+    "radiation_ugy_h": 8.41,
+    "temperature_c": -25.6,
+    "spectral_class": 4
+   },
+   "name": {
+    "es": "Plataforma de aterrizaje y vehículo de ascenso",
+    "en": "Landing pad and ascent vehicle"
+   },
+   "info": {
+    "es": "El terreno más llano a menos de 170 m del hábitat según el DTM de HiRISE. El vehículo de ascenso fabrica su combustible con CO₂ marciano.",
+    "en": "The flattest ground within 170 m of the habitat according to the HiRISE DTM. The ascent vehicle makes its propellant from Martian CO₂."
+   },
+   "source": "DTM HiRISE + CTX (pendiente)"
+  },
+  {
+   "id": "solar_aeolis",
+   "type": "solar_farm",
+   "x": -847,
+   "z": -2497,
+   "elevation_m": -4153,
+   "at_point": {
+    "slope_deg": 1.4,
+    "radiation_ugy_h": 8.41,
+    "temperature_c": -23.2,
+    "spectral_class": 4
+   },
+   "name": {
+    "es": "Campo solar",
+    "en": "Solar farm"
+   },
+   "info": {
+    "es": "Marte recibe ~43 % de la luz solar que llega a la Tierra y el polvo cubre los paneles: por eso están inclinados y son tantos.",
+    "en": "Mars gets ~43% of the sunlight Earth does and dust coats the panels: that is why they are tilted and there are so many."
+   },
+   "source": "NASA Mars Fact Sheet"
+  },
+  {
+   "id": "isru_aeolis",
+   "type": "isru",
+   "x": -833,
+   "z": -2531,
+   "elevation_m": -4153.2,
+   "at_point": {
+    "slope_deg": 4.5,
+    "radiation_ugy_h": 8.39,
+    "temperature_c": -21.1,
+    "spectral_class": 4
+   },
+   "name": {
+    "es": "Planta de oxígeno ISRU",
+    "en": "ISRU oxygen plant"
+   },
+   "info": {
+    "es": "Versión grande de MOXIE, el instrumento de Perseverance que en 2021 produjo oxígeno a partir del CO₂ de la atmósfera marciana.",
+    "en": "A scaled-up MOXIE, the Perseverance instrument that made oxygen from Martian atmospheric CO₂ in 2021."
+   },
+   "source": "NASA/JPL MOXIE (Mars 2020)"
+  },
+  {
+   "id": "greenhouse_aeolis",
+   "type": "greenhouse",
+   "x": -751,
+   "z": -2515,
+   "elevation_m": -4155,
+   "at_point": {
+    "slope_deg": 6.4,
+    "radiation_ugy_h": 8.41,
+    "temperature_c": -24.6,
+    "spectral_class": 0
+   },
+   "name": {
+    "es": "Invernadero",
+    "en": "Greenhouse"
+   },
+   "info": {
+    "es": "El regolito marciano contiene percloratos tóxicos: aquí se cultiva en sustrato lavado y bajo presión.",
+    "en": "Martian regolith contains toxic perchlorates: crops here grow in washed soil and under pressure."
+   },
+   "source": "NASA Phoenix / Curiosity SAM (percloratos)"
+  },
+  {
+   "id": "drill_kilmarie",
+   "type": "drill_site",
+   "x": -670,
+   "z": -2604,
+   "elevation_m": -4159,
+   "at_point": {
+    "slope_deg": 2.6,
+    "radiation_ugy_h": 8.41,
+    "temperature_c": -24.2,
+    "spectral_class": 0
+   },
+   "name": {
+    "es": "Perforación «Kilmarie»",
+    "en": "\"Kilmarie\" drill site"
+   },
+   "info": {
+    "es": "Unidad de arcillas de Glen Torridon: las muestras con más minerales de arcilla de la misión.",
+    "en": "Glen Torridon clay-bearing unit: the most clay-rich samples of the mission."
+   },
+   "msl_sol": 2384,
+   "sol_note": "sol aproximado; posición de la traza oficial en ese sol",
+   "mineral": {
+    "es": "Basalto / polvo (sin firma)",
+    "en": "Basalt / dust (no signature)"
+   },
+   "source": "Traza MSL (JPL MMGIS) + CRISM"
+  },
+  {
+   "id": "drill_hutton",
+   "type": "drill_site",
+   "x": -833,
+   "z": -1981,
+   "elevation_m": -4101.6,
+   "at_point": {
+    "slope_deg": 12.7,
+    "radiation_ugy_h": 8.37,
+    "temperature_c": -30.6,
+    "spectral_class": 0
+   },
+   "name": {
+    "es": "Perforación «Hutton»",
+    "en": "\"Hutton\" drill site"
+   },
+   "info": {
+    "es": "Justo bajo el pedimento Greenheugh, al final de Glen Torridon.",
+    "en": "Just below the Greenheugh pediment, at the end of Glen Torridon."
+   },
+   "msl_sol": 2668,
+   "sol_note": "sol aproximado; posición de la traza oficial en ese sol",
+   "mineral": {
+    "es": "Basalto / polvo (sin firma)",
+    "en": "Basalt / dust (no signature)"
+   },
+   "source": "Traza MSL (JPL MMGIS) + CRISM"
+  },
+  {
+   "id": "drill_edinburgh",
+   "type": "drill_site",
+   "x": -839,
+   "z": -1952,
+   "elevation_m": -4097.7,
+   "at_point": {
+    "slope_deg": 13.6,
+    "radiation_ugy_h": 8.25,
+    "temperature_c": -23.2,
+    "spectral_class": 0
+   },
+   "name": {
+    "es": "Perforación «Edinburgh»",
+    "en": "\"Edinburgh\" drill site"
+   },
+   "info": {
+    "es": "Arenisca de la cima del pedimento Greenheugh: dunas antiguas convertidas en roca.",
+    "en": "Sandstone capping the Greenheugh pediment: ancient dunes turned to rock."
+   },
+   "msl_sol": 2711,
+   "sol_note": "sol aproximado; posición de la traza oficial en ese sol",
+   "mineral": {
+    "es": "Basalto / polvo (sin firma)",
+    "en": "Basalt / dust (no signature)"
+   },
+   "source": "Traza MSL (JPL MMGIS) + CRISM"
+  },
+  {
+   "id": "drill_glasgow",
+   "type": "drill_site",
+   "x": -823,
+   "z": -2061,
+   "elevation_m": -4100.9,
+   "at_point": {
+    "slope_deg": 15.1,
+    "radiation_ugy_h": 8.45,
+    "temperature_c": -18.6,
+    "spectral_class": 1
+   },
+   "name": {
+    "es": "Perforación «Glasgow»",
+    "en": "\"Glasgow\" drill site"
+   },
+   "info": {
+    "es": "Unidad de arcillas de Glen Torridon.",
+    "en": "Glen Torridon clay-bearing unit."
+   },
+   "msl_sol": 2754,
+   "sol_note": "sol aproximado; posición de la traza oficial en ese sol",
+   "mineral": {
+    "es": "Arcillas (filosilicatos)",
+    "en": "Clays (phyllosilicates)"
+   },
+   "source": "Traza MSL (JPL MMGIS) + CRISM"
+  },
+  {
+   "id": "drill_mary_anning",
+   "type": "drill_site",
+   "x": -228,
+   "z": -2412,
+   "elevation_m": -4128.7,
+   "at_point": {
+    "slope_deg": 4.9,
+    "radiation_ugy_h": 8.43,
+    "temperature_c": -24.9,
+    "spectral_class": 1
+   },
+   "name": {
+    "es": "Perforación «Mary Anning»",
+    "en": "\"Mary Anning\" drill site"
+   },
+   "info": {
+    "es": "Aquí SAM hizo su experimento de química húmeda en busca de moléculas orgánicas.",
+    "en": "SAM ran its wet-chemistry experiment here, searching for organic molecules."
+   },
+   "msl_sol": 2838,
+   "sol_note": "sol aproximado; posición de la traza oficial en ese sol",
+   "mineral": {
+    "es": "Arcillas (filosilicatos)",
+    "en": "Clays (phyllosilicates)"
+   },
+   "source": "Traza MSL (JPL MMGIS) + CRISM"
+  },
+  {
+   "id": "drill_nontron",
+   "type": "drill_site",
+   "x": 1036,
+   "z": -2052,
+   "elevation_m": -4069.4,
+   "at_point": {
+    "slope_deg": 4.7,
+    "radiation_ugy_h": 8.45,
+    "temperature_c": -23.5,
+    "spectral_class": 0
+   },
+   "name": {
+    "es": "Perforación «Nontron»",
+    "en": "\"Nontron\" drill site"
+   },
+   "info": {
+    "es": "Transición entre las arcillas y los sulfatos: el clima de Marte empezaba a secarse.",
+    "en": "The clay-to-sulfate transition: Mars' climate was starting to dry out."
+   },
+   "msl_sol": 3056,
+   "sol_note": "sol aproximado; posición de la traza oficial en ese sol",
+   "mineral": {
+    "es": "Basalto / polvo (sin firma)",
+    "en": "Basalt / dust (no signature)"
+   },
+   "source": "Traza MSL (JPL MMGIS) + CRISM"
+  },
+  {
+   "id": "drill_pontours",
+   "type": "drill_site",
+   "x": 502,
+   "z": -1664,
+   "elevation_m": -4043.2,
+   "at_point": {
+    "slope_deg": 7.3,
+    "radiation_ugy_h": 8.39,
+    "temperature_c": -22.8,
+    "spectral_class": 4
+   },
+   "name": {
+    "es": "Perforación «Pontours»",
+    "en": "\"Pontours\" drill site"
+   },
+   "info": {
+    "es": "Subida hacia el pedimento por Maria Gordon Notch.",
+    "en": "The climb towards the pediment through Maria Gordon Notch."
+   },
+   "msl_sol": 3170,
+   "sol_note": "sol aproximado; posición de la traza oficial en ese sol",
+   "mineral": {
+    "es": "Dunas basalticas",
+    "en": "Basaltic dunes"
+   },
+   "source": "Traza MSL (JPL MMGIS) + CRISM"
+  },
+  {
+   "id": "drill_zechstein",
+   "type": "drill_site",
+   "x": -4,
+   "z": -1384,
+   "elevation_m": -3975.4,
+   "at_point": {
+    "slope_deg": 9.4,
+    "radiation_ugy_h": 8.57,
+    "temperature_c": -18.9,
+    "spectral_class": 0
+   },
+   "name": {
+    "es": "Perforación «Zechstein»",
+    "en": "\"Zechstein\" drill site"
+   },
+   "info": {
+    "es": "Roca bajo el pedimento Greenheugh.",
+    "en": "Bedrock beneath the Greenheugh pediment."
+   },
+   "msl_sol": 3289,
+   "sol_note": "sol aproximado; posición de la traza oficial en ese sol",
+   "mineral": {
+    "es": "Basalto / polvo (sin firma)",
+    "en": "Basalt / dust (no signature)"
+   },
+   "source": "Traza MSL (JPL MMGIS) + CRISM"
+  },
+  {
+   "id": "drill_avanavero",
+   "type": "drill_site",
+   "x": 108,
+   "z": -853,
+   "elevation_m": -3910.4,
+   "at_point": {
+    "slope_deg": 0.5,
+    "radiation_ugy_h": 8.57,
+    "temperature_c": -22.5,
+    "spectral_class": 2
+   },
+   "name": {
+    "es": "Perforación «Avanavero»",
+    "en": "\"Avanavero\" drill site"
+   },
+   "info": {
+    "es": "Paso Paraitepuy, en la entrada a la unidad de sulfatos.",
+    "en": "Paraitepuy Pass, at the entrance to the sulfate-bearing unit."
+   },
+   "msl_sol": 3512,
+   "sol_note": "sol aproximado; posición de la traza oficial en ese sol",
+   "mineral": {
+    "es": "Sulfatos",
+    "en": "Sulfates"
+   },
+   "source": "Traza MSL (JPL MMGIS) + CRISM"
+  },
+  {
+   "id": "drill_canaima",
+   "type": "drill_site",
+   "x": 223,
+   "z": -547,
+   "elevation_m": -3870.3,
+   "at_point": {
+    "slope_deg": 7.3,
+    "radiation_ugy_h": 8.47,
+    "temperature_c": -16.8,
+    "spectral_class": 2
+   },
+   "name": {
+    "es": "Perforación «Canaima»",
+    "en": "\"Canaima\" drill site"
+   },
+   "info": {
+    "es": "Primera muestra de la unidad de sulfatos: sales que dejó el agua al evaporarse.",
+    "en": "First sample of the sulfate-bearing unit: salts left behind as water evaporated."
+   },
+   "msl_sol": 3612,
+   "sol_note": "sol aproximado; posición de la traza oficial en ese sol",
+   "mineral": {
+    "es": "Sulfatos",
+    "en": "Sulfates"
+   },
+   "source": "Traza MSL (JPL MMGIS) + CRISM"
+  },
+  {
+   "id": "drill_tapo_caparo",
+   "type": "drill_site",
+   "x": 190,
+   "z": -255,
+   "elevation_m": -3847.4,
+   "at_point": {
+    "slope_deg": 9.2,
+    "radiation_ugy_h": 8.49,
+    "temperature_c": -15.4,
+    "spectral_class": 2
+   },
+   "name": {
+    "es": "Perforación «Tapo Caparo»",
+    "en": "\"Tapo Caparo\" drill site"
+   },
+   "info": {
+    "es": "Banda marcadora: una capa dura y oscura con ondulaciones dejadas por olas de un lago.",
+    "en": "Marker band: a hard dark layer with ripples left by lake waves."
+   },
+   "msl_sol": 3752,
+   "sol_note": "sol aproximado; posición de la traza oficial en ese sol",
+   "mineral": {
+    "es": "Sulfatos",
+    "en": "Sulfates"
+   },
+   "source": "Traza MSL (JPL MMGIS) + CRISM"
+  },
+  {
+   "id": "drill_ubajara",
+   "type": "drill_site",
+   "x": 213,
+   "z": -114,
+   "elevation_m": -3824.4,
+   "at_point": {
+    "slope_deg": 13.4,
+    "radiation_ugy_h": 8.53,
+    "temperature_c": -15.8,
+    "spectral_class": 0
+   },
+   "name": {
+    "es": "Perforación «Ubajara»",
+    "en": "\"Ubajara\" drill site"
+   },
+   "info": {
+    "es": "Sulfatos por encima de la banda marcadora; aquí SAM midió carbono orgánico.",
+    "en": "Sulfates above the marker band; SAM measured organic carbon here."
+   },
+   "msl_sol": 3823,
+   "sol_note": "sol aproximado; posición de la traza oficial en ese sol",
+   "mineral": {
+    "es": "Basalto / polvo (sin firma)",
+    "en": "Basalt / dust (no signature)"
+   },
+   "source": "Traza MSL (JPL MMGIS) + CRISM"
+  },
+  {
+   "id": "drill_sequoia",
+   "type": "drill_site",
+   "x": 564,
+   "z": 384,
+   "elevation_m": -3762.6,
+   "at_point": {
+    "slope_deg": 11.1,
+    "radiation_ugy_h": 8.47,
+    "temperature_c": -18.6,
+    "spectral_class": 0
+   },
+   "name": {
+    "es": "Perforación «Sequoia»",
+    "en": "\"Sequoia\" drill site"
+   },
+   "info": {
+    "es": "Unidad de sulfatos, camino del canal Gediz Vallis.",
+    "en": "Sulfate-bearing unit, on the way to the Gediz Vallis channel."
+   },
+   "msl_sol": 3980,
+   "sol_note": "sol aproximado; posición de la traza oficial en ese sol",
+   "mineral": {
+    "es": "Basalto / polvo (sin firma)",
+    "en": "Basalt / dust (no signature)"
+   },
+   "source": "Traza MSL (JPL MMGIS) + CRISM"
+  },
+  {
+   "id": "relay_1",
+   "type": "relay",
+   "x": -645,
+   "z": -2079,
+   "elevation_m": -4102.1,
+   "at_point": {
+    "slope_deg": 10.1,
+    "radiation_ugy_h": 8.45,
+    "temperature_c": -26,
+    "spectral_class": 1
+   },
+   "name": {
+    "es": "Repetidora 1",
+    "en": "Relay 1"
+   },
+   "info": {
+    "es": "Colocada en el punto más alto y con más cielo visible de la zona: cuanto más cielo, mejor enlace con los orbitadores (y más radiación).",
+    "en": "Placed on the highest spot with the most open sky nearby: more sky means a better link to the orbiters (and more radiation)."
+   },
+   "near_sol": 2575,
+   "source": "DTM HiRISE + CTX, capa de radiación (RAD)"
+  },
+  {
+   "id": "relay_2",
+   "type": "relay",
+   "x": 565,
+   "z": -2032,
+   "elevation_m": -4065.6,
+   "at_point": {
+    "slope_deg": 2.4,
+    "radiation_ugy_h": 8.53,
+    "temperature_c": -24.6,
+    "spectral_class": 4
+   },
+   "name": {
+    "es": "Repetidora 2",
+    "en": "Relay 2"
+   },
+   "info": {
+    "es": "Colocada en el punto más alto y con más cielo visible de la zona: cuanto más cielo, mejor enlace con los orbitadores (y más radiación).",
+    "en": "Placed on the highest spot with the most open sky nearby: more sky means a better link to the orbiters (and more radiation)."
+   },
+   "near_sol": 3015,
+   "source": "DTM HiRISE + CTX, capa de radiación (RAD)"
+  },
+  {
+   "id": "relay_3",
+   "type": "relay",
+   "x": -104,
+   "z": -1053,
+   "elevation_m": -3932.8,
+   "at_point": {
+    "slope_deg": 4.5,
+    "radiation_ugy_h": 8.57,
+    "temperature_c": -25.3,
+    "spectral_class": 0
+   },
+   "name": {
+    "es": "Repetidora 3",
+    "en": "Relay 3"
+   },
+   "info": {
+    "es": "Colocada en el punto más alto y con más cielo visible de la zona: cuanto más cielo, mejor enlace con los orbitadores (y más radiación).",
+    "en": "Placed on the highest spot with the most open sky nearby: more sky means a better link to the orbiters (and more radiation)."
+   },
+   "near_sol": 3381,
+   "source": "DTM HiRISE + CTX, capa de radiación (RAD)"
+  },
+  {
+   "id": "relay_4",
+   "type": "relay",
+   "x": 439,
+   "z": -144,
+   "elevation_m": -3791.9,
+   "at_point": {
+    "slope_deg": 5.9,
+    "radiation_ugy_h": 8.67,
+    "temperature_c": -23.5,
+    "spectral_class": 2
+   },
+   "name": {
+    "es": "Repetidora 4",
+    "en": "Relay 4"
+   },
+   "info": {
+    "es": "Colocada en el punto más alto y con más cielo visible de la zona: cuanto más cielo, mejor enlace con los orbitadores (y más radiación).",
+    "en": "Placed on the highest spot with the most open sky nearby: more sky means a better link to the orbiters (and more radiation)."
+   },
+   "near_sol": 3871,
+   "source": "DTM HiRISE + CTX, capa de radiación (RAD)"
+  },
+  {
+   "id": "relay_5",
+   "type": "relay",
+   "x": 426,
+   "z": 945,
+   "elevation_m": -3700.5,
+   "at_point": {
+    "slope_deg": 7.3,
+    "radiation_ugy_h": 8.61,
+    "temperature_c": -22.1,
+    "spectral_class": 2
+   },
+   "name": {
+    "es": "Repetidora 5",
+    "en": "Relay 5"
+   },
+   "info": {
+    "es": "Colocada en el punto más alto y con más cielo visible de la zona: cuanto más cielo, mejor enlace con los orbitadores (y más radiación).",
+    "en": "Placed on the highest spot with the most open sky nearby: more sky means a better link to the orbiters (and more radiation)."
+   },
+   "near_sol": 4380,
+   "source": "DTM HiRISE + CTX, capa de radiación (RAD)"
+  },
+  {
+   "id": "relay_6",
+   "type": "relay",
+   "x": -844,
+   "z": 2429,
+   "elevation_m": -3587.8,
+   "at_point": {
+    "slope_deg": 7.3,
+    "radiation_ugy_h": 8.73,
+    "temperature_c": -17.9,
+    "spectral_class": 0
+   },
+   "name": {
+    "es": "Repetidora 6",
+    "en": "Relay 6"
+   },
+   "info": {
+    "es": "Colocada en el punto más alto y con más cielo visible de la zona: cuanto más cielo, mejor enlace con los orbitadores (y más radiación).",
+    "en": "Placed on the highest spot with the most open sky nearby: more sky means a better link to the orbiters (and more radiation)."
+   },
+   "near_sol": 4680,
+   "source": "DTM HiRISE + CTX, capa de radiación (RAD)"
+  },
+  {
+   "id": "depot_1",
+   "type": "depot",
+   "x": -839,
+   "z": -2152,
+   "elevation_m": -4123.6,
+   "at_point": {
+    "slope_deg": 7.8,
+    "radiation_ugy_h": 8.37,
+    "temperature_c": -23.9,
+    "spectral_class": 1
+   },
+   "name": {
+    "es": "Depósito de suministros 1",
+    "en": "Supply cache 1"
+   },
+   "info": {
+    "es": "Carga lanzada antes de la expedición. Las cajas pesan aquí un 38 % de lo que pesarían en la Tierra, pero cuesta lo mismo empujarlas y frenarlas: la masa no cambia.",
+    "en": "Cargo dropped ahead of the expedition. Crates weigh 38% of their Earth weight here, but they are just as hard to push and stop: mass does not change."
+   },
+   "near_sol": 2643,
+   "source": "DTM HiRISE + CTX, capa de radiación (RAD)"
+  },
+  {
+   "id": "depot_2",
+   "type": "depot",
+   "x": 205,
+   "z": -2177,
+   "elevation_m": -4085.3,
+   "at_point": {
+    "slope_deg": 6.8,
+    "radiation_ugy_h": 8.49,
+    "temperature_c": -22.5,
+    "spectral_class": 0
+   },
+   "name": {
+    "es": "Depósito de suministros 2",
+    "en": "Supply cache 2"
+   },
+   "info": {
+    "es": "Carga lanzada antes de la expedición. Las cajas pesan aquí un 38 % de lo que pesarían en la Tierra, pero cuesta lo mismo empujarlas y frenarlas: la masa no cambia.",
+    "en": "Cargo dropped ahead of the expedition. Crates weigh 38% of their Earth weight here, but they are just as hard to push and stop: mass does not change."
+   },
+   "near_sol": 3000,
+   "source": "DTM HiRISE + CTX, capa de radiación (RAD)"
+  },
+  {
+   "id": "depot_3",
+   "type": "depot",
+   "x": 261,
+   "z": -1560,
+   "elevation_m": -4026.8,
+   "at_point": {
+    "slope_deg": 5.9,
+    "radiation_ugy_h": 8.41,
+    "temperature_c": -21.4,
+    "spectral_class": 0
+   },
+   "name": {
+    "es": "Depósito de suministros 3",
+    "en": "Supply cache 3"
+   },
+   "info": {
+    "es": "Carga lanzada antes de la expedición. Las cajas pesan aquí un 38 % de lo que pesarían en la Tierra, pero cuesta lo mismo empujarlas y frenarlas: la masa no cambia.",
+    "en": "Cargo dropped ahead of the expedition. Crates weigh 38% of their Earth weight here, but they are just as hard to push and stop: mass does not change."
+   },
+   "near_sol": 3204,
+   "source": "DTM HiRISE + CTX, capa de radiación (RAD)"
+  },
+  {
+   "id": "depot_4",
+   "type": "depot",
+   "x": 430,
+   "z": 148,
+   "elevation_m": -3791.6,
+   "at_point": {
+    "slope_deg": 6.4,
+    "radiation_ugy_h": 8.55,
+    "temperature_c": -18.9,
+    "spectral_class": 0
+   },
+   "name": {
+    "es": "Depósito de suministros 4",
+    "en": "Supply cache 4"
+   },
+   "info": {
+    "es": "Carga lanzada antes de la expedición. Las cajas pesan aquí un 38 % de lo que pesarían en la Tierra, pero cuesta lo mismo empujarlas y frenarlas: la masa no cambia.",
+    "en": "Cargo dropped ahead of the expedition. Crates weigh 38% of their Earth weight here, but they are just as hard to push and stop: mass does not change."
+   },
+   "near_sol": 3931,
+   "source": "DTM HiRISE + CTX, capa de radiación (RAD)"
+  },
+  {
+   "id": "depot_5",
+   "type": "depot",
+   "x": 433,
+   "z": 797,
+   "elevation_m": -3718.7,
+   "at_point": {
+    "slope_deg": 6.4,
+    "radiation_ugy_h": 8.71,
+    "temperature_c": -22.1,
+    "spectral_class": 2
+   },
+   "name": {
+    "es": "Depósito de suministros 5",
+    "en": "Supply cache 5"
+   },
+   "info": {
+    "es": "Carga lanzada antes de la expedición. Las cajas pesan aquí un 38 % de lo que pesarían en la Tierra, pero cuesta lo mismo empujarlas y frenarlas: la masa no cambia.",
+    "en": "Cargo dropped ahead of the expedition. Crates weigh 38% of their Earth weight here, but they are just as hard to push and stop: mass does not change."
+   },
+   "near_sol": 4371,
+   "source": "DTM HiRISE + CTX, capa de radiación (RAD)"
+  },
+  {
+   "id": "meteo_frio",
+   "type": "weather",
+   "x": 893,
+   "z": -1905,
+   "elevation_m": -4062.2,
+   "at_point": {
+    "slope_deg": 12,
+    "radiation_ugy_h": 8.39,
+    "temperature_c": -34.8,
+    "spectral_class": 0
+   },
+   "name": {
+    "es": "Estación meteorológica «Trampa de frío»",
+    "en": "\"Cold trap\" weather station"
+   },
+   "info": {
+    "es": "El suelo más frío a media mañana cerca de la ruta, según el mapa térmico. REMS, la estación de Curiosity, mide de −90 °C de noche a unos 0 °C de día.",
+    "en": "The coldest mid-morning ground near the route on the thermal map. REMS, Curiosity's weather station, records from −90 °C at night to about 0 °C by day."
+   },
+   "source": "REMS (Curiosity) + THEMIS"
+  },
+  {
+   "id": "meteo_radiacion",
+   "type": "weather",
+   "x": -637,
+   "z": 2930,
+   "elevation_m": -3537.3,
+   "at_point": {
+    "slope_deg": 8,
+    "radiation_ugy_h": 8.92,
+    "temperature_c": -24.6,
+    "spectral_class": 3
+   },
+   "name": {
+    "es": "Estación de radiación «Cielo abierto»",
+    "en": "\"Open sky\" radiation station"
+   },
+   "info": {
+    "es": "El punto de la ruta más expuesto al cielo. Marte no tiene campo magnético global ni atmósfera densa: RAD mide aquí ~0,21 mGy al día.",
+    "en": "The spot on the route most exposed to the sky. Mars has no global magnetic field or thick atmosphere: RAD measures ~0.21 mGy per day here."
+   },
+   "source": "RAD (Curiosity)"
+  },
+  {
+   "id": "meteo_base",
+   "type": "weather",
+   "x": -785,
+   "z": -2549,
+   "elevation_m": -4156.5,
+   "at_point": {
+    "slope_deg": 1.4,
+    "radiation_ugy_h": 8.41,
+    "temperature_c": -23.9,
+    "spectral_class": 4
+   },
+   "name": {
+    "es": "Estación meteorológica de la base",
+    "en": "Base weather station"
+   },
+   "info": {
+    "es": "Presión de unos 7 mbar: menos del 1 % de la terrestre. El viento apenas empuja, aunque levante polvo.",
+    "en": "Pressure of about 7 mbar: under 1% of Earth's. The wind barely pushes, even when it lifts dust."
+   },
+   "source": "REMS (Curiosity)"
+  },
+  {
+   "id": "sismo_1",
+   "type": "seismic",
+   "x": 393,
+   "z": -459,
+   "elevation_m": -3865.9,
+   "at_point": {
+    "slope_deg": 0.2,
+    "radiation_ugy_h": 8.51,
+    "temperature_c": -22.8,
+    "spectral_class": 2
+   },
+   "name": {
+    "es": "Sismómetro",
+    "en": "Seismometer"
+   },
+   "info": {
+    "es": "Como SEIS, de la misión InSight, que registró más de 1300 martemotos. Va bajo una cúpula que lo protege del viento y del frío.",
+    "en": "Like SEIS on the InSight mission, which recorded over 1,300 marsquakes. It sits under a dome that shields it from wind and cold."
+   },
+   "source": "NASA InSight (SEIS)"
+  },
+  {
+   "id": "curiosity",
+   "type": "curiosity",
+   "x": -714,
+   "z": 2877,
+   "elevation_m": -3548.6,
+   "at_point": {
+    "slope_deg": 9.4,
+    "radiation_ugy_h": 8.84,
+    "temperature_c": -23.9,
+    "spectral_class": 2
+   },
+   "name": {
+    "es": "Rover Curiosity (MSL)",
+    "en": "Curiosity rover (MSL)"
+   },
+   "info": {
+    "es": "Aquí estaba Curiosity en el sol 4936, tras 37,21 km de recorrido desde su aterrizaje en 2012. Pesa 899 kg en la Tierra; en Marte sus ruedas cargan como si fueran 340.",
+    "en": "Curiosity was here on sol 4936, after driving 37.21 km since landing in 2012. It weighs 899 kg on Earth; on Mars its wheels carry the equivalent of 340."
+   },
+   "msl_sol": 4936,
+   "heading_rad": -2.878,
+   "source": "Traza MSL (JPL MMGIS): posición y rumbo reales"
+  }
+ ],
+ "track_posts": {
+  "_doc": "[x, z, sol]: balizas sobre la traza de Curiosity",
+  "spacing_m": 170,
+  "points": [
+   [
+    -1805.8,
+    -2991.2,
+    1711
+   ],
+   [
+    -1716.4,
+    -2890.4,
+    1727
+   ],
+   [
+    -1552.7,
+    -2919.9,
+    1747
+   ],
+   [
+    -1414.1,
+    -2881.3,
+    1787
+   ],
+   [
+    -1318.8,
+    -2781.3,
+    1800
+   ],
+   [
+    -1279.8,
+    -2668.2,
+    1829
+   ],
+   [
+    -1225.3,
+    -2562.7,
+    1869
+   ],
+   [
+    -1153.1,
+    -2449.7,
+    1901
+   ],
+   [
+    -1057.1,
+    -2422.7,
+    1949
+   ],
+   [
+    -949.7,
+    -2559.1,
+    1991
+   ],
+   [
+    -837.5,
+    -2664.8,
+    2007
+   ],
+   [
+    -915.3,
+    -2715.2,
+    2034
+   ],
+   [
+    -1040.7,
+    -2703,
+    2047
+   ],
+   [
+    -959.9,
+    -2459.8,
+    2297
+   ],
+   [
+    -822.1,
+    -2422.7,
+    2311
+   ],
+   [
+    -752.4,
+    -2537.7,
+    2354
+   ],
+   [
+    -640,
+    -2624.5,
+    2414
+   ],
+   [
+    -646.7,
+    -2533.4,
+    2432
+   ],
+   [
+    -705.5,
+    -2365.3,
+    2473
+   ],
+   [
+    -682.4,
+    -2230.6,
+    2568
+   ],
+   [
+    -807.8,
+    -2173.3,
+    2595
+   ],
+   [
+    -842.9,
+    -2089.7,
+    2645
+   ],
+   [
+    -833.9,
+    -1966.7,
+    2732
+   ],
+   [
+    -734.7,
+    -2065.2,
+    2781
+   ],
+   [
+    -560.6,
+    -2129.1,
+    2788
+   ],
+   [
+    -412.5,
+    -2182.2,
+    2795
+   ],
+   [
+    -296.1,
+    -2251.5,
+    2816
+   ],
+   [
+    -227.4,
+    -2398.9,
+    2824
+   ],
+   [
+    -110.7,
+    -2340.4,
+    2936
+   ],
+   [
+    -0.6,
+    -2235.4,
+    2956
+   ],
+   [
+    180.8,
+    -2174.5,
+    2967
+   ],
+   [
+    282.3,
+    -2177.6,
+    3005
+   ],
+   [
+    482.9,
+    -2162.2,
+    3015
+   ],
+   [
+    655.6,
+    -2163.7,
+    3025
+   ],
+   [
+    822.7,
+    -2146.5,
+    3036
+   ],
+   [
+    1033.9,
+    -2082.9,
+    3047
+   ],
+   [
+    994.6,
+    -1965.3,
+    3120
+   ],
+   [
+    854.4,
+    -1865.9,
+    3140
+   ],
+   [
+    696.1,
+    -1764.9,
+    3149
+   ],
+   [
+    503.4,
+    -1671.2,
+    3161
+   ],
+   [
+    340.2,
+    -1624.5,
+    3197
+   ],
+   [
+    175.3,
+    -1531.8,
+    3212
+   ],
+   [
+    24.4,
+    -1429.5,
+    3280
+   ],
+   [
+    -39.6,
+    -1323.2,
+    3322
+   ],
+   [
+    -53.2,
+    -1159.4,
+    3347
+   ],
+   [
+    -116.1,
+    -1225,
+    3387
+   ],
+   [
+    -0.7,
+    -1084.5,
+    3467
+   ],
+   [
+    50.3,
+    -914.5,
+    3485
+   ],
+   [
+    123.7,
+    -775.5,
+    3533
+   ],
+   [
+    192.3,
+    -695.2,
+    3553
+   ],
+   [
+    284.8,
+    -575.6,
+    3576
+   ],
+   [
+    108.8,
+    -509.5,
+    3635
+   ],
+   [
+    15.1,
+    -547.4,
+    3658
+   ],
+   [
+    162.7,
+    -419.5,
+    3706
+   ],
+   [
+    183,
+    -287.9,
+    3744
+   ],
+   [
+    205.9,
+    -129.5,
+    3810
+   ],
+   [
+    312,
+    -90.1,
+    3867
+   ],
+   [
+    245.3,
+    -5.5,
+    3897
+   ],
+   [
+    341.9,
+    126,
+    3912
+   ],
+   [
+    405,
+    222.7,
+    3934
+   ],
+   [
+    537.2,
+    339.7,
+    3951
+   ],
+   [
+    641,
+    446.2,
+    4071
+   ],
+   [
+    707.5,
+    592.2,
+    4098
+   ],
+   [
+    739.2,
+    755,
+    4151
+   ],
+   [
+    813,
+    868.4,
+    4180
+   ],
+   [
+    813.8,
+    962.4,
+    4244
+   ],
+   [
+    729.2,
+    999.1,
+    4319
+   ],
+   [
+    642.9,
+    834.4,
+    4334
+   ],
+   [
+    520.2,
+    728.5,
+    4360
+   ],
+   [
+    362.3,
+    796.7,
+    4380
+   ],
+   [
+    187.6,
+    783.1,
+    4394
+   ],
+   [
+    66.7,
+    880.1,
+    4429
+   ],
+   [
+    -62,
+    954,
+    4446
+   ],
+   [
+    -188.8,
+    1077.5,
+    4459
+   ],
+   [
+    -241.9,
+    1242.2,
+    4480
+   ],
+   [
+    -293.5,
+    1398.6,
+    4496
+   ],
+   [
+    -402.3,
+    1466,
+    4510
+   ],
+   [
+    -468.6,
+    1624.7,
+    4530
+   ],
+   [
+    -647.1,
+    1706.7,
+    4548
+   ],
+   [
+    -737.4,
+    1847.2,
+    4573
+   ],
+   [
+    -859.5,
+    1927,
+    4591
+   ],
+   [
+    -918.7,
+    2086.8,
+    4614
+   ],
+   [
+    -920.8,
+    2181.1,
+    4643
+   ],
+   [
+    -786.2,
+    2294.7,
+    4677
+   ],
+   [
+    -782.3,
+    2396,
+    4841
+   ],
+   [
+    -777,
+    2558.8,
+    4857
+   ],
+   [
+    -778.4,
+    2658.9,
+    4912
+   ],
+   [
+    -705.2,
+    2811.3,
+    4928
+   ],
+   [
+    -690.8,
+    2975.8,
+    4948
+   ],
+   [
+    -586.3,
+    2958.5,
+    4959
+   ]
+  ]
+ }
+}

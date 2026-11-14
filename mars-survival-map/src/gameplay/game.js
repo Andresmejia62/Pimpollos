@@ -9,12 +9,16 @@ const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const DRIVE = { speed_k: 2.4, board_radius_m: 6, look_m: 3 };
 
 export class Game {
-  constructor(data, world, groundAt, colliders = null) {
+  constructor(data, world, groundAt, colliders = null, dynamics = null) {
     this.data = data;
     this.world = world;
     this.groundAt = groundAt;
     this.colliders = colliders;
+    this.dynamics = dynamics;
     this._p = { x: 0, z: 0, nx: 0, nz: 0, hit: false };
+    this._v = { vx: 0, vz: 0 };
+    // el mundo esta comprimido: la traccion se escala igual que la velocidad de marcha (ver PHYS.realWalkSpeed)
+    this.gripScale = this.rules.movement.walk_speed_mps / PHYS.realWalkSpeed;
     this.rules = data.rules;
     this.objectives = Object.fromEntries(data.objectives.objectives.map((o) => [o.id, o]));
     this.missions = [...data.missions.missions].sort((a, b) => a.order - b.order);
@@ -202,6 +206,7 @@ export class Game {
     s.blockedAhead = false;
     const steps = Math.min(4, Math.ceil(dt / 0.034));
     for (let i = 0; i < steps; i++) this._move(dt / steps, move, jump);
+    if (this.dynamics) this.dynamics.step(dt, s.x, s.z);
     if (s.driving) { s.car.x = s.x; s.car.z = s.z; s.car.heading = s.heading; }
 
     // Ambiente en la posicion actual
@@ -290,8 +295,9 @@ export class Game {
   // Suelo bajo (x, z): el terreno o, a pie, la cima de una roca que se pueda pisar
   _ground(x, z) {
     const base = this.groundAt(x, z), s = this.s;
-    if (s.driving || !this.colliders || s.y == null) return base;
-    return this.colliders.groundOn(x, z, s.y, PHYS.step, base);
+    if (!this.colliders || s.y == null) return base;
+    // el Land Rover sube a plataformas bajas, pero no se apoya en las rocas: las pasa con su altura libre
+    return s.driving ? this.colliders.groundOn(x, z, s.y, PHYS.carClear, base, false) : this.colliders.groundOn(x, z, s.y, PHYS.step, base);
   }
 
   _move(dt, move, jump) {
@@ -315,8 +321,18 @@ export class Game {
         s.heading = Math.atan2(-move[0], -move[1]);
       }
     }
-    // inercia: la velocidad se acerca a la deseada con una aceleracion limitada (casi nula en el aire)
-    const acc = !s.grounded ? PHYS.airAccel : drv ? (move ? PHYS.carAccel : PHYS.carBrake) : move ? PHYS.accel : PHYS.friction;
+    // Traccion: la fuerza que da el suelo es mu * peso * cos(pendiente). Con el 38 % de peso hay menos agarre,
+    // pero la masa es la misma: por eso en Marte cuesta mas arrancar, frenar y girar que en la Tierra.
+    const e = 1.5;
+    const hx = (this.groundAt(s.x + e, s.z) - this.groundAt(s.x - e, s.z)) / (2 * e), hz = (this.groundAt(s.x, s.z + e) - this.groundAt(s.x, s.z - e)) / (2 * e);
+    const k2 = 1 + hx * hx + hz * hz;
+    const grip = (drv ? PHYS.carMu : PHYS.bootMu) * MARS.g * this.gripScale / Math.sqrt(k2);
+    let acc = PHYS.airAccel;
+    if (s.grounded) {
+      // la gravedad tira cuesta abajo: subir acelera menos y bajar alarga la frenada
+      s.vx -= (MARS.g * hx / k2) * dt; s.vz -= (MARS.g * hz / k2) * dt;
+      acc = drv && move ? Math.min(grip, PHYS.carEngine) : grip;
+    }
     const dvx = tx - s.vx, dvz = tz - s.vz, dv = Math.hypot(dvx, dvz);
     if (dv > acc * dt) { s.vx += (dvx / dv) * acc * dt; s.vz += (dvz / dv) * acc * dt; }
     else { s.vx = tx; s.vz = tz; }
@@ -325,8 +341,7 @@ export class Game {
     let mvx = s.vx, mvz = s.vz;
     const slip = this.rules.resources.integrity.slip;
     if (s.grounded && !drv && slopeHere > slip.from_deg) {
-      const e = 1.5;
-      const gx = this.groundAt(s.x - e, s.z) - this.groundAt(s.x + e, s.z), gz = this.groundAt(s.x, s.z - e) - this.groundAt(s.x, s.z + e);
+      const gx = -hx, gz = -hz;
       const gl = Math.hypot(gx, gz);
       if (gl > 1e-4) {
         const v = MARS.g * Math.sin((slopeHere * Math.PI) / 180) * PHYS.slideK;
@@ -366,10 +381,36 @@ export class Game {
         hit = C.resolve(p, PHYS.radius, s.y, PHYS.step, parked).hit;
         nx = p.x; nz = p.z;
       }
+      // cuerpos sueltos (cajas, bidones, rocas): se empujan y devuelven el empujon segun su masa
+      const D = this.dynamics;
+      if (D) {
+        const v = this._v;
+        v.vx = s.vx; v.vz = s.vz;
+        if (drv) {
+          const fx = -Math.sin(s.heading) * PHYS.carAxle, fz = -Math.cos(s.heading) * PHYS.carAxle;
+          for (const k of [1, -1]) {
+            p.x = nx + fx * k; p.z = nz + fz * k;
+            if (D.pushBy(p, PHYS.carRadius, v, PHYS.carMass, s.y, PHYS.carClear)) { nx = p.x - fx * k; nz = p.z - fz * k; hit = true; }
+          }
+        } else {
+          p.x = nx; p.z = nz;
+          if (D.pushBy(p, PHYS.radius, v, PHYS.mass, s.y, PHYS.step)) { nx = p.x; nz = p.z; hit = true; }
+        }
+        s.vx = v.vx; s.vz = v.vz;
+      }
       if (hit) {
         // el choque anula la velocidad contra el obstaculo; se sigue deslizando a lo largo de el
         const vn = s.vx * p.nx + s.vz * p.nz;
-        if (vn < 0) { s.vx -= vn * p.nx; s.vz -= vn * p.nz; }
+        if (vn < 0) {
+          const bounce = drv ? PHYS.carBounce : 0;
+          s.vx -= (1 + bounce) * vn * p.nx; s.vz -= (1 + bounce) * vn * p.nz;
+          // el Land Rover tiene 1800 kg de inercia: un choque frontal rapido se nota en el traje
+          if (drv && -vn > PHYS.carCrashSafe) {
+            const damage = (-vn - PHYS.carCrashSafe) * PHYS.carCrashDamage;
+            s.integrity -= damage;
+            this.emit("crash", { impact: -vn, damage });
+          }
+        }
         if (W.blockedAt(nx, nz)) { nx = x0; nz = z0; }
       }
     }

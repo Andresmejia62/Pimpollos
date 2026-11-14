@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "layers": "python3 data/scripts/build_layers.py",
     "fetch": "python3 data/scripts/fetch_nasa.py",
-    "textures": "python3 data/scripts/build_textures.py"
+    "textures": "python3 data/scripts/build_textures.py",
+    "structures": "node data/scripts/build_structures.mjs"
   },
   "dependencies": {
     "three": "0.180.0"

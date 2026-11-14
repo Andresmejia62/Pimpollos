@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { assetUrl } from "../data.js";
-import { Colliders } from "./physics.js";
+import { Colliders, Dynamics } from "./physics.js";
 
 // Colores de Marte (sRGB) para la rampa de albedo: sombra -> polvo -> roca clara
 const COL_LO = "#1f0f09", COL_MID = "#8a5536", COL_HI = "#dcb48f";
@@ -272,6 +272,8 @@ export class MarsScene {
     this.beacons = [];
     this.animated = [];
     this.colliders = new Colliders();   // obstaculos: las estructuras se registran en props.js, las rocas aqui
+    this.dynamics = new Dynamics(this.colliders, (x, z) => this.heightAt(x, z), world.half);   // cajas, bidones y rocas sueltas
+    this.structures = [];               // {group, x, z}: se ocultan de lejos para no gastar dibujado
     this._buildSky();
     this._buildDust();
     this._buildLights();

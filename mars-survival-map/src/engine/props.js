@@ -440,3 +440,6 @@ export function buildLandRover(ms) {
 
   return { group: root, update };
 }
+
+// piezas compartidas con engine/structures.js
+export { UP, std, glow, at, box, cyl, ball, castAll, MAT, solarPanel, beaconMast, dish, makeWheel };
