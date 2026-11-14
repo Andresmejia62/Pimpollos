@@ -1,1 +1,9 @@
-{}
+{
+  "userIgnoreFilters": [
+    "dist/",
+    "mars-survival-map/data/raw/",
+    "mars-survival-map/dist/",
+    "mars-survival-map/node_modules/",
+    "node_modules/"
+  ]
+}

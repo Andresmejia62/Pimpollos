@@ -277,10 +277,59 @@
       ],
       "valid_fraction": 0.896,
       "bytes": 1484445
+    },
+    {
+      "file": "hirise_ortho_009149.tif",
+      "collection": "mro_hirise_socet_dtms",
+      "item": "DTEEC_009149_1750_009294_1750_U01",
+      "asset": "PSP_009149_1750_RED_A_01_ORTHO.tif",
+      "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_009149_1750_PSP_009294_1750/PSP_009149_1750_RED_A_01_ORTHO.tif",
+      "stac": "https://stac.astrogeology.usgs.gov/api/collections/mro_hirise_socet_dtms/items/DTEEC_009149_1750_009294_1750_U01",
+      "native_res_m": 0.253,
+      "saved_res_m": 2.0,
+      "shape": [
+        3372,
+        2926
+      ],
+      "valid_fraction": 0.897,
+      "bytes": 7830161
+    },
+    {
+      "file": "hirise_ortho_019698.tif",
+      "collection": "mro_hirise_socet_dtms",
+      "item": "DTEEC_019698_1750_019988_1750_U01",
+      "asset": "ESP_019698_1750_RED_A_01_ORTHO.tif",
+      "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_019698_1750_ESP_019988_1750/ESP_019698_1750_RED_A_01_ORTHO.tif",
+      "stac": "https://stac.astrogeology.usgs.gov/api/collections/mro_hirise_socet_dtms/items/DTEEC_019698_1750_019988_1750_U01",
+      "native_res_m": 0.253,
+      "saved_res_m": 2.0,
+      "shape": [
+        2897,
+        2995
+      ],
+      "valid_fraction": 0.687,
+      "bytes": 5242131
+    },
+    {
+      "file": "hirise_ortho_009650.tif",
+      "collection": "mro_hirise_socet_dtms",
+      "item": "DTEEC_009650_1755_009716_1755_U01",
+      "asset": "PSP_009650_1755_RED_A_01_ORTHO.tif",
+      "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_009650_1755_PSP_009716_1755/PSP_009650_1755_RED_A_01_ORTHO.tif",
+      "stac": "https://stac.astrogeology.usgs.gov/api/collections/mro_hirise_socet_dtms/items/DTEEC_009650_1755_009716_1755_U01",
+      "native_res_m": 0.253,
+      "saved_res_m": 2.0,
+      "shape": [
+        3315,
+        1196
+      ],
+      "valid_fraction": 0.818,
+      "bytes": 3235872
     }
   ],
   "accessed_utc_by_group": {
     "themis": "2026-11-14T18:15:29Z",
-    "crism": "2026-11-14T18:15:29Z"
+    "crism": "2026-11-14T18:15:29Z",
+    "ortho": "2026-11-14T18:52:52Z"
   }
 }

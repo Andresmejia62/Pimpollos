@@ -11,14 +11,12 @@
             "id": "ebeac6a501d3a899",
             "type": "leaf",
             "state": {
-              "type": "markdown",
+              "type": "image",
               "state": {
-                "file": "docs/reglas.md",
-                "mode": "source",
-                "source": false
+                "file": "public/layers/slope_overlay.png"
               },
-              "icon": "lucide-file",
-              "title": "reglas"
+              "icon": "lucide-image",
+              "title": "slope_overlay"
             }
           }
         ]
@@ -187,6 +185,8 @@
   },
   "active": "93453c7a3d68f103",
   "lastOpenFiles": [
+    "public/layers/radiation_overlay.png",
+    "docs/reglas.md",
     "dist/index.html",
     "dist/assets/index-Di280CJY.css",
     "dist/assets/index-BUxml2Fk.js",
@@ -197,7 +197,6 @@
     "dist/textures",
     "dist/story/missions.json",
     "dist/story/facts.json",
-    "dist/story/dialogs.json",
     "dist/layers/thermal_overlay.png",
     "dist/layers/thermal_night.png",
     "dist/layers/thermal.png",
@@ -231,7 +230,6 @@
     "node_modules/picocolors/README.md",
     "node_modules/fsevents/README.md",
     "node_modules/@types/estree/README.md",
-    "docs/pruebas_usabilidad.md",
-    "docs/entrega_nasa.md"
+    "docs/pruebas_usabilidad.md"
   ]
 }

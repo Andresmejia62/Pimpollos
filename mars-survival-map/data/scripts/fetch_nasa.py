@@ -120,6 +120,31 @@ def fetch_themis(region: Region) -> list:
 
 
 # ---------------------------------------------------------------------------
+# HiRISE: ortoimagenes (25 cm nativo; se lee la vista reducida de ~2 m) para la textura
+# ---------------------------------------------------------------------------
+HIRISE_ORTHOS = [
+    ("DTEEC_009149_1750_009294_1750_U01", "PSP_009149_1750_RED_A_01_ORTHO.tif", "hirise_ortho_009149.tif"),
+    ("DTEEC_019698_1750_019988_1750_U01", "ESP_019698_1750_RED_A_01_ORTHO.tif", "hirise_ortho_019698.tif"),
+    ("DTEEC_009650_1755_009716_1755_U01", "PSP_009650_1755_RED_A_01_ORTHO.tif", "hirise_ortho_009650.tif"),
+]
+
+
+def fetch_orthos(region: Region) -> list:
+    out = []
+    for item, fname, name in HIRISE_ORTHOS:
+        url = STAC.format(col="mro_hirise_socet_dtms", item=item)
+        it = get_json(url)
+        href = next(v["href"] for v in it["assets"].values() if v["href"].endswith(fname))
+        print(f"{name}: {fname} (2 m)")
+        info = fetch_window(href, RAW / name, region, 2.0)
+        print(f"   -> {info['shape']} px @ {info['saved_res_m']} m, cobertura {info['valid_fraction']:.0%}, "
+              f"{info['bytes'] / 1e6:.1f} MB")
+        out.append({"file": name, "collection": "mro_hirise_socet_dtms", "item": item, "asset": fname,
+                    "href": href, "stac": url, **info})
+    return out
+
+
+# ---------------------------------------------------------------------------
 # CRISM: parametros espectrales MTRDR (Viviano-Beck et al. 2014), PDS Geosciences
 # ---------------------------------------------------------------------------
 ODE_URL = ("https://oderest.rsl.wustl.edu/live2/?query=product&results=fp&target=mars&ihid=MRO&iid=CRISM"
@@ -194,8 +219,8 @@ def fetch_window_bands(href, out: Path, region: Region, indexes, names, nodata) 
 if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument("--only", default="base,themis,crism",
-                    help="grupos separados por coma: base (traza + DTM/orto), themis, crism")
+    ap.add_argument("--only", default="base,themis,crism,ortho",
+                    help="grupos separados por coma: base (traza + DTM/orto CTX), themis, crism, ortho (HiRISE 2 m)")
     groups = set(ap.parse_args().only.split(","))
     region = Region.load()
     RAW.mkdir(parents=True, exist_ok=True)
@@ -209,6 +234,8 @@ if __name__ == "__main__":
         new += fetch_themis(region)
     if "crism" in groups:
         new += fetch_crism(region)
+    if "ortho" in groups:
+        new += fetch_orthos(region)
     files_new = {p["file"] for p in new}
     manifest["products"] = [p for p in manifest["products"] if p["file"] not in files_new] + new
     manifest.setdefault("accessed_utc_by_group", {}).update(

@@ -4,17 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "6beab6eac64671c7",
+        "id": "f19854b23e143e9b",
         "type": "tabs",
         "children": [
           {
-            "id": "9e82da23651ded64",
+            "id": "2651d99a09c61a49",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "mars-survival-map/README.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "New tab"
+              "title": "README"
             }
           }
         ]
@@ -37,7 +41,7 @@
               "type": "file-explorer",
               "state": {
                 "sortOrder": "alphabetical",
-                "autoReveal": false,
+                "autoReveal": true,
                 "showSearch": false,
                 "searchQuery": ""
               },
@@ -181,6 +185,48 @@
       "bases:Create new base": false
     }
   },
-  "active": "9e82da23651ded64",
-  "lastOpenFiles": []
+  "active": "fdf6d2e472c4ecda",
+  "lastOpenFiles": [
+    "mars-survival-map/src/engine/props.js",
+    "mars-survival-map/docs/guia_supervivencia.md",
+    "mars-survival-map/docs/entrega_nasa.md",
+    "mars-survival-map/dist/layers/dem16.png",
+    "mars-survival-map/dist/layers/cost_256.png",
+    "mars-survival-map/public/textures/textures.json",
+    "mars-survival-map/public/textures/ao.png",
+    "mars-survival-map/public/textures/normal_hd.jpg",
+    "mars-survival-map/public/textures/albedo_hd.jpg",
+    "mars-survival-map/data/scripts/build_textures.py",
+    "mars-survival-map/data/raw/hirise_ortho_009650.tif",
+    "mars-survival-map/data/raw/hirise_ortho_019698.tif",
+    "mars-survival-map/data/raw/hirise_ortho_009149.tif",
+    "mars-survival-map/grafo/capas/Ruta sugerida.md",
+    "mars-survival-map/grafo/reglas/Tormenta solar.md",
+    "mars-survival-map/grafo/reglas/Reglas de supervivencia.md",
+    "mars-survival-map/grafo/reglas/Refugios.md",
+    "mars-survival-map/grafo/reglas/Oxígeno.md",
+    "mars-survival-map/grafo/reglas/Integridad.md",
+    "mars-survival-map/grafo/reglas/Energía.md",
+    "mars-survival-map/grafo/lugares/Unidad de sulfatos.md",
+    "mars-survival-map/grafo/lugares/Rover Tumbo.md",
+    "mars-survival-map/grafo/lugares/Región boxwork.md",
+    "mars-survival-map/grafo/lugares/Refugio Sur.md",
+    "mars-survival-map/grafo/lugares/Recorte geográfico.md",
+    "mars-survival-map/grafo/lugares/Objetivos científicos.md",
+    "mars-survival-map/grafo/lugares/Glen Torridon.md",
+    "mars-survival-map/grafo/lugares/Monte Sharp.md",
+    "mars-survival-map/grafo/lugares/Hábitat Aeolis.md",
+    "mars-survival-map/grafo/lugares/Gediz Vallis.md",
+    "mars-survival-map/grafo/lugares/Cráter Gale.md",
+    "mars-survival-map/grafo/equipo/M3 Datos y supervivencia.md",
+    "mars-survival-map/grafo/equipo/Raul Valverde.md",
+    "mars-survival-map/grafo/equipo/M4 Narrativa y UX.md",
+    "mars-survival-map/grafo/equipo/M2 Web y motor.md",
+    "mars-survival-map/grafo/equipo/M1 Blender y terreno.md",
+    "mars-survival-map/grafo/reglas",
+    "mars-survival-map/grafo/lugares",
+    "mars-survival-map/grafo/equipo",
+    "mars-survival-map/grafo/datos",
+    "mars-survival-map/grafo/codigo"
+  ]
 }

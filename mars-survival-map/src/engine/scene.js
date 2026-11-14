@@ -1,35 +1,57 @@
 import * as THREE from "three";
 import { assetUrl } from "../data.js";
 
-const MARS_HAZE = new THREE.Color("#c9a07a");
-const DUST = new THREE.Color("#a8714a");
+// Colores de Marte (sRGB) para la rampa de albedo: sombra -> polvo -> roca clara
+const COL_LO = "#2b140c", COL_MID = "#a55f39", COL_HI = "#ecc09a";
+const HORIZON_DAY = new THREE.Color("#d2a37c"), ZENITH_DAY = new THREE.Color("#8f6a55");
+const STORM_TINT = new THREE.Color("#8a3b1c");
 
-// Textura de detalle procedural (grano de arena y grava) para el suelo cercano
-function detailTexture() {
-  const s = 256;
-  const data = new Uint8Array(s * s * 4);
-  let seed = 1337;
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  const base = new Float32Array(s * s);
-  for (let i = 0; i < s * s; i++) base[i] = rnd();
-  // suavizado 3x3 + ruido fino: manchas de grava sobre arena
-  for (let y = 0; y < s; y++) {
-    for (let x = 0; x < s; x++) {
-      let acc = 0;
-      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) acc += base[((y + dy + s) % s) * s + ((x + dx + s) % s)];
-      const v = 0.55 * (acc / 25) + 0.45 * base[y * s + x];
-      const g = Math.round(255 * Math.min(1, Math.max(0, (v - 0.5) * 2.2 + 0.5)));
-      const i = (y * s + x) * 4;
-      data[i] = data[i + 1] = data[i + 2] = g;
-      data[i + 3] = 255;
+// ---- ruido repetible para la textura de detalle --------------------------------------
+function tileNoise(size, cells, seed) {
+  let s = seed >>> 0;
+  const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const g = new Float32Array(cells * cells);
+  for (let i = 0; i < g.length; i++) g[i] = rnd();
+  const out = new Float32Array(size * size);
+  const k = cells / size;
+  for (let y = 0; y < size; y++) {
+    const fy = y * k, y0 = Math.floor(fy), ty = fy - y0, sy = ty * ty * (3 - 2 * ty);
+    for (let x = 0; x < size; x++) {
+      const fx = x * k, x0 = Math.floor(fx), tx = fx - x0, sx = tx * tx * (3 - 2 * tx);
+      const a = g[(y0 % cells) * cells + (x0 % cells)], b = g[(y0 % cells) * cells + ((x0 + 1) % cells)];
+      const c = g[((y0 + 1) % cells) * cells + (x0 % cells)], d = g[((y0 + 1) % cells) * cells + ((x0 + 1) % cells)];
+      out[y * size + x] = (a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy;
     }
   }
-  const tex = new THREE.DataTexture(data, s, s, THREE.RGBAFormat);
+  return out;
+}
+
+// R = altura (grava/arena), G/B = derivadas (relieve fino), A = segundo ruido independiente
+function detailTexture() {
+  const S = 256;
+  const h = new Float32Array(S * S), h2 = new Float32Array(S * S);
+  [[8, 0.5, 11], [16, 0.27, 23], [32, 0.14, 37], [64, 0.09, 51]].forEach(([c, w, seed]) => {
+    const n = tileNoise(S, c, seed), m = tileNoise(S, c, seed + 1000);
+    for (let i = 0; i < h.length; i++) { h[i] += n[i] * w; h2[i] += m[i] * w; }
+  });
+  // granos: picos dispersos
+  const grain = tileNoise(S, 128, 77);
+  for (let i = 0; i < h.length; i++) h[i] = Math.min(1, h[i] * 0.85 + Math.max(0, grain[i] - 0.72) * 1.1);
+  const data = new Uint8Array(S * S * 4);
+  const at = (x, y) => h[((y + S) % S) * S + ((x + S) % S)];
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const i = (y * S + x) * 4;
+    data[i] = Math.round(255 * Math.min(1, Math.max(0, h[y * S + x])));
+    data[i + 1] = Math.round(255 * Math.min(1, Math.max(0, 0.5 + (at(x + 1, y) - at(x - 1, y)) * 2.2)));
+    data[i + 2] = Math.round(255 * Math.min(1, Math.max(0, 0.5 + (at(x, y + 1) - at(x, y - 1)) * 2.2)));
+    data[i + 3] = Math.round(255 * Math.min(1, Math.max(0, h2[y * S + x])));
+  }
+  const tex = new THREE.DataTexture(data, S, S, THREE.RGBAFormat);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.magFilter = THREE.LinearFilter;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.generateMipmaps = true;
-  tex.anisotropy = 4;
+  tex.anisotropy = 8;
   tex.needsUpdate = true;
   return tex;
 }
@@ -48,33 +70,63 @@ const TERRAIN_VS = /* glsl */ `
 `;
 
 const TERRAIN_FS = /* glsl */ `
-  uniform sampler2D uOptical;
+  uniform sampler2D uAlbedo;     // gris HiRISE+CTX (o la ortoimagen coloreada si no hay HD)
+  uniform sampler2D uNormalMap;  // normales del DEM a 3 m, espacio de mundo
+  uniform sampler2D uAO;         // fraccion de cielo visible
   uniform sampler2D uOverlay;
   uniform sampler2D uDetail;
-  uniform float uOverlayOn;
-  uniform vec3 uSunDir;
-  uniform vec3 uSunColor;
-  uniform vec3 uAmbient;
-  uniform vec3 uFogColor;
-  uniform float uFogDensity;
-  uniform vec3 uFlatColor;
-  uniform float uUseFlat;
+  uniform float uHasHD, uOverlayOn, uFogDensity, uUseFlat, uStorm;
+  uniform vec3 uSunDir, uSunColor, uAmbient, uFogColor, uColLo, uColMid, uColHi;
   varying vec2 vUv;
   varying vec3 vNormalW;
   varying vec3 vPosW;
+
+  vec3 ramp(float g) {
+    return g < 0.5 ? mix(uColLo, uColMid, g * 2.0) : mix(uColMid, uColHi, (g - 0.5) * 2.0);
+  }
+
   void main() {
-    vec3 base = mix(texture2D(uOptical, vUv).rgb, uFlatColor, uUseFlat);
-    float d1 = texture2D(uDetail, vPosW.xz / 6.0).r;
-    float d2 = texture2D(uDetail, vPosW.xz / 47.0).r;
     float dist = distance(cameraPosition, vPosW);
-    float near = 1.0 - smoothstep(60.0, 600.0, dist);
-    base *= mix(1.0, mix(0.78, 1.18, d1) * mix(0.9, 1.08, d2), near);
-    vec3 n = normalize(vNormalW);
-    float ndl = max(dot(n, uSunDir), 0.0);
-    vec3 col = base * (uAmbient + uSunColor * ndl);
+    float near = 1.0 - smoothstep(25.0, 320.0, dist);
+    float mid = 1.0 - smoothstep(250.0, 2600.0, dist);
+
+    vec3 N = normalize(vNormalW);
+    float g = 0.52;
+    float ao = 1.0;
+    if (uUseFlat < 0.5) {
+      vec3 nm = normalize(texture2D(uNormalMap, vUv).xyz * 2.0 - 1.0);
+      N = normalize(mix(N, nm, uHasHD));
+      vec3 a = texture2D(uAlbedo, vUv).rgb;
+      g = mix(dot(a, vec3(0.35, 0.5, 0.15)) * 1.25, a.r, uHasHD);
+      ao = mix(0.42, 1.0, smoothstep(0.6, 1.0, texture2D(uAO, vUv).r));
+    }
+
+    vec4 d1 = texture2D(uDetail, vPosW.xz / 3.3);
+    vec4 d2 = texture2D(uDetail, vPosW.xz / 27.0 + 0.37);
+    vec4 d3 = texture2D(uDetail, vPosW.xz / 230.0 + 0.11);
+
+    // roca en las pendientes, arena en lo llano
+    float steep = 1.0 - N.y;
+    float rock = smoothstep(0.045, 0.15, steep + (d2.r - 0.5) * 0.06);
+    float strata = sin(vPosW.y * 1.9 + d2.a * 5.0 + d3.r * 6.0) * 0.5 + 0.5;
+    strata = mix(strata, sin(vPosW.y * 7.1 + d1.a * 3.0) * 0.5 + 0.5, 0.3);
+    float ripples = sin((vPosW.x * 0.8 + vPosW.z * 0.55) * 2.2 + d2.r * 7.0) * 0.5 + 0.5;
+    float gSand = g * mix(1.0, 0.84 + 0.2 * d1.r + 0.12 * ripples, near) * mix(1.0, 0.9 + 0.2 * d2.r, mid);
+    float gRock = g * mix(1.0, 0.68 + 0.5 * strata, mid * 0.85) * mix(1.0, 0.78 + 0.44 * d1.a, near);
+    vec3 base = ramp(clamp(mix(gSand, gRock * 0.94, rock), 0.0, 1.0));
+    base = mix(base, base * vec3(0.9, 0.84, 0.8), rock * 0.55);
+
+    // relieve fino
+    vec2 bump = (d1.gb - 0.5) * 1.7 * near + (d2.gb - 0.5) * 1.0 * mid;
+    N = normalize(N + vec3(bump.x, 0.0, bump.y) * mix(0.5, 1.25, rock));
+
+    float ndl = max(dot(N, uSunDir), 0.0);
+    vec3 col = base * (uAmbient * ao + uSunColor * ndl);
+
     vec4 ov = texture2D(uOverlay, vUv);
     col = mix(col, ov.rgb, ov.a * uOverlayOn * 0.85);
-    float f = 1.0 - exp(-dist * uFogDensity);
+
+    float f = 1.0 - exp(-dist * uFogDensity * (1.0 + 5.0 * uStorm));
     col = mix(col, uFogColor, clamp(f, 0.0, 1.0));
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
@@ -91,17 +143,27 @@ const SKY_VS = /* glsl */ `
   }
 `;
 const SKY_FS = /* glsl */ `
-  uniform vec3 uSunDir;
-  uniform vec3 uHorizon;
-  uniform vec3 uZenith;
+  uniform vec3 uSunDir, uHorizon, uZenith;
+  uniform float uStorm, uTime;
   varying vec3 vDir;
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float noise(vec2 p) {
+    vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
+  }
   void main() {
     vec3 d = normalize(vDir);
     float h = clamp(d.y, -0.05, 1.0);
-    vec3 col = mix(uHorizon, uZenith, pow(max(h, 0.0), 0.55));
+    vec3 col = mix(uHorizon, uZenith, pow(max(h, 0.0), 0.5));
+    // velos de polvo altos, muy tenues
+    vec2 q = d.xz / (0.25 + max(d.y, 0.0)) * 1.6 + vec2(uTime * 0.004, 0.0);
+    float dust = noise(q) * 0.6 + noise(q * 2.3) * 0.4;
+    col *= 1.0 + (dust - 0.5) * 0.16 * smoothstep(0.0, 0.4, d.y);
     float s = max(dot(d, uSunDir), 0.0);
-    col += vec3(0.75, 0.82, 0.95) * pow(s, 220.0) * 2.0;      // disco solar
-    col += vec3(0.55, 0.62, 0.75) * pow(s, 18.0) * 0.35;      // halo azulado (dispersion en el polvo)
+    col += vec3(0.8, 0.86, 1.0) * pow(s, 900.0) * 6.0;        // disco solar (pequeno: Marte esta mas lejos)
+    col += vec3(0.55, 0.64, 0.8) * pow(s, 14.0) * 0.4;        // halo azulado del polvo
+    col += uHorizon * pow(s, 3.0) * 0.12;
+    col *= 1.0 - 0.35 * uStorm;
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -116,35 +178,58 @@ export class MarsScene {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 1.12;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(60, 1, 0.3, 30000);
+    this.camera = new THREE.PerspectiveCamera(58, 1, 0.3, 30000);
     this.sunDir = new THREE.Vector3(0.4, 0.8, 0.2).normalize();
+    this.fogColor = HORIZON_DAY.clone();
+    this.storm = 0;
     this.textures = {};
     this.overlays = {};
+    this.beacons = [];
+    this.animated = [];
     this._buildSky();
+    this._buildLights();
     this.resize();
     window.addEventListener("resize", () => this.resize());
   }
 
   async init(onProgress = () => {}) {
     const loader = new THREE.TextureLoader();
+    const maxAniso = this.renderer.capabilities.getMaxAnisotropy();
     const load = (p, srgb = true) => new Promise((res, rej) => loader.load(assetUrl(p), (t) => {
-      if (srgb) t.colorSpace = THREE.SRGBColorSpace;
-      t.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+      t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+      t.anisotropy = maxAniso;
       res(t);
     }, undefined, rej));
     const names = ["slope", "radiation", "thermal", "spectral"];
-    const [optical, ...ovs] = await Promise.all([load("layers/optical.png"), ...names.map((k) => load(`layers/${k}_overlay.png`))]);
+    let done = 0;
+    const tick = (p) => p.then((v) => { onProgress(0.6 * (++done / 7)); return v; });
+    const hd = Promise.all([tick(load("textures/albedo_hd.jpg", false)), tick(load("textures/normal_hd.jpg", false)), tick(load("textures/ao.png", false))])
+      .catch(() => null);
+    const [ovs, hdTex] = await Promise.all([Promise.all(names.map((k) => tick(load(`layers/${k}_overlay.png`)))), hd]);
     names.forEach((k, i) => { this.overlays[k] = ovs[i]; });
-    this.textures.optical = optical;
+    const white = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1); white.needsUpdate = true;
+    const flatN = new THREE.DataTexture(new Uint8Array([128, 255, 128, 255]), 1, 1); flatN.needsUpdate = true;
+    if (hdTex) {
+      [this.textures.albedo, this.textures.normal, this.textures.ao] = hdTex;
+      this.hasHD = 1;
+    } else {
+      this.textures.albedo = await load("layers/optical.png", false);
+      this.textures.normal = flatN;
+      this.textures.ao = white;
+      this.hasHD = 0;
+    }
     this.textures.detail = detailTexture();
     this.textures.empty = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1);
     this.textures.empty.needsUpdate = true;
-    onProgress(0.5);
+    onProgress(0.65);
     this._buildTerrain();
-    onProgress(0.8);
+    onProgress(0.85);
     this._buildApron();
+    this._buildShadowCatcher();
     this._buildRocks();
     this._buildRoute();
     onProgress(1);
@@ -157,11 +242,11 @@ export class MarsScene {
     this.camera.updateProjectionMatrix();
   }
 
-  // ---- cielo y sol -----------------------------------------------------------
+  // ---- cielo, sol y luces -------------------------------------------------------------
   _buildSky() {
     this.skyMat = new THREE.ShaderMaterial({
       vertexShader: SKY_VS, fragmentShader: SKY_FS, side: THREE.BackSide, depthWrite: false,
-      uniforms: { uSunDir: { value: this.sunDir }, uHorizon: { value: new THREE.Color("#d9ae86") }, uZenith: { value: new THREE.Color("#9c7158") } },
+      uniforms: { uSunDir: { value: this.sunDir }, uHorizon: { value: HORIZON_DAY.clone() }, uZenith: { value: ZENITH_DAY.clone() }, uStorm: { value: 0 }, uTime: { value: 0 } },
     });
     const sky = new THREE.Mesh(new THREE.SphereGeometry(20000, 32, 16), this.skyMat);
     sky.frustumCulled = false;
@@ -169,28 +254,67 @@ export class MarsScene {
     this.scene.add(sky);
   }
 
-  setTimeOfDay(hour) {
-    // Sol a lat -4,8: sale por el este (~6 h), cenit cerca del mediodia, se pone al oeste (~18 h)
-    const u = (hour - 6) / 12;
-    const el = Math.sin(Math.PI * Math.min(Math.max(u, 0), 1)) * 1.25 + (u < 0 || u > 1 ? -0.2 : 0);
-    // hemisferio sur cerca del ecuador: el sol pasa por el norte (E -> N -> O)
-    const az = Math.PI / 2 - Math.PI * Math.min(Math.max(u, 0), 1);
-    const y = Math.sin(el), c = Math.cos(el);
-    // x = Este, z = Sur: azimut desde el norte en sentido horario
-    this.sunDir.set(Math.sin(az) * c, Math.max(y, 0.04), -Math.cos(az) * c).normalize();
-    const day = Math.min(1, Math.max(0, y * 2.5));
-    if (this.terrainMat) {
-      this.terrainMat.uniforms.uSunColor.value.setRGB(1.25 * day, 1.12 * day, 0.98 * day);
-      this.terrainMat.uniforms.uAmbient.value.setRGB(0.32 + 0.18 * day, 0.24 + 0.14 * day, 0.2 + 0.1 * day);
-    }
-    this.skyMat.uniforms.uHorizon.value.set("#d9ae86").multiplyScalar(0.35 + 0.65 * day);
-    this.skyMat.uniforms.uZenith.value.set("#9c7158").multiplyScalar(0.25 + 0.75 * day);
+  _buildLights() {
+    // luces para modelos y rocas (el terreno usa su propio shader con los mismos colores)
+    this.hemi = new THREE.HemisphereLight("#e9c6a4", "#6a4230", 1.0);
+    this.sun = new THREE.DirectionalLight("#fff0dc", 2.4);
+    this.sun.castShadow = true;
+    this.sun.shadow.mapSize.set(2048, 2048);
+    const c = this.sun.shadow.camera;
+    c.left = -46; c.right = 46; c.top = 46; c.bottom = -46; c.near = 1; c.far = 420;
+    this.sun.shadow.bias = -0.0006;
+    this.sun.shadow.normalBias = 0.05;
+    this.scene.add(this.hemi, this.sun, this.sun.target);
+    this.focus = new THREE.Vector3();
   }
 
-  // ---- terreno ---------------------------------------------------------------
+  setTimeOfDay(hour) {
+    // lat -4,8: el sol sale por el este, pasa alto por el norte y se pone al oeste
+    const u = (hour - 6) / 12;
+    const uc = Math.min(Math.max(u, 0), 1);
+    const el = Math.sin(Math.PI * uc) * 1.25 + (u < 0 || u > 1 ? -0.2 : 0);
+    const az = Math.PI / 2 - Math.PI * uc;
+    const y = Math.sin(el), c = Math.cos(el);
+    this.sunDir.set(Math.sin(az) * c, Math.max(y, 0.04), -Math.cos(az) * c).normalize();
+    const day = Math.min(1, Math.max(0, y * 2.5));
+    const low = 1 - Math.min(1, Math.max(0, y * 1.6));   // sol bajo: luz mas calida
+    const st = this.storm;
+    if (this.terrainMat) {
+      const k = 1 - 0.45 * st;
+      this.terrainMat.uniforms.uSunColor.value.setRGB(1.5 * day * k, (1.36 - 0.25 * low) * day * k, (1.2 - 0.45 * low) * day * k);
+      this.terrainMat.uniforms.uAmbient.value.setRGB(0.26 + 0.2 * day, 0.2 + 0.15 * day, 0.17 + 0.11 * day);
+    }
+    const hz = this.skyMat.uniforms.uHorizon.value.copy(HORIZON_DAY).multiplyScalar(0.3 + 0.7 * day).lerp(STORM_TINT, 0.55 * st);
+    this.skyMat.uniforms.uZenith.value.copy(ZENITH_DAY).multiplyScalar(0.22 + 0.78 * day).lerp(STORM_TINT, 0.4 * st);
+    this.fogColor.copy(hz);
+    this.sun.intensity = 2.6 * day * (1 - 0.5 * st);
+    this.sun.color.setRGB(1, 0.95 - 0.15 * low, 0.86 - 0.3 * low);
+    this.hemi.intensity = 0.55 + 0.6 * day;
+  }
+
+  setStorm(v) {
+    this.storm = v;
+    this.skyMat.uniforms.uStorm.value = v;
+    if (this.terrainMat) this.terrainMat.uniforms.uStorm.value = v;
+    if (this.apron) this.apron.material.uniforms.uStorm.value = v;
+  }
+
+  // ---- terreno --------------------------------------------------------------------------
+  _terrainUniforms(flat) {
+    const T = this.textures;
+    return {
+      uAlbedo: { value: T.albedo }, uNormalMap: { value: T.normal }, uAO: { value: T.ao },
+      uOverlay: { value: T.empty }, uDetail: { value: T.detail },
+      uHasHD: { value: this.hasHD }, uOverlayOn: { value: 0 }, uUseFlat: { value: flat ? 1 : 0 }, uStorm: { value: 0 },
+      uSunDir: { value: this.sunDir }, uSunColor: { value: new THREE.Color(1.3, 1.2, 1.05) }, uAmbient: { value: new THREE.Color(0.4, 0.32, 0.26) },
+      uFogColor: { value: this.fogColor }, uFogDensity: { value: 0.00013 },
+      uColLo: { value: new THREE.Color(COL_LO) }, uColMid: { value: new THREE.Color(COL_MID) }, uColHi: { value: new THREE.Color(COL_HI) },
+    };
+  }
+
   _buildTerrain() {
     const w = this.world;
-    const S = 767; // segmentos: 768 vertices por lado (~8 m)
+    const S = 767; // 768 vertices por lado (~8 m); el relieve mas fino sale del mapa de normales
     this.seg = S;
     this.step = w.size / S;
     const geo = new THREE.PlaneGeometry(w.size, w.size, S, S);
@@ -204,15 +328,7 @@ export class MarsScene {
     }
     geo.computeVertexNormals();
     geo.computeBoundingSphere();
-    this.terrainMat = new THREE.ShaderMaterial({
-      vertexShader: TERRAIN_VS, fragmentShader: TERRAIN_FS,
-      uniforms: {
-        uOptical: { value: this.textures.optical }, uOverlay: { value: this.textures.empty }, uDetail: { value: this.textures.detail },
-        uOverlayOn: { value: 0 }, uSunDir: { value: this.sunDir }, uSunColor: { value: new THREE.Color(1.2, 1.1, 0.95) },
-        uAmbient: { value: new THREE.Color(0.45, 0.35, 0.28) }, uFogColor: { value: MARS_HAZE }, uFogDensity: { value: 0.00016 },
-        uFlatColor: { value: DUST }, uUseFlat: { value: 0 },
-      },
-    });
+    this.terrainMat = new THREE.ShaderMaterial({ vertexShader: TERRAIN_VS, fragmentShader: TERRAIN_FS, uniforms: this._terrainUniforms(false) });
     this.terrain = new THREE.Mesh(geo, this.terrainMat);
     this.scene.add(this.terrain);
   }
@@ -230,6 +346,12 @@ export class MarsScene {
     return c + (b - c) * (1 - fx) + (d - c) * (1 - fz);
   }
 
+  // Normal del terreno (para apoyar objetos e inclinar al astronauta)
+  normalAt(x, z, out = new THREE.Vector3()) {
+    const e = 1.5;
+    return out.set(this.heightAt(x - e, z) - this.heightAt(x + e, z), 2 * e, this.heightAt(x, z - e) - this.heightAt(x, z + e)).normalize();
+  }
+
   // Terreno lejano de baja resolucion fuera del recorte (extiende los bordes hacia el horizonte)
   _buildApron() {
     const w = this.world, R = 26000, S = 160;
@@ -241,20 +363,14 @@ export class MarsScene {
       const x = pos.getX(i), z = pos.getZ(i);
       const cx = Math.max(-lim, Math.min(lim, x)), cz = Math.max(-lim, Math.min(lim, z));
       const out = Math.hypot(x - cx, z - cz);
-      // el monte sigue subiendo hacia el sur; el resto baja suavemente hacia la planicie
-      const trend = z > lim ? out * 0.12 : -out * 0.03;
+      const trend = z > lim ? out * 0.12 : -out * 0.03; // el monte sigue subiendo hacia el sur
       pos.setY(i, w.demHeight(cx, cz) + trend - 3 - Math.sin(x * 0.0021) * Math.cos(z * 0.0017) * 40 * Math.min(1, out / 1500));
     }
     geo.computeVertexNormals();
-    const mat = this.terrainMat.clone();
-    mat.uniforms = THREE.UniformsUtils.clone(this.terrainMat.uniforms);
-    mat.uniforms.uSunDir.value = this.sunDir;
-    mat.uniforms.uSunColor = this.terrainMat.uniforms.uSunColor;
-    mat.uniforms.uAmbient = this.terrainMat.uniforms.uAmbient;
-    mat.uniforms.uUseFlat.value = 1;
-    mat.uniforms.uDetail.value = this.textures.detail;
-    mat.uniforms.uOverlay.value = this.textures.empty;
-    this.apron = new THREE.Mesh(geo, mat);
+    const u = this._terrainUniforms(true);
+    u.uSunColor = this.terrainMat.uniforms.uSunColor;
+    u.uAmbient = this.terrainMat.uniforms.uAmbient;
+    this.apron = new THREE.Mesh(geo, new THREE.ShaderMaterial({ vertexShader: TERRAIN_VS, fragmentShader: TERRAIN_FS, uniforms: u }));
     this.scene.add(this.apron);
   }
 
@@ -264,21 +380,75 @@ export class MarsScene {
     this.terrainMat.uniforms.uOverlayOn.value = tex ? 1 : 0;
   }
 
-  // ---- rocas decorativas alrededor del jugador ------------------------------
+  // ---- sombras: un parche de malla identico al terreno que solo recibe sombras ------------
+  _buildShadowCatcher() {
+    const C = 14; // celdas por lado (~112 m)
+    this.catchN = C;
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array((C + 1) * (C + 1) * 3);
+    const idx = [];
+    for (let iz = 0; iz < C; iz++) for (let ix = 0; ix < C; ix++) {
+      const a = iz * (C + 1) + ix, b = (iz + 1) * (C + 1) + ix, c = (iz + 1) * (C + 1) + ix + 1, d = iz * (C + 1) + ix + 1;
+      idx.push(a, b, d, b, c, d);
+    }
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.setIndex(idx);
+    const mat = new THREE.ShadowMaterial({ opacity: 0.5, color: "#1a0a05", polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    this.catcher = new THREE.Mesh(geo, mat);
+    this.catcher.receiveShadow = true;
+    this.catcher.frustumCulled = false;
+    this.catcher.renderOrder = 2;
+    this.scene.add(this.catcher);
+    this.catchCell = null;
+  }
+
+  _updateShadowCatcher(px, pz) {
+    const C = this.catchN, S = this.seg, W = S + 1, st = this.step, half = this.world.half;
+    const cx = Math.max(0, Math.min(S - C, Math.round((px + half) / st) - C / 2));
+    const cz = Math.max(0, Math.min(S - C, Math.round((pz + half) / st) - C / 2));
+    const key = cx + "," + cz;
+    if (key === this.catchCell) return;
+    this.catchCell = key;
+    const src = this.terrain.geometry.attributes.position, dst = this.catcher.geometry.attributes.position;
+    for (let iz = 0; iz <= C; iz++) for (let ix = 0; ix <= C; ix++) {
+      const i = (cz + iz) * W + (cx + ix);
+      dst.setXYZ(iz * (C + 1) + ix, src.getX(i), src.getY(i), src.getZ(i));
+    }
+    dst.needsUpdate = true;
+  }
+
+  // Centro de interes (jugador o camara): mueve la luz de sombras, el parche y las rocas
+  setFocus(x, y, z) {
+    this.focus.set(x, y, z);
+    const sx = Math.round(x), sz = Math.round(z); // ajuste a 1 m para que la sombra no tiemble
+    this.sun.target.position.set(sx, y, sz);
+    this.sun.position.set(sx, y, sz).addScaledVector(this.sunDir, 200);
+    this.sun.target.updateMatrixWorld();
+    this._updateShadowCatcher(x, z);
+    this.updateRocks(x, z);
+  }
+
+  // ---- rocas ------------------------------------------------------------------------------
   _buildRocks() {
-    const geo = new THREE.DodecahedronGeometry(1, 0);
-    const mat = new THREE.MeshLambertMaterial({ color: "#8a5638" });
-    this.rockMax = 2200;
+    const geo = new THREE.IcosahedronGeometry(1, 1);
+    const p = geo.attributes.position;
+    const h3 = (x, y, z) => { const s = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453; return s - Math.floor(s); };
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      const k = 0.72 + 0.5 * h3(Math.round(x * 50), Math.round(y * 50), Math.round(z * 50));
+      p.setXYZ(i, x * k, y * k * 0.8, z * k);
+    }
+    geo.computeVertexNormals();
+    const mat = new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 1, metalness: 0, flatShading: true });
+    this.rockMax = 2400;
     this.rocks = new THREE.InstancedMesh(geo, mat, this.rockMax);
     this.rocks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.rocks.count = 0;
     this.rocks.frustumCulled = false;
+    this.rocks.castShadow = true;
+    this.rocks.receiveShadow = true;
     this.scene.add(this.rocks);
     this.rockCell = null;
-    // luces solo para las rocas y los modelos (el terreno usa su propio shader)
-    this.hemi = new THREE.HemisphereLight("#e8c3a0", "#5a3826", 1.1);
-    this.sun = new THREE.DirectionalLight("#fff1dc", 2.2);
-    this.scene.add(this.hemi, this.sun);
   }
 
   updateRocks(px, pz) {
@@ -294,19 +464,22 @@ export class MarsScene {
       for (let gx = cx - RAD; gx <= cx + RAD; gx++) {
         let seed = ((gx * 73856093) ^ (gz * 19349663)) >>> 0;
         const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
-        const count = 6 + Math.floor(rnd() * 10);
+        // mas piedras al pie de las pendientes y pocas en la arena lisa
+        const ccx = (gx + 0.5) * CELL, ccz = (gz + 0.5) * CELL;
+        const slope = this.world.inside(ccx, ccz, 10) ? this.world.slope(ccx, ccz) : 0;
+        const count = Math.floor((3 + rnd() * 8) * (0.6 + Math.min(2.2, slope / 9)));
         for (let i = 0; i < count && k < this.rockMax; i++) {
           const x = (gx + rnd()) * CELL, z = (gz + rnd()) * CELL;
           if (!this.world.inside(x, z, 10)) continue;
-          const big = rnd() < 0.08;
-          const r = big ? 0.7 + rnd() * 1.1 : 0.12 + rnd() * 0.4;
-          p.set(x, this.heightAt(x, z) + r * 0.25, z);
-          e.set(rnd() * 3, rnd() * 3, rnd() * 3);
+          const big = rnd() < 0.07;
+          const r = big ? 0.7 + rnd() * 1.3 : 0.1 + rnd() * rnd() * 0.55;
+          p.set(x, this.heightAt(x, z) + r * 0.18, z);
+          e.set(rnd() * 6.28, rnd() * 6.28, rnd() * 6.28);
           q.setFromEuler(e);
-          s.set(r * (0.8 + rnd() * 0.6), r * (0.45 + rnd() * 0.4), r * (0.8 + rnd() * 0.6));
+          s.set(r * (0.8 + rnd() * 0.6), r * (0.5 + rnd() * 0.45), r * (0.8 + rnd() * 0.6));
           m.compose(p, q, s);
           this.rocks.setMatrixAt(k, m);
-          col.setHSL(0.055 + rnd() * 0.03, 0.42 + rnd() * 0.15, 0.24 + rnd() * 0.14);
+          col.setHSL(0.045 + rnd() * 0.035, 0.3 + rnd() * 0.2, 0.2 + rnd() * 0.16);
           this.rocks.setColorAt(k, col);
           k++;
         }
@@ -317,118 +490,118 @@ export class MarsScene {
     if (this.rocks.instanceColor) this.rocks.instanceColor.needsUpdate = true;
   }
 
-  // ---- marcadores, estructuras y ruta ---------------------------------------
-  addBeacon(x, z, color, radius, tall = 380) {
+  // ---- balizas -------------------------------------------------------------------------------
+  addBeacon(x, z, radius, tall = 380) {
     const y = this.heightAt(x, z);
     const g = new THREE.Group();
+    const color = new THREE.Color("#ffffff");
     const beamMat = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-      uniforms: { uColor: { value: new THREE.Color(color) }, uTime: { value: 0 } },
-      vertexShader: "varying float vY; void main(){ vY = uv.y; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0);} ",
-      fragmentShader: "uniform vec3 uColor; uniform float uTime; varying float vY; void main(){ float a = (1.0 - vY) * (0.35 + 0.1*sin(uTime*2.0)); gl_FragColor = vec4(uColor * a, a); }",
+      uniforms: { uColor: { value: color }, uTime: { value: 0 }, uPower: { value: 1 } },
+      vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0);} ",
+      fragmentShader: `uniform vec3 uColor; uniform float uTime, uPower; varying vec2 vUv;
+        void main(){ float fade = pow(1.0 - vUv.y, 1.6);
+          float pulse = 0.6 + 0.4 * sin(vUv.y * 70.0 - uTime * 3.5);   // anillos de luz que suben
+          float a = fade * (0.22 + 0.2 * pulse) * uPower;
+          gl_FragColor = vec4(uColor * a, a); }`,
     });
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, tall, 16, 1, true), beamMat);
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2.4, tall, 20, 1, true), beamMat);
     beam.position.set(x, y + tall / 2, z);
     g.add(beam);
-    // anillo que sigue el terreno (radio de escaneo)
+    // anillo del radio de escaneo, apoyado en el terreno
     const pts = [];
     for (let i = 0; i <= 96; i++) {
       const a = (i / 96) * Math.PI * 2;
       const px = x + Math.cos(a) * radius, pz = z + Math.sin(a) * radius;
-      pts.push(new THREE.Vector3(px, this.heightAt(px, pz) + 0.25, pz));
+      pts.push(new THREE.Vector3(px, this.heightAt(px, pz) + 0.3, pz));
     }
-    const ring = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.95 }));
+    const ringMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.95 });
+    const ring = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), ringMat);
     g.add(ring);
-    g.userData = { beamMat };
+    // marcador flotante
+    const gemMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95 });
+    const gem = new THREE.Mesh(new THREE.OctahedronGeometry(1.5, 0), gemMat);
+    gem.scale.set(1, 1.7, 1);
+    gem.position.set(x, y + 16, z);
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.12, 8, 40), gemMat);
+    halo.position.copy(gem.position);
+    halo.rotation.x = Math.PI / 2;
+    g.add(gem, halo);
+    const b = { group: g, beamMat, ring, ringMat, gem, halo, gemMat, baseY: y + 16, color, target: false };
+    this.beacons.push(b);
     this.scene.add(g);
-    return g;
+    return b;
   }
 
-  addStructure(kind, x, z) {
-    const y = this.heightAt(x, z);
-    const g = new THREE.Group();
-    const white = new THREE.MeshLambertMaterial({ color: "#e9e4dc" });
-    const grey = new THREE.MeshLambertMaterial({ color: "#7d7a76" });
-    const gold = new THREE.MeshLambertMaterial({ color: "#d39b3a", emissive: "#3a2400" });
-    if (kind === "base") {
-      const dome = new THREE.Mesh(new THREE.SphereGeometry(7, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), white);
-      g.add(dome);
-      for (let i = 0; i < 3; i++) {
-        const mod = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.4, 9, 16), white);
-        mod.rotation.z = Math.PI / 2;
-        mod.rotation.y = (i * Math.PI * 2) / 3;
-        mod.position.set(Math.cos((i * Math.PI * 2) / 3) * 10, 2.2, -Math.sin((i * Math.PI * 2) / 3) * 10);
-        g.add(mod);
-      }
-      const panel = new THREE.Mesh(new THREE.BoxGeometry(8, 0.2, 4), new THREE.MeshLambertMaterial({ color: "#1f2b45" }));
-      panel.position.set(-16, 1.6, 6); panel.rotation.x = -0.3;
-      g.add(panel);
-    } else if (kind === "rover") {
-      const body = new THREE.Mesh(new THREE.BoxGeometry(5, 2.2, 3), white);
-      body.position.y = 1.9;
-      g.add(body);
-      const cab = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.4, 2.8), gold);
-      cab.position.set(2.6, 2.4, 0);
-      g.add(cab);
-      for (let i = 0; i < 6; i++) {
-        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.5, 14), grey);
-        wheel.rotation.x = Math.PI / 2;
-        wheel.position.set(-1.8 + (i % 3) * 1.8, 0.6, i < 3 ? 1.7 : -1.7);
-        g.add(wheel);
-      }
-      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 2.2, 6), grey);
-      mast.position.set(-1.6, 4, 0.8);
-      g.add(mast);
-    }
-    g.position.set(x, y, z);
-    this.scene.add(g);
-    return g;
+  setBeacon(b, { visible, target, shelter }) {
+    b.group.visible = visible;
+    b.target = target;
+    b.color.set(target ? "#3DDC97" : shelter ? "#2a9d6c" : "#c9c9c9");
+    b.ringMat.color.copy(b.color);
+    b.gemMat.color.copy(b.color);
+    b.ring.visible = target || shelter;
+    b.gem.visible = b.halo.visible = target;
+    b.beamMat.uniforms.uPower.value = target ? 1.25 : 0.55;
   }
 
-  addShelterModule(x, z) {
-    const y = this.heightAt(x, z);
-    const g = new THREE.Group();
-    const white = new THREE.MeshLambertMaterial({ color: "#e6e0d6" });
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 12, 20), white);
-    m.rotation.z = Math.PI / 2;
-    m.position.y = 3;
-    g.add(m);
-    const lock = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 2, 16), white);
-    lock.position.set(0, 3, 3.6); lock.rotation.x = Math.PI / 2;
-    g.add(lock);
-    g.position.set(x, y, z);
-    this.scene.add(g);
-    return g;
-  }
-
+  // ---- ruta sugerida ------------------------------------------------------------------------
   _buildRoute() {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * 2000), 3));
+    geo.setAttribute("lineDistance", new THREE.BufferAttribute(new Float32Array(2000), 1));
     geo.setDrawRange(0, 0);
-    this.routeLine = new THREE.Line(geo, new THREE.LineDashedMaterial({ color: "#3DDC97", dashSize: 6, gapSize: 4, transparent: true, opacity: 0.95, depthTest: true }));
+    this.routeMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false,
+      uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color("#3DDC97") } },
+      vertexShader: "attribute float lineDistance; varying float vD; void main(){ vD = lineDistance; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0);} ",
+      fragmentShader: `uniform float uTime; uniform vec3 uColor; varying float vD;
+        void main(){ float t = fract((vD - uTime * 9.0) / 11.0);     // guiones que avanzan hacia el objetivo
+          if (t > 0.6) discard;
+          gl_FragColor = vec4(uColor * (0.9 + 0.5 * (1.0 - t / 0.6)), 0.95); }`,
+    });
+    this.routeLine = new THREE.Line(geo, this.routeMat);
     this.routeLine.frustumCulled = false;
+    this.routeLine.renderOrder = 3;
     this.scene.add(this.routeLine);
   }
 
   setRoute(points) {
-    const attr = this.routeLine.geometry.attributes.position;
+    const pos = this.routeLine.geometry.attributes.position, ld = this.routeLine.geometry.attributes.lineDistance;
     const n = Math.min(points.length, 2000);
+    let d = 0;
     for (let i = 0; i < n; i++) {
       const [x, z] = points[i];
-      attr.setXYZ(i, x, this.heightAt(x, z) + 1.2, z);
+      if (i) d += Math.hypot(x - points[i - 1][0], z - points[i - 1][1]);
+      pos.setXYZ(i, x, this.heightAt(x, z) + 1.0, z);
+      ld.setX(i, d);
     }
-    attr.needsUpdate = true;
+    pos.needsUpdate = true;
+    ld.needsUpdate = true;
     this.routeLine.geometry.setDrawRange(0, n);
-    this.routeLine.computeLineDistances();
   }
 
   setRouteVisible(v) { this.routeLine.visible = v; }
 
-  render(time) {
-    this.sun.position.copy(this.sunDir).multiplyScalar(100).add(this.camera.position);
-    this.sun.target.position.copy(this.camera.position);
-    this.sun.target.updateMatrixWorld();
-    this.scene.traverse((o) => { if (o.userData && o.userData.beamMat) o.userData.beamMat.uniforms.uTime.value = time; });
+  // objetos con animacion propia: fn(time, dt)
+  addAnimated(fn) { this.animated.push(fn); }
+
+  render(time, dt = 0.016) {
+    this.skyMat.uniforms.uTime.value = time;
+    this.routeMat.uniforms.uTime.value = time;
+    for (const b of this.beacons) {
+      if (!b.group.visible) continue;
+      b.beamMat.uniforms.uTime.value = time;
+      if (b.target) {
+        b.gem.position.y = b.baseY + Math.sin(time * 2.0) * 1.2;
+        b.gem.rotation.y = time * 1.4;
+        b.halo.position.y = b.gem.position.y;
+        b.halo.rotation.z = -time * 0.8;
+        const s = 1 + 0.12 * Math.sin(time * 4.0);
+        b.halo.scale.set(s, s, s);
+        b.ringMat.opacity = 0.65 + 0.3 * Math.sin(time * 4.0);
+      }
+    }
+    for (const fn of this.animated) fn(time, dt);
     this.renderer.render(this.scene, this.camera);
   }
 }

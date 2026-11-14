@@ -80,13 +80,15 @@ def merge_dem(region, raw: Path, log: dict, pts) -> np.ndarray:
         if valid.mean() < 0.02:
             continue
         # erosionar bordes (los DTM HiRISE tienen orillas ruidosas)
-        core = smooth(valid.astype(np.float32), 4, passes=1) > 0.999
+        r_e = max(2, int(round(24.0 / region.px)))    # erosion del borde: ~24 m
+        r_f = max(4, int(round(180.0 / region.px)))   # mezcla suave: ~180 m (oculta la costura)
+        core = smooth(valid.astype(np.float32), r_e, passes=1) > 0.999
         off, npts, mad = offset_vs_rover(np.where(core, h, np.nan), pts)
         how = "rover"
         if off is None:  # pocos puntos del rover: alinear a la base ya corregida
             off, how = float(np.nanmedian((h - base)[core])), "ctx"
         h = h - off
-        w = np.clip(smooth(core.astype(np.float32), 12, passes=2) * 1.6 - 0.6, 0, 1)
+        w = np.clip(smooth(core.astype(np.float32), r_f, passes=2) * 2.0 - 1.0, 0, 1)  # 0 justo en el borde
         w[~core] = 0
         dem = np.where(w > 0, dem * (1 - w) + np.nan_to_num(h) * w, dem)
         log["dem_merge"].append({"file": name, "role": "detalle", "coverage": round(float(core.mean()), 3),
