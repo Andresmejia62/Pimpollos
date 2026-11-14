@@ -12,6 +12,8 @@ export class Controls {
     window.addEventListener("keydown", (e) => {
       if (e.repeat) return;
       const k = e.key.toLowerCase();
+      // Espacio = saltar: que no desplace la pagina ni pulse el boton que tenga el foco
+      if (this.enabled && k === " " && !(e.target instanceof HTMLButtonElement)) e.preventDefault();
       this.keys.add(k);
       if (this.enabled && this.handlers.key) this.handlers.key(k, e);
     });
@@ -67,6 +69,8 @@ export class Controls {
     const l = Math.hypot(x, z);
     return [x / l, z / l];
   }
+
+  jumpHeld() { return this.keys.has(" "); }
 
   // Coloca la camara detras del jugador sin atravesar el terreno
   updateCamera(camera, target, groundAt) {

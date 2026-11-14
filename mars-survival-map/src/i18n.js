@@ -46,8 +46,8 @@ const UI = {
   resume: { es: "Volver al juego", en: "Resume" },
   controls: { es: "Controles", en: "Controls" },
   controlsList: {
-    es: "W A S D: caminar / conducir · E: subir o bajar del Land Rover · Ratón: mirar (clic para capturar) · Rueda: alejar cámara · 1–4: capas · R: ruta · H: ayuda · M: minimapa grande · Esc: pausa",
-    en: "W A S D: walk / drive · E: enter or exit the Land Rover · Mouse: look (click to capture) · Wheel: camera distance · 1–4: layers · R: route · H: help · M: large minimap · Esc: pause",
+    es: "W A S D: caminar / conducir · Espacio: saltar · E: subir o bajar del Land Rover · Ratón: mirar (clic para capturar) · Rueda: alejar cámara · 1–4: capas · R: ruta · H: ayuda · M: minimapa grande · Esc: pausa",
+    en: "W A S D: walk / drive · Space: jump · E: enter or exit the Land Rover · Mouse: look (click to capture) · Wheel: camera distance · 1–4: layers · R: route · H: help · M: large minimap · Esc: pause",
   },
   stormIn: { es: "Tormenta solar · llega en", en: "Solar storm · arrives in" },
   stormActive: { es: "Tormenta solar activa", en: "Solar storm active" },
@@ -62,6 +62,7 @@ const UI = {
   clickToLook: { es: "Haz clic para mirar con el ratón", en: "Click to look around with the mouse" },
   boardCar: { es: "Subir al Land Rover", en: "Board the Land Rover" },
   exitCar: { es: "Bajar del Land Rover", en: "Exit the Land Rover" },
+  gravity: { es: "Gravedad 0,38 g", en: "Gravity 0.38 g" },
   localTime: { es: "Hora local", en: "Local time" },
 };
 export const ui = (key) => {

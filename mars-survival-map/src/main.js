@@ -26,7 +26,7 @@ async function boot() {
 
   const astro = new Astronaut(scene.scene);
   astro.tryLoadModel();
-  const game = new Game(data, world, (x, z) => scene.heightAt(x, z));
+  const game = new Game(data, world, (x, z) => scene.heightAt(x, z), scene.colliders);
   const path = new Pathfinder(world);
   const alerts = new AlertSystem(data.alerts, game);
   const hud = new Hud(game, world, data);
@@ -87,6 +87,13 @@ async function boot() {
   game.on("shelter", (o) => { const d = game.dialogs[o.id === "rover" ? "d_shelter_rover" : "d_shelter_habitat"]; if (d) hud.dialogQueue.push(d); });
   game.on("spe", (sp) => { if (sp.phase === "warning") { sfx.klaxon(); if (game.s.layer !== "radiation") game.setLayer("radiation"); game.setRoute(true); } updateBeacons(); });
   game.on("scanStart", () => sfx.scan());
+  game.on("jump", () => sfx.step());
+  game.on("land", ({ damage, driving }) => {
+    sfx.step();
+    if (damage > 0) hud.showAlert({ id: "a_hard_landing", severity: "caution", text: driving
+      ? { es: "Aterrizaje brusco: el golpe ha dañado el traje. Frena antes de las crestas.", en: "Hard landing: the jolt damaged your suit. Slow down before crests." }
+      : { es: "Caída fuerte: el traje ha perdido integridad. En Marte se cae despacio, pero desde muy alto también duele.", en: "Hard fall: your suit lost integrity. You fall slowly on Mars, but from high up it still hurts." } });
+  });
   game.on("scanComplete", ({ mission, objective, fact }) => {
     sfx.success();
     controls.unlock();
@@ -182,7 +189,7 @@ async function boot() {
     if (k === "m") $("minimapPanel").classList.toggle("big");
     if (DEBUG) {
       if (k === "t") game.triggerStorm();
-      if (k === "n") { const o = game.target; game.s.x = o.world.x + 25; game.s.z = o.world.z + 25; }
+      if (k === "n") { const o = game.target; game.s.x = o.world.x + 25; game.s.z = o.world.z + 25; game.s.y = null; }
       if (k === "k") { game.s.oxygen = 100; game.s.energy = 100; game.s.integrity = 100; }
     }
   });
@@ -207,11 +214,11 @@ async function boot() {
       scene.setFocus(cx, scene.heightAt(cx, cz), cz);
     } else {
       if (s.phase === "playing" && !paused && $("scrGuide").hidden) {
-        game.update(dt, controls.moveVector());
+        game.update(dt, controls.moveVector(), controls.jumpHeld());
         acc += dt;
         if (acc > 0.25) { acc = 0; alerts.check(now); }
       }
-      const y = scene.heightAt(s.x, s.z);
+      const y = s.y ?? scene.heightAt(s.x, s.z);
       // al subir al Land Rover se oculta el astronauta y la camara se aleja
       if (s.driving !== wasDriving) {
         wasDriving = s.driving;
@@ -219,7 +226,7 @@ async function boot() {
         if (s.driving) { walkDist = controls.dist; controls.dist = Math.max(controls.dist, 13); }
         else controls.dist = walkDist;
       }
-      astro.update(dt, s.driving ? 0 : s.speed, s.x, y, s.z, s.heading);
+      astro.update(dt, s.driving ? 0 : s.speed, s.x, y, s.z, s.heading, s.air);
       controls.updateCamera(scene.camera, { x: s.x, y: y + (s.driving ? 0.6 : 0), z: s.z }, (x, z) => scene.heightAt(x, z));
       hud.camYaw = controls.yaw;
       scene.setTimeOfDay(game.hour);
@@ -237,7 +244,7 @@ async function boot() {
       hud.update(now);
       setWind(s.spe && s.spe.phase === "active" ? 0.09 : 0.05);
     }
-    car.update(dt, s.car.x, s.car.z, s.car.heading, s.driving ? s.speed : 0, now);
+    car.update(dt, s.car.x, s.car.z, s.car.heading, s.driving ? s.speed : 0, now, s.driving ? s.y : null, s.driving ? s.air : 0);
     scene.render(now, dt);
     if (DEBUG) {
       frames++; fpsT += dt;

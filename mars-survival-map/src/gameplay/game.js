@@ -1,13 +1,20 @@
 // Estado y reglas del juego. Implementa public/layers/rules.json (M3) tal cual
 // y la campana de public/story/missions.json (M4).
+import { MARS, PHYS, boxCollider } from "../engine/physics.js";
+
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+
 // Land Rover: transporte rapido sin presurizar (no es refugio). Conducir no cansa ni desgasta el traje.
 const DRIVE = { speed_k: 2.4, board_radius_m: 6, look_m: 3 };
 
 export class Game {
-  constructor(data, world, groundAt) {
+  constructor(data, world, groundAt, colliders = null) {
     this.data = data;
     this.world = world;
     this.groundAt = groundAt;
+    this.colliders = colliders;
+    this._p = { x: 0, z: 0, nx: 0, nz: 0, hit: false };
     this.rules = data.rules;
     this.objectives = Object.fromEntries(data.objectives.objectives.map((o) => [o.id, o]));
     this.missions = [...data.missions.missions].sort((a, b) => a.order - b.order);
@@ -34,6 +41,8 @@ export class Game {
       science: 0, layer: null, routeOn: false,
       tutorialStep: 0, tutorialTimer: 0, routeToggledInStep: false,
       failCause: null,
+      // fisica: altura de los pies, velocidad y contacto con el suelo (y = null -> se apoya al empezar)
+      y: null, vx: 0, vy: 0, vz: 0, grounded: true, air: 0,
       driving: false,
       car: { x: start.world.x + 13, z: start.world.z + 24, heading: 2.3 },
     };
@@ -76,11 +85,14 @@ export class Game {
         const nx = s.x + rx * k, nz = s.z + rz * k;
         if (!this.world.blockedAt(nx, nz)) { s.x = nx; s.z = nz; break; }
       }
+      s.y = null;
     } else if (this.nearVehicle) {
       s.driving = true;
       s.x = s.car.x; s.z = s.car.z; s.heading = s.car.heading;
       s.scanProgress = 0;
+      s.y = null;
     } else return false;
+    s.vx = s.vy = s.vz = 0;
     this.emit("vehicle", s.driving);
     return true;
   }
@@ -179,32 +191,17 @@ export class Game {
   }
 
   // ---- bucle principal ------------------------------------------------------------
-  update(dt, move) {
+  update(dt, move, jump = false) {
     const s = this.s;
     if (s.phase !== "playing") return;
     const R = this.rules.resources, H = this.rules.hazards, W = this.world;
     s.realSeconds += dt;
     s.gameSeconds += dt * this.rules.time.time_scale;
 
-    // Movimiento
-    const slopeHere = W.slope(s.x, s.z);
-    let speed = 0;
+    // Movimiento: en pasos cortos para que las colisiones no se salten obstaculos a pocos FPS
     s.blockedAhead = false;
-    if (move) {
-      const slopeK = Math.min(1, Math.max(0.5, 1 - (slopeHere - H.slope.slow_above_deg) / 26));
-      speed = this.rules.movement.walk_speed_mps * slopeK * (s.driving ? DRIVE.speed_k : s.energy <= 0 ? 0.4 : 1);
-      const nx = s.x + move[0] * speed * dt, nz = s.z + move[1] * speed * dt;
-      const look = s.driving ? DRIVE.look_m : 1.5; // mirar un poco adelante para detectar el escalon
-      const okBoth = !W.blockedAt(nx + move[0] * look, nz + move[1] * look);
-      if (okBoth) { s.x = nx; s.z = nz; }
-      else if (move[0] && !W.blockedAt(nx + Math.sign(move[0]) * look, s.z)) { s.x = nx; speed *= Math.abs(move[0]); s.blockedAhead = true; }
-      else if (move[1] && !W.blockedAt(s.x, nz + Math.sign(move[1]) * look)) { s.z = nz; speed *= Math.abs(move[1]); s.blockedAhead = true; }
-      else { speed = 0; s.blockedAhead = true; }
-      if (speed > 0) s.heading = Math.atan2(-move[0], -move[1]);
-      s.movedTotal += speed * dt;
-    }
-    s.speed = speed;
-    s.moving = speed > 0.1;
+    const steps = Math.min(4, Math.ceil(dt / 0.034));
+    for (let i = 0; i < steps; i++) this._move(dt / steps, move, jump);
     if (s.driving) { s.car.x = s.x; s.car.z = s.z; s.car.heading = s.heading; }
 
     // Ambiente en la posicion actual
@@ -287,6 +284,134 @@ export class Game {
     }
 
     this._tutorial(dt);
+  }
+
+  // ---- fisica del movimiento ---------------------------------------------------------
+  // Suelo bajo (x, z): el terreno o, a pie, la cima de una roca que se pueda pisar
+  _ground(x, z) {
+    const base = this.groundAt(x, z), s = this.s;
+    if (s.driving || !this.colliders || s.y == null) return base;
+    return this.colliders.groundOn(x, z, s.y, PHYS.step, base);
+  }
+
+  _move(dt, move, jump) {
+    const s = this.s, W = this.world, H = this.rules.hazards, C = this.colliders;
+    const drv = s.driving;
+    if (s.y == null || Math.abs(s.y - this.groundAt(s.x, s.z)) > 60) { s.y = this._ground(s.x, s.z); s.vy = 0; s.grounded = true; }
+    const slopeHere = W.slope(s.x, s.z);
+    const slopeK = clamp(1 - (slopeHere - H.slope.slow_above_deg) / 26, 0.5, 1);
+    const top = this.rules.movement.walk_speed_mps * slopeK * (drv ? DRIVE.speed_k : s.energy <= 0 ? 0.4 : 1);
+
+    // velocidad deseada: a pie va hacia donde se pulsa; el Land Rover gira poco a poco y avanza de frente
+    let tx = 0, tz = 0;
+    if (move) {
+      if (drv) {
+        const dh = wrapAngle(Math.atan2(-move[0], -move[1]) - s.heading);
+        if (s.grounded) s.heading += clamp(dh, -PHYS.carTurn * dt, PHYS.carTurn * dt);
+        const v = top * Math.max(0.3, Math.cos(dh));
+        tx = -Math.sin(s.heading) * v; tz = -Math.cos(s.heading) * v;
+      } else {
+        tx = move[0] * top; tz = move[1] * top;
+        s.heading = Math.atan2(-move[0], -move[1]);
+      }
+    }
+    // inercia: la velocidad se acerca a la deseada con una aceleracion limitada (casi nula en el aire)
+    const acc = !s.grounded ? PHYS.airAccel : drv ? (move ? PHYS.carAccel : PHYS.carBrake) : move ? PHYS.accel : PHYS.friction;
+    const dvx = tx - s.vx, dvz = tz - s.vz, dv = Math.hypot(dvx, dvz);
+    if (dv > acc * dt) { s.vx += (dvx / dv) * acc * dt; s.vz += (dvz / dv) * acc * dt; }
+    else { s.vx = tx; s.vz = tz; }
+
+    // en laderas resbaladizas la gravedad arrastra cuesta abajo
+    let mvx = s.vx, mvz = s.vz;
+    const slip = this.rules.resources.integrity.slip;
+    if (s.grounded && !drv && slopeHere > slip.from_deg) {
+      const e = 1.5;
+      const gx = this.groundAt(s.x - e, s.z) - this.groundAt(s.x + e, s.z), gz = this.groundAt(s.x, s.z - e) - this.groundAt(s.x, s.z + e);
+      const gl = Math.hypot(gx, gz);
+      if (gl > 1e-4) {
+        const v = MARS.g * Math.sin((slopeHere * Math.PI) / 180) * PHYS.slideK;
+        mvx += (gx / gl) * v; mvz += (gz / gl) * v;
+      }
+    }
+
+    // desplazamiento horizontal: pendientes bloqueadas (reglas de M3) y obstaculos
+    const x0 = s.x, z0 = s.z, g0 = this.groundAt(x0, z0);
+    let nx = x0 + mvx * dt, nz = z0 + mvz * dt;
+    const sp = Math.hypot(mvx, mvz);
+    if (sp > 1e-3) {
+      const look = drv ? DRIVE.look_m : 1.5; // mirar un poco adelante para detectar el escalon
+      const dx = mvx / sp, dz = mvz / sp;
+      let blocked = false;
+      if (W.blockedAt(nx + dx * look, nz + dz * look)) {
+        blocked = true;
+        if (mvx && !W.blockedAt(nx + Math.sign(mvx) * look, z0)) { nz = z0; s.vz = 0; }
+        else if (mvz && !W.blockedAt(x0, nz + Math.sign(mvz) * look)) { nx = x0; s.vx = 0; }
+        else { nx = x0; nz = z0; s.vx = s.vz = 0; }
+      }
+      if (blocked && move) s.blockedAhead = true;
+    }
+    if (C) {
+      const p = this._p;
+      let hit = false;
+      if (drv) {
+        // dos circulos, sobre cada eje del vehiculo
+        const fx = -Math.sin(s.heading) * PHYS.carAxle, fz = -Math.cos(s.heading) * PHYS.carAxle;
+        for (const k of [1, -1]) {
+          p.x = nx + fx * k; p.z = nz + fz * k;
+          if (C.resolve(p, PHYS.carRadius, s.y, PHYS.carClear).hit) { nx = p.x - fx * k; nz = p.z - fz * k; hit = true; }
+        }
+      } else {
+        p.x = nx; p.z = nz;
+        const parked = boxCollider(s.car.x, s.car.z, 0.95, 2.35, s.car.heading);
+        hit = C.resolve(p, PHYS.radius, s.y, PHYS.step, parked).hit;
+        nx = p.x; nz = p.z;
+      }
+      if (hit) {
+        // el choque anula la velocidad contra el obstaculo; se sigue deslizando a lo largo de el
+        const vn = s.vx * p.nx + s.vz * p.nz;
+        if (vn < 0) { s.vx -= vn * p.nx; s.vz -= vn * p.nz; }
+        if (W.blockedAt(nx, nz)) { nx = x0; nz = z0; }
+      }
+    }
+    // en el aire no se atraviesa una ladera mas alta que un escalon
+    if (!s.grounded && this._ground(nx, nz) > s.y + PHYS.step * 1.5) { nx = x0; nz = z0; s.vx = s.vz = 0; }
+    s.x = nx; s.z = nz;
+    const moved = Math.hypot(nx - x0, nz - z0);
+    s.speed = moved / dt;
+    s.moving = s.speed > 0.1;
+    s.movedTotal += moved;
+
+    // vertical: gravedad de Marte. En el suelo el cuerpo sigue la pendiente; despega si salta,
+    // si el suelo cae mas rapido de lo que la gravedad permite seguirlo (cresta) o si pisa un borde.
+    const gNew = this._ground(nx, nz);
+    const vG = clamp((this.groundAt(nx, nz) - g0) / dt, -s.speed * 1.2 - 0.5, s.speed * 1.2 + 0.5);
+    if (s.grounded) {
+      if (jump && !drv) {
+        s.vy = Math.max(0, vG) * 0.5 + PHYS.jumpV;
+        s.grounded = false;
+        this.emit("jump");
+      } else if (s.y - gNew > PHYS.step || vG < s.vy - MARS.g * dt - (drv ? PHYS.carCrestTol : PHYS.crestTol)) {
+        s.grounded = false;
+      } else {
+        s.y = gNew;
+        s.vy = vG;
+      }
+    }
+    if (!s.grounded) {
+      s.vy -= MARS.g * dt;
+      s.y += s.vy * dt;
+      if (s.y <= gNew) {
+        const impact = Math.max(0, vG - s.vy);
+        s.y = gNew;
+        s.vy = vG;
+        s.grounded = true;
+        const safe = drv ? PHYS.carSafeImpact : PHYS.safeImpact;
+        const damage = Math.max(0, impact - safe) * (drv ? PHYS.carImpactDamage : PHYS.impactDamage);
+        if (damage > 0) s.integrity -= damage;
+        if (impact > 1.2) this.emit("land", { impact, damage, driving: drv });
+      }
+    }
+    s.air = s.grounded ? 0 : Math.max(0, s.y - gNew);
   }
 
   // Tutorial de la mision 1 (missions.json -> tutorial)

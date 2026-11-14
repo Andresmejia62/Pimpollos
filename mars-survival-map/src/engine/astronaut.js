@@ -189,7 +189,8 @@ export class Astronaut {
   }
 
   // speed en m/s del mundo; el paso es un "salto" de baja gravedad (38 % de la terrestre)
-  update(dt, speed, x, y, z, heading) {
+  // air: metros sobre el suelo (0 = apoyado)
+  update(dt, speed, x, y, z, heading, air = 0) {
     this.root.position.set(x, y, z);
     this.root.rotation.y = heading;
     if (this.mixer) {
@@ -199,9 +200,11 @@ export class Astronaut {
     const p = this.parts;
     if (!p) return;
     this.clock += dt;
-    const moving = speed > 0.2;
+    const flying = air > 0.25;
+    const moving = speed > 0.2 && !flying;
     this.gait = lerp(this.gait, moving ? Math.min(1, speed / 5) : 0, Math.min(1, dt * 7));
-    const k = this.gait;
+    this.fly = lerp(this.fly || 0, flying ? 1 : 0, Math.min(1, dt * 9));
+    const k = this.gait, f = this.fly;
     this.phase += dt * (2.2 + speed * 0.35) * (moving ? 1 : k);
     const a = this.phase * Math.PI;
     const s = Math.sin(a), c = Math.cos(a);
@@ -225,6 +228,19 @@ export class Astronaut {
     p.head.rotation.y = -s * 0.07 * k + Math.sin(this.clock * 0.45) * 0.22 * (1 - k);
     p.head.rotation.x = 0.06 * k;
     p.mastTip.material.emissiveIntensity = Math.sin(this.clock * 4) > 0.7 ? 3 : 0.3;   // baliza de la antena
-    this.body.position.y = Math.abs(s) * 0.24 * k;
+    // en el aire (salto o caida lenta de baja gravedad): piernas recogidas y brazos abiertos para equilibrarse
+    if (f > 0.01) {
+      p.legL.hip.rotation.x = lerp(p.legL.hip.rotation.x, 0.5, f);
+      p.legR.hip.rotation.x = lerp(p.legR.hip.rotation.x, 0.15, f);
+      p.legL.knee.rotation.x = lerp(p.legL.knee.rotation.x, -0.9, f);
+      p.legR.knee.rotation.x = lerp(p.legR.knee.rotation.x, -0.5, f);
+      p.armL.shoulder.rotation.x = lerp(p.armL.shoulder.rotation.x, 0.5, f);
+      p.armR.shoulder.rotation.x = lerp(p.armR.shoulder.rotation.x, 0.5, f);
+      p.torso.rotation.x = lerp(p.torso.rotation.x, -0.08, f);
+    }
+    p.armL.shoulder.rotation.z = -0.1 - 0.75 * f;
+    p.armR.shoulder.rotation.z = 0.1 + 0.75 * f;
+    // el rebote del paso solo es visual; en el aire manda la fisica
+    this.body.position.y = Math.abs(s) * 0.24 * k * (1 - f);
   }
 }

@@ -56,7 +56,7 @@ export class Hud {
         `<span>∠ <b>${env.slope.toFixed(0)}°</b></span><span>☢ <b>${env.dose.toFixed(2)}</b> µGy/h${s.spe && s.spe.phase === "active" ? " ×40" : ""}</span><span>🌡 <b>${env.temp.toFixed(0)} °C</b></span>`;
     }
     const h = this.game.hour % 24;
-    $("clock").textContent = `${ui("localTime")} ${String(Math.floor(h)).padStart(2, "0")}:${String(Math.floor((h % 1) * 60)).padStart(2, "0")} · Sol 212`;
+    $("clock").textContent = `${ui("localTime")} ${String(Math.floor(h)).padStart(2, "0")}:${String(Math.floor((h % 1) * 60)).padStart(2, "0")} · Sol 212 · ${ui("gravity")}`;
 
     // mision y objetivo
     const m = this.game.mission;

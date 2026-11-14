@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { MARS } from "./physics.js";
 
 // Estructuras y vehiculos hechos con primitivas (sin modelos externos).
 // Convencion: los vehiculos miran hacia -Z, igual que el rumbo del juego (rotation.y = heading).
@@ -132,6 +133,17 @@ export function buildHabitat(ms, x, z) {
   for (let i = 0; i < 3; i++) g.add(at(new THREE.Mesh(new THREE.CapsuleGeometry(0.42, 1.3, 4, 12), MAT.metal), 3.6 + i * 1.05, gy(4.6, 8.4) + 1.0, 8.4));
   g.add(box(1.2, 0.9, 1.2, MAT.accent, -3.8, gy(-3.8, 9) + 0.45, 9), box(0.9, 0.7, 0.9, MAT.hull2, -3.9, gy(-3.8, 9) + 1.25, 9.05));
 
+  // obstaculos (coordenadas locales del habitat)
+  const col = ms.colliders.frame(x, z, g.rotation.y);
+  col.circle(0, 0, 6.5);
+  col.box(0, 7.1, 1.6, 2.2);                       // esclusa
+  col.box(-7.2, 0, 1.6, 1.25);                     // tunel
+  col.box(-10.6, 0, 2.35, 5.05);                   // laboratorio
+  for (let i = 0; i < 3; i++) col.circle(-5 + i * 5.2, -12.5, 0.3);
+  col.circle(7.6, -4.5, 0.3);
+  col.box(4.65, 8.4, 1.65, 0.5);                   // depositos
+  col.box(-3.85, 9, 0.65, 0.65);                   // carga
+
   castAll(g);
   ms.scene.add(g);
   ms.addAnimated((t) => { mast.lightMat.emissiveIntensity = (t * 0.8) % 1 < 0.15 ? 4 : 0.25; });
@@ -170,6 +182,8 @@ export function buildRover(ms, x, z) {
   const mast = beaconMast(2.2, "#3ddc97");
   g.add(at(mast.g, 0.8, 3.6, 2.1));
 
+  ms.colliders.addBox(x, z, 1.95, 3.35, 0.6);
+
   castAll(g);
   ms.scene.add(g);
   ms.addAnimated((t) => { mast.lightMat.emissiveIntensity = 1.2 + Math.sin(t * 3) * 1.0; });
@@ -201,6 +215,11 @@ export function buildShelter(ms, x, z) {
   g.add(at(mast.g, 2.6, 3.2, 0));
   g.add(at(solarPanel(3, 2, 1.5), -1.5, gy(-1.5, -6.5), -6.5));
   for (let i = 0; i < 2; i++) g.add(at(new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 1.1, 4, 12), MAT.metal), 4.6, 0.95, 1.6 + i * 0.85));
+
+  const col = ms.colliders.frame(x, z, g.rotation.y);
+  col.box(0, 0, 4.3, 3.5);
+  col.box(4.6, 2.0, 0.45, 0.9);                    // depositos
+  col.circle(-1.5, -6.5, 0.3);
 
   castAll(g);
   ms.scene.add(g);
@@ -351,33 +370,45 @@ export function buildLandRover(ms) {
   dust.renderOrder = 4;
   ms.scene.add(dust);
 
-  const st = { yaw: 0, init: false, spin: 0, steer: 0, n: new THREE.Vector3(0, 1, 0), next: 0, emit: 0, x: 0, z: 0 };
+  const st = { yaw: 0, init: false, spin: 0, steer: 0, n: new THREE.Vector3(0, 1, 0), next: 0, emit: 0, x: 0, z: 0, air: false, dip: 0, dipV: 0, vy: 0, y: 0 };
   const nTmp = new THREE.Vector3(), q = new THREE.Quaternion(), qYaw = new THREE.Quaternion(), rear = new THREE.Vector3();
   const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
-  function update(dt, x, z, heading, speed, time) {
+  // y: altura de las ruedas (null = apoyado en el terreno); air: metros sobre el suelo
+  function update(dt, x, z, heading, speed, time, y = null, air = 0) {
     const jumped = !st.init || Math.hypot(x - st.x, z - st.z) > 6;
+    const ground = ms.heightAt(x, z);
+    if (y == null) y = ground;
+    const flying = air > 0.05;
     st.x = x; st.z = z;
     ms.normalAt(x, z, nTmp);
     const dh = wrap(heading - st.yaw);
-    if (jumped) { st.yaw = heading; st.n.copy(nTmp); st.init = true; }
+    if (jumped) { st.yaw = heading; st.n.copy(nTmp); st.init = true; st.dip = st.dipV = 0; st.y = y; }
     else {
       st.yaw += dh * Math.min(1, dt * 6);
-      st.n.lerp(nTmp, Math.min(1, dt * 7)).normalize();
+      // en el aire conserva la inclinacion del despegue; al tocar suelo vuelve a copiar el terreno
+      if (!flying) st.n.lerp(nTmp, Math.min(1, dt * 7)).normalize();
     }
-    root.position.set(x, ms.heightAt(x, z), z);
+    // suspension: al aterrizar la carroceria se hunde segun la velocidad de caida y rebota
+    const vy = dt > 0 ? (y - st.y) / dt : 0;
+    if (st.air && !flying) st.dipV += Math.min(2.2, Math.max(0, -st.vy) * 0.35);
+    st.air = flying; st.vy = vy; st.y = y;
+    st.dipV += (-st.dip * 90 - st.dipV * 9) * dt;
+    st.dip = Math.max(-0.05, Math.min(0.2, st.dip + st.dipV * dt));
+    root.position.set(x, y, z);
     root.quaternion.copy(q.setFromUnitVectors(UP, st.n)).multiply(qYaw.setFromAxisAngle(UP, st.yaw));
 
     // ruedas: rodadura y direccion
     const k = Math.min(1, speed / 8);
-    st.spin -= (speed * dt) / R;
+    if (!flying) st.spin -= (speed * dt) / R;
+    else st.spin -= (speed * dt) / R * 0.4;       // en el aire las ruedas siguen girando por inercia
     st.steer += ((speed > 0.3 ? Math.max(-0.55, Math.min(0.55, dh * 1.6)) : 0) - st.steer) * Math.min(1, dt * 9);
     for (const wh of wheels) {
       wh.spin.rotation.x = st.spin;
       if (wh.front) wh.steer.rotation.y = st.steer;
     }
     // suspension: vibra con el terreno y se inclina en las curvas
-    body.position.y = Math.sin(time * 11) * 0.012 * k + Math.sin(time * 5.3) * 0.01 * k;
+    body.position.y = Math.sin(time * 11) * 0.012 * k + Math.sin(time * 5.3) * 0.01 * k - st.dip + (flying ? 0.06 : 0);
     body.rotation.z = -st.steer * 0.07 * k;
     body.rotation.x = Math.sin(time * 7.1) * 0.006 * k;
     P.head.emissiveIntensity = 1.2 + 1.6 * k;
@@ -386,7 +417,7 @@ export function buildLandRover(ms) {
 
     // polvo detras de las ruedas traseras
     st.emit += speed * dt;
-    if (speed > 1.5 && st.emit > 0.9) {
+    if (speed > 1.5 && st.emit > 0.9 && !flying) {
       st.emit = 0;
       for (const sx of [-0.83, 0.83]) {
         const i = st.next = (st.next + 1) % N;
@@ -399,7 +430,9 @@ export function buildLandRover(ms) {
     for (let i = 0; i < N; i++) {
       if (dAge[i] >= 1) continue;
       dAge[i] = Math.min(1, dAge[i] + dt / 2.2);
-      dPos[i * 3] += dVel[i * 3] * dt; dPos[i * 3 + 1] += dVel[i * 3 + 1] * dt * (1 - dAge[i]); dPos[i * 3 + 2] += dVel[i * 3 + 2] * dt;
+      // el polvo sube y cae despacio: gravedad de Marte y aire muy tenue
+      dVel[i * 3 + 1] -= MARS.g * 0.12 * dt;
+      dPos[i * 3] += dVel[i * 3] * dt; dPos[i * 3 + 1] += dVel[i * 3 + 1] * dt; dPos[i * 3 + 2] += dVel[i * 3 + 2] * dt;
     }
     dGeo.attributes.position.needsUpdate = true;
     dGeo.attributes.aAge.needsUpdate = true;

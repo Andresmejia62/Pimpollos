@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { assetUrl } from "../data.js";
+import { Colliders } from "./physics.js";
 
 // Colores de Marte (sRGB) para la rampa de albedo: sombra -> polvo -> roca clara
 const COL_LO = "#1f0f09", COL_MID = "#8a5536", COL_HI = "#dcb48f";
@@ -65,7 +66,10 @@ const TERRAIN_VS = /* glsl */ `
     vNormalW = normalize(mat3(modelMatrix) * normal);
     vec4 wp = modelMatrix * vec4(position, 1.0);
     vPosW = wp.xyz;
-    gl_Position = projectionMatrix * viewMatrix * wp;
+    // misma expresion que usa three.js en sus materiales: asi el parche de sombras (ShadowMaterial)
+    // obtiene exactamente la misma profundidad que el terreno y no queda oculto por redondeo
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
   }
 `;
 
@@ -267,6 +271,7 @@ export class MarsScene {
     this.overlays = {};
     this.beacons = [];
     this.animated = [];
+    this.colliders = new Colliders();   // obstaculos: las estructuras se registran en props.js, las rocas aqui
     this._buildSky();
     this._buildDust();
     this._buildLights();
@@ -520,6 +525,9 @@ export class MarsScene {
       idx.push(a, b, d, b, c, d);
     }
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    // con normales: sin ellas el sesgo de sombra (normalBias) normaliza un vector nulo y en algunas GPU
+    // el resultado es NaN, con lo que no se dibuja ninguna sombra
+    geo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(pos.length), 3));
     geo.setIndex(idx);
     const mat = new THREE.ShadowMaterial({ opacity: 0.5, color: "#1a0a05", polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     this.catcher = new THREE.Mesh(geo, mat);
@@ -538,11 +546,14 @@ export class MarsScene {
     if (key === this.catchCell) return;
     this.catchCell = key;
     const src = this.terrain.geometry.attributes.position, dst = this.catcher.geometry.attributes.position;
+    const srcN = this.terrain.geometry.attributes.normal, dstN = this.catcher.geometry.attributes.normal;
     for (let iz = 0; iz <= C; iz++) for (let ix = 0; ix <= C; ix++) {
-      const i = (cz + iz) * W + (cx + ix);
-      dst.setXYZ(iz * (C + 1) + ix, src.getX(i), src.getY(i), src.getZ(i));
+      const i = (cz + iz) * W + (cx + ix), j = iz * (C + 1) + ix;
+      dst.setXYZ(j, src.getX(i), src.getY(i), src.getZ(i));
+      dstN.setXYZ(j, srcN.getX(i), srcN.getY(i), srcN.getZ(i));
     }
     dst.needsUpdate = true;
+    dstN.needsUpdate = true;
   }
 
   // Centro de interes (jugador o camara): mueve la luz de sombras, el parche y las rocas
@@ -587,6 +598,7 @@ export class MarsScene {
     this.rockCell = key;
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), p = new THREE.Vector3();
     const col = new THREE.Color();
+    const solid = [];
     let k = 0;
     for (let gz = cz - RAD; gz <= cz + RAD; gz++) {
       for (let gx = cx - RAD; gx <= cx + RAD; gx++) {
@@ -607,6 +619,9 @@ export class MarsScene {
           s.set(r * (0.8 + rnd() * 0.6), r * (0.5 + rnd() * 0.45), r * (0.8 + rnd() * 0.6));
           m.compose(p, q, s);
           this.rocks.setMatrixAt(k, m);
+          // las rocas medianas y grandes son obstaculos (las bajas se pisan): radio y cima aproximados
+          const rad = ((s.x + s.y + s.z) / 3) * 0.9;
+          if (rad >= 0.3) solid.push({ x, z, r: rad * 0.95, top: p.y + rad * 0.8 });
           col.setHSL(0.045 + rnd() * 0.035, 0.3 + rnd() * 0.2, 0.2 + rnd() * 0.16);
           this.rocks.setColorAt(k, col);
           k++;
@@ -614,6 +629,7 @@ export class MarsScene {
       }
     }
     this.rocks.count = k;
+    this.colliders.rocks = solid;
     this.rocks.instanceMatrix.needsUpdate = true;
     if (this.rocks.instanceColor) this.rocks.instanceColor.needsUpdate = true;
   }
