@@ -3,7 +3,7 @@ import { t, ui, getLang, setLang } from "./i18n.js";
 import { World } from "./engine/world.js";
 import { MarsScene } from "./engine/scene.js";
 import { Astronaut } from "./engine/astronaut.js";
-import { buildHabitat, buildRover, buildShelter } from "./engine/props.js";
+import { buildHabitat, buildRover, buildShelter, buildLandRover } from "./engine/props.js";
 import { Controls } from "./engine/controls.js";
 import { Game } from "./gameplay/game.js";
 import { AlertSystem } from "./gameplay/alerts.js";
@@ -31,6 +31,8 @@ async function boot() {
   const alerts = new AlertSystem(data.alerts, game);
   const hud = new Hud(game, world, data);
   const controls = new Controls(canvas);
+  const car = buildLandRover(scene);
+  let wasDriving = false, walkDist = controls.dist;
 
   // ---- marcadores y estructuras ------------------------------------------------
   const beacons = {};
@@ -175,6 +177,7 @@ async function boot() {
     const map = { 1: "slope", 2: "radiation", 3: "thermal", 4: "spectral" };
     if (map[k]) game.setLayer(map[k]);
     if (k === "r") game.setRoute();
+    if (k === "e" && game.toggleVehicle()) sfx.blip();
     if (k === "h") show("scrGuide", $("scrGuide").hidden);
     if (k === "m") $("minimapPanel").classList.toggle("big");
     if (DEBUG) {
@@ -209,8 +212,15 @@ async function boot() {
         if (acc > 0.25) { acc = 0; alerts.check(now); }
       }
       const y = scene.heightAt(s.x, s.z);
-      astro.update(dt, s.speed, s.x, y, s.z, s.heading);
-      controls.updateCamera(scene.camera, { x: s.x, y, z: s.z }, (x, z) => scene.heightAt(x, z));
+      // al subir al Land Rover se oculta el astronauta y la camara se aleja
+      if (s.driving !== wasDriving) {
+        wasDriving = s.driving;
+        astro.root.visible = !s.driving;
+        if (s.driving) { walkDist = controls.dist; controls.dist = Math.max(controls.dist, 13); }
+        else controls.dist = walkDist;
+      }
+      astro.update(dt, s.driving ? 0 : s.speed, s.x, y, s.z, s.heading);
+      controls.updateCamera(scene.camera, { x: s.x, y: y + (s.driving ? 0.6 : 0), z: s.z }, (x, z) => scene.heightAt(x, z));
       hud.camYaw = controls.yaw;
       scene.setTimeOfDay(game.hour);
       scene.setFocus(s.x, y, s.z);
@@ -227,6 +237,7 @@ async function boot() {
       hud.update(now);
       setWind(s.spe && s.spe.phase === "active" ? 0.09 : 0.05);
     }
+    car.update(dt, s.car.x, s.car.z, s.car.heading, s.driving ? s.speed : 0, now);
     scene.render(now, dt);
     if (DEBUG) {
       frames++; fpsT += dt;

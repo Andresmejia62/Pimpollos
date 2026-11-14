@@ -102,6 +102,11 @@ export class Hud {
       });
     }
 
+    // Land Rover: aviso para subir o bajar
+    const canBoard = this.game.nearVehicle;
+    $("carPrompt").hidden = !(s.phase === "playing" && (canBoard || (s.driving && !s.moving)));
+    $("carPromptText").textContent = ui(s.driving ? "exitCar" : "boardCar");
+
     this._compass(tg);
     this.minimap.draw(tg);
     this._dialogs(now);
@@ -289,6 +294,12 @@ class Minimap {
         ctx.strokeRect(px - 7, pz - 7, 14, 14);
         if (isT) { ctx.beginPath(); ctx.arc(px, pz, 14, 0, Math.PI * 2); ctx.stroke(); }
       }
+    }
+    // Land Rover aparcado (rombo naranja)
+    if (s.car && !s.driving) {
+      const [cx, cz] = this.toPx(s.car.x, s.car.z);
+      ctx.fillStyle = "#FF8A3D"; ctx.strokeStyle = "#000"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(cx, cz - 9); ctx.lineTo(cx + 9, cz); ctx.lineTo(cx, cz + 9); ctx.lineTo(cx - 9, cz); ctx.closePath(); ctx.fill(); ctx.stroke();
     }
     // jugador (triangulo orientado al rumbo)
     const [px, pz] = this.toPx(s.x, s.z);

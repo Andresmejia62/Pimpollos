@@ -164,25 +164,82 @@ const SKY_VS = /* glsl */ `
 `;
 const SKY_FS = /* glsl */ `
   uniform vec3 uSunDir, uHorizon, uZenith;
-  uniform float uStorm, uTime;
+  uniform float uStorm, uTime, uDay, uLow;
   varying vec3 vDir;
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
   float noise(vec2 p) {
     vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
     return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
   }
+  float fbm(vec2 p) {
+    float a = 0.5, s = 0.0;
+    for (int i = 0; i < 4; i++) { s += a * noise(p); p = p * 2.07 + 13.7; a *= 0.5; }
+    return s / 0.9375;
+  }
+  // angulo (rad) entre la direccion de vista y otra direccion; estable para angulos pequenos
+  float angTo(vec3 d, vec3 o) { return sqrt(max(0.0, 2.0 * (1.0 - dot(d, o)))); }
+
   void main() {
     vec3 d = normalize(vDir);
-    float h = clamp(d.y, -0.05, 1.0);
-    vec3 col = mix(uHorizon, uZenith, pow(max(h, 0.0), 0.5));
-    // velos de polvo altos, muy tenues
-    vec2 q = d.xz / (0.25 + max(d.y, 0.0)) * 1.6 + vec2(uTime * 0.004, 0.0);
-    float dust = noise(q) * 0.6 + noise(q * 2.3) * 0.4;
-    col *= 1.0 + (dust - 0.5) * 0.16 * smoothstep(0.0, 0.4, d.y);
+    float h = max(d.y, 0.0);
     float s = max(dot(d, uSunDir), 0.0);
-    col += vec3(0.8, 0.86, 1.0) * pow(s, 900.0) * 6.0;        // disco solar (pequeno: Marte esta mas lejos)
-    col += vec3(0.55, 0.64, 0.8) * pow(s, 14.0) * 0.4;        // halo azulado del polvo
-    col += uHorizon * pow(s, 3.0) * 0.12;
+    float ang = angTo(d, uSunDir);
+    float calm = 1.0 - 0.7 * uStorm;
+
+    // degradado: polvo claro en el horizonte, mas oscuro y rojizo hacia el cenit
+    vec3 col = mix(uHorizon, uZenith, pow(h, 0.42));
+    col = mix(col, uHorizon * vec3(1.1, 1.06, 1.0), exp(-h * 11.0) * 0.55);
+    // el polvo dispersa la luz hacia delante: el cielo aclara alrededor del sol
+    col += uHorizon * (0.2 * pow(s, 4.0) + 0.08 * pow(s, 1.5)) * calm;
+
+    // estrellas (solo con el sol muy bajo)
+    float night = pow(1.0 - uDay, 2.0);
+    if (night > 0.01) {
+      vec3 g = d * 170.0, id = floor(g), f = fract(g) - 0.5;
+      float r = hash3(id);
+      vec3 off = (vec3(hash3(id + 1.0), hash3(id + 2.0), hash3(id + 3.0)) - 0.5) * 0.5;
+      float star = step(0.986, r) * smoothstep(0.3, 0.0, length(f + off));
+      col += vec3(0.9, 0.93, 1.0) * star * (0.7 + 0.3 * sin(uTime * 3.0 + r * 90.0)) * night * smoothstep(0.0, 0.15, d.y);
+    }
+
+    // lunas: Fobos (disco palido) y Deimos (un punto brillante)
+    float moonLit = 0.5 + 0.5 * uDay;
+    float phobos = smoothstep(0.0085, 0.0065, angTo(d, normalize(vec3(-0.55, 0.62, -0.5))));
+    float crater = noise(d.xz * 900.0);
+    col = mix(col, vec3(0.9, 0.84, 0.77) * moonLit * (0.82 + 0.3 * crater) + col * 0.22, phobos * 0.55);
+    float deimos = smoothstep(0.0032, 0.0018, angTo(d, normalize(vec3(0.62, 0.45, 0.55))));
+    col = mix(col, vec3(0.95, 0.92, 0.88) * moonLit + col * 0.2, deimos * 0.6);
+
+    // velos de polvo altos y cirros de hielo de agua (como los que fotografia Curiosity)
+    vec2 q = d.xz / (0.22 + h);
+    float tm = uTime * 0.005;
+    float veil = noise(q * 1.6 + vec2(tm, 0.0)) * 0.6 + noise(q * 3.7) * 0.4;
+    col *= 1.0 + (veil - 0.5) * 0.14 * smoothstep(0.0, 0.4, d.y);
+    float c1 = fbm(q * 1.1 + vec2(tm, 0.0));
+    float c2 = fbm(q * vec2(0.7, 3.2) + vec2(c1 * 1.8 + tm * 1.5, 2.0));
+    float cloud = smoothstep(0.5, 0.8, c2) * smoothstep(0.32, 0.62, c1) * smoothstep(0.03, 0.25, d.y);
+    vec3 cloudCol = mix(uHorizon * 1.25, vec3(1.0, 0.93, 0.86) * (0.35 + 0.75 * uDay), 0.55);
+    cloudCol += vec3(0.5, 0.6, 0.8) * pow(s, 6.0) * 0.35;
+    col = mix(col, cloudCol, cloud * 0.42 * calm);
+
+    // sol: disco pequeno (Marte esta mas lejos) con aureola azulada, mas marcada al atardecer
+    vec3 glow = vec3(0.5, 0.62, 0.85) * (exp(-ang * 14.0) * 0.5 + exp(-ang * 60.0) * 0.9);
+    col += glow * (0.6 + 0.9 * uLow) * calm;
+    col += mix(vec3(1.0, 0.97, 0.92), vec3(0.85, 0.92, 1.0), uLow) * smoothstep(0.0064, 0.0048, ang) * 9.0;
+
+    // borde lejano del crater Gale: dos crestas que se pierden en la bruma
+    float az = atan(d.x, d.z);
+    vec2 cd = vec2(cos(az), sin(az));
+    float hf = 0.012 + 0.07 * pow(fbm(cd * 2.6 + 4.0), 1.6) + 0.012 * fbm(cd * 17.0);
+    float hn = -0.004 + 0.05 * pow(fbm(cd * 4.2 + 21.0), 1.5) + 0.008 * fbm(cd * 31.0 + 3.0);
+    vec3 rock = uZenith * 0.55;
+    float below = smoothstep(0.0, -0.035, d.y);
+    vec3 farC = mix(uHorizon, rock, 0.16 + 0.1 * smoothstep(hf - 0.05, hf, d.y));
+    vec3 nearC = mix(uHorizon, rock, 0.3 + 0.14 * smoothstep(hn - 0.04, hn, d.y));
+    col = mix(col, mix(farC, uHorizon, below), smoothstep(hf + 0.0012, hf - 0.0012, d.y));
+    col = mix(col, mix(nearC, uHorizon, below), smoothstep(hn + 0.0012, hn - 0.0012, d.y));
+
     col *= 1.0 - 0.35 * uStorm;
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
@@ -211,6 +268,7 @@ export class MarsScene {
     this.beacons = [];
     this.animated = [];
     this._buildSky();
+    this._buildDust();
     this._buildLights();
     this.resize();
     window.addEventListener("resize", () => this.resize());
@@ -260,18 +318,65 @@ export class MarsScene {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    // tamano en pixeles de 1 m a 1 m de distancia (para las motas de polvo)
+    const hpx = h * this.renderer.getPixelRatio();
+    this.dustMat.uniforms.uScale.value = hpx / (2 * Math.tan((this.camera.fov * Math.PI) / 360));
   }
 
   // ---- cielo, sol y luces -------------------------------------------------------------
   _buildSky() {
     this.skyMat = new THREE.ShaderMaterial({
       vertexShader: SKY_VS, fragmentShader: SKY_FS, side: THREE.BackSide, depthWrite: false,
-      uniforms: { uSunDir: { value: this.sunDir }, uHorizon: { value: HORIZON_DAY.clone() }, uZenith: { value: ZENITH_DAY.clone() }, uStorm: { value: 0 }, uTime: { value: 0 } },
+      uniforms: { uSunDir: { value: this.sunDir }, uHorizon: { value: HORIZON_DAY.clone() }, uZenith: { value: ZENITH_DAY.clone() }, uStorm: { value: 0 }, uTime: { value: 0 }, uDay: { value: 1 }, uLow: { value: 0 } },
     });
     const sky = new THREE.Mesh(new THREE.SphereGeometry(20000, 32, 16), this.skyMat);
     sky.frustumCulled = false;
     sky.renderOrder = -1;
     this.scene.add(sky);
+  }
+
+  // Polvo en suspension: motas que el viento arrastra alrededor de la camara
+  _buildDust() {
+    const N = 900, BOX = 70;
+    const pos = new Float32Array(N * 3), seed = new Float32Array(N);
+    let s = 9173;
+    const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+    for (let i = 0; i < N; i++) { pos[i * 3] = rnd() * BOX; pos[i * 3 + 1] = rnd() * BOX; pos[i * 3 + 2] = rnd() * BOX; seed[i] = rnd(); }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute("aSeed", new THREE.BufferAttribute(seed, 1));
+    this.dustMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false,
+      uniforms: { uTime: { value: 0 }, uBox: { value: BOX }, uScale: { value: 900 }, uStorm: { value: 0 }, uColor: { value: this.fogColor } },
+      vertexShader: /* glsl */ `
+        uniform float uTime, uBox, uScale, uStorm;
+        attribute float aSeed;
+        varying float vA;
+        void main() {
+          vec3 p = position + vec3(2.2, 0.12, 0.9) * uTime * (0.5 + aSeed) * (1.0 + 3.0 * uStorm);
+          p.y += sin(uTime * 0.7 + aSeed * 40.0) * 0.6;
+          p = mod(p - cameraPosition + uBox * 0.5, uBox) - uBox * 0.5;   // la caja sigue a la camara
+          vec4 mv = viewMatrix * vec4(p + cameraPosition, 1.0);
+          gl_Position = projectionMatrix * mv;
+          float dist = max(-mv.z, 0.5);
+          gl_PointSize = max(1.5, uScale * (0.02 + 0.035 * aSeed) / dist);
+          vA = smoothstep(uBox * 0.5, uBox * 0.3, length(p)) * smoothstep(0.8, 4.0, dist) * (0.35 + 0.65 * aSeed);
+        }`,
+      fragmentShader: /* glsl */ `
+        uniform vec3 uColor;
+        uniform float uStorm;
+        varying float vA;
+        void main() {
+          float a = smoothstep(0.5, 0.1, length(gl_PointCoord - 0.5)) * vA * (0.4 + 0.4 * uStorm);
+          gl_FragColor = vec4(uColor * 1.2, a);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+    });
+    this.dust = new THREE.Points(geo, this.dustMat);
+    this.dust.frustumCulled = false;
+    this.dust.renderOrder = 4;
+    this.scene.add(this.dust);
   }
 
   _buildLights() {
@@ -307,6 +412,8 @@ export class MarsScene {
     const hz = this.skyMat.uniforms.uHorizon.value.copy(HORIZON_DAY).multiplyScalar(0.3 + 0.7 * day).lerp(STORM_TINT, 0.55 * st);
     this.skyMat.uniforms.uZenith.value.copy(ZENITH_DAY).multiplyScalar(0.22 + 0.78 * day).lerp(STORM_TINT, 0.4 * st);
     this.fogColor.copy(hz);
+    this.skyMat.uniforms.uDay.value = day;
+    this.skyMat.uniforms.uLow.value = low;
     this.sun.intensity = 2.6 * day * (1 - 0.5 * st);
     this.sun.color.setRGB(1, 0.95 - 0.15 * low, 0.86 - 0.3 * low);
     this.hemi.intensity = 0.55 + 0.6 * day;
@@ -315,6 +422,7 @@ export class MarsScene {
   setStorm(v) {
     this.storm = v;
     this.skyMat.uniforms.uStorm.value = v;
+    this.dustMat.uniforms.uStorm.value = v;
     if (this.terrainMat) this.terrainMat.uniforms.uStorm.value = v;
     if (this.apron) this.apron.material.uniforms.uStorm.value = v;
   }
@@ -608,6 +716,7 @@ export class MarsScene {
 
   render(time, dt = 0.016) {
     this.skyMat.uniforms.uTime.value = time;
+    this.dustMat.uniforms.uTime.value = time;
     this.routeMat.uniforms.uTime.value = time;
     for (const b of this.beacons) {
       if (!b.group.visible) continue;

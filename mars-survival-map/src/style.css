@@ -105,6 +105,9 @@ button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 @keyframes pulse { 50% { opacity: .45; } }
 
 .hint { position: absolute; left: 50%; bottom: calc(var(--u) * 1.2); transform: translateX(-50%); font-family: var(--font-text); font-size: calc(var(--u) * 1.05); color: var(--hud-text-dim); text-shadow: 0 1px 2px #000; white-space: nowrap; }
+.prompt { position: absolute; left: 50%; bottom: calc(var(--u) * 8); transform: translateX(-50%); display: flex; align-items: center; gap: calc(var(--u) * .6); padding: calc(var(--u) * .5) calc(var(--u) * 1.1); background: var(--hud-bg); border: 1px solid var(--hud-border); border-radius: calc(var(--u) * .7); backdrop-filter: blur(6px); font-size: calc(var(--u) * 1.4); font-weight: 600; white-space: nowrap; }
+.prompt[hidden] { display: none; }
+.prompt kbd { font: 700 calc(var(--u) * 1.2) var(--font-hud); background: var(--hud-text); color: #120e10; border-radius: calc(var(--u) * .3); padding: 0 calc(var(--u) * .55); }
 .clock { position: absolute; left: 50%; top: calc(var(--u) * 6.1); transform: translateX(-50%); font-size: calc(var(--u) * 1.1); color: var(--hud-text-dim); text-shadow: 0 1px 2px #000; font-variant-numeric: tabular-nums; }
 .fps { position: absolute; left: calc(var(--u) * 2); top: calc(var(--u) * 13); font: 600 12px ui-monospace, monospace; color: #fff; background: rgba(0,0,0,.5); padding: 2px 6px; border-radius: 4px; }
 

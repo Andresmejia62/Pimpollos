@@ -1,5 +1,8 @@
 // Estado y reglas del juego. Implementa public/layers/rules.json (M3) tal cual
 // y la campana de public/story/missions.json (M4).
+// Land Rover: transporte rapido sin presurizar (no es refugio). Conducir no cansa ni desgasta el traje.
+const DRIVE = { speed_k: 2.4, board_radius_m: 6, look_m: 3 };
+
 export class Game {
   constructor(data, world, groundAt) {
     this.data = data;
@@ -31,6 +34,8 @@ export class Game {
       science: 0, layer: null, routeOn: false,
       tutorialStep: 0, tutorialTimer: 0, routeToggledInStep: false,
       failCause: null,
+      driving: false,
+      car: { x: start.world.x + 13, z: start.world.z + 24, heading: 2.3 },
     };
     this.checkpoint = null;
   }
@@ -55,6 +60,30 @@ export class Game {
 
   distTo(o) { return Math.hypot(o.world.x - this.s.x, o.world.z - this.s.z); }
   radiusOf(o) { return Math.max(o.radius_m || 15, this.rules.science.scan_radius_m); }
+
+  // ---- Land Rover -------------------------------------------------------------------
+  get nearVehicle() { const s = this.s; return !s.driving && Math.hypot(s.car.x - s.x, s.car.z - s.z) < DRIVE.board_radius_m; }
+
+  // Sube si esta cerca; si ya conduce, baja por un costado que no este bloqueado
+  toggleVehicle() {
+    const s = this.s;
+    if (s.phase !== "playing") return false;
+    if (s.driving) {
+      s.driving = false;
+      s.car = { x: s.x, z: s.z, heading: s.heading };
+      const rx = Math.cos(s.heading), rz = -Math.sin(s.heading);   // derecha del vehiculo
+      for (const k of [-2.3, 2.3, -3.2, 3.2]) {
+        const nx = s.x + rx * k, nz = s.z + rz * k;
+        if (!this.world.blockedAt(nx, nz)) { s.x = nx; s.z = nz; break; }
+      }
+    } else if (this.nearVehicle) {
+      s.driving = true;
+      s.x = s.car.x; s.z = s.car.z; s.heading = s.car.heading;
+      s.scanProgress = 0;
+    } else return false;
+    this.emit("vehicle", s.driving);
+    return true;
+  }
 
   // ---- flujo de misiones ---------------------------------------------------------
   startMission(i) {
@@ -163,9 +192,9 @@ export class Game {
     s.blockedAhead = false;
     if (move) {
       const slopeK = Math.min(1, Math.max(0.5, 1 - (slopeHere - H.slope.slow_above_deg) / 26));
-      speed = this.rules.movement.walk_speed_mps * slopeK * (s.energy <= 0 ? 0.4 : 1);
+      speed = this.rules.movement.walk_speed_mps * slopeK * (s.driving ? DRIVE.speed_k : s.energy <= 0 ? 0.4 : 1);
       const nx = s.x + move[0] * speed * dt, nz = s.z + move[1] * speed * dt;
-      const look = 1.5; // mirar un poco adelante para detectar el escalon
+      const look = s.driving ? DRIVE.look_m : 1.5; // mirar un poco adelante para detectar el escalon
       const okBoth = !W.blockedAt(nx + move[0] * look, nz + move[1] * look);
       if (okBoth) { s.x = nx; s.z = nz; }
       else if (move[0] && !W.blockedAt(nx + Math.sign(move[0]) * look, s.z)) { s.x = nx; speed *= Math.abs(move[0]); s.blockedAhead = true; }
@@ -176,6 +205,7 @@ export class Game {
     }
     s.speed = speed;
     s.moving = speed > 0.1;
+    if (s.driving) { s.car.x = s.x; s.car.z = s.z; s.car.heading = s.heading; }
 
     // Ambiente en la posicion actual
     const slope = W.slope(s.x, s.z);
@@ -192,7 +222,8 @@ export class Game {
     if (s.inShelter && s.inShelter !== prevShelter) this.emit("shelter", this.objectives[s.inShelter]);
 
     // Recursos (rules.json -> resources)
-    let o2 = R.oxygen.base_drain_per_s * (s.moving ? 1 + slope / 25 : 1);
+    const onFoot = s.moving && !s.driving;
+    let o2 = R.oxygen.base_drain_per_s * (onFoot ? 1 + slope / 25 : 1);
     if (s.energy <= 0) o2 *= 1.5;
     s.oxygen -= o2 * dt;
     s.energy -= R.energy.base_drain_per_s * (1 + R.energy.cold.extra_per_deg * Math.max(0, R.energy.cold.comfort_c - temp)) * dt;
@@ -200,7 +231,7 @@ export class Game {
     const speMult = s.spe && s.spe.phase === "active" ? E.dose_multiplier : 1;
     const shelterK = s.inShelter ? E.shelter_factor : 1;
     s.integrity -= R.integrity.radiation.k_per_ugy_h * dose * speMult * shelterK * dt;
-    if (s.moving && slope > R.integrity.slip.from_deg && slope <= R.integrity.slip.to_deg) s.integrity -= R.integrity.slip.drain_per_s * dt;
+    if (onFoot && slope > R.integrity.slip.from_deg && slope <= R.integrity.slip.to_deg) s.integrity -= R.integrity.slip.drain_per_s * dt;
     if (s.inShelter) {
       const cap = s.inShelter === "rover" ? R.shelter_refill.rover_cap : 100;
       if (s.oxygen < cap) s.oxygen = Math.min(cap, s.oxygen + R.shelter_refill.oxygen_per_s * dt);
