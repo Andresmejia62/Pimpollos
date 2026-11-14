@@ -3,13 +3,19 @@ import { t, ui, getLang, setLang } from "./i18n.js";
 import { World } from "./engine/world.js";
 import { MarsScene } from "./engine/scene.js";
 import { Astronaut } from "./engine/astronaut.js";
-import { buildHabitat, buildRover, buildShelter, buildLandRover } from "./engine/props.js";
+import { buildHabitat, buildRover, buildShelter } from "./engine/props.js";
+import { buildMarsRover } from "./engine/marsrover.js";
 import { Controls } from "./engine/controls.js";
 import { Game } from "./gameplay/game.js";
 import { AlertSystem } from "./gameplay/alerts.js";
 import { Pathfinder } from "./gameplay/pathfinding.js";
 import { Hud } from "./ui/hud.js";
 import { initAudio, sfx, setWind } from "./audio.js";
+import { GeoFrame } from "./geo.js";
+import { Atlas } from "./ui/atlas.js";
+import { ProfileScreen } from "./ui/profile.js";
+import { loadProfile } from "./engine/physiology.js";
+import { LoadingScreen, PauseMenu } from "./ui/screens.js";
 
 const $ = (id) => document.getElementById(id);
 const DEBUG = new URLSearchParams(location.search).has("debug");
@@ -17,21 +23,29 @@ const show = (id, on = true) => { $(id).hidden = !on; };
 
 async function boot() {
   setLang(getLang());
-  $("loadText").textContent = ui("loading");
-  const data = await loadAll((p) => { $("loadBar").style.width = Math.round(p * 70) + "%"; });
+  const loader = new LoadingScreen();
+  const data = await loadAll((p, key) => loader.data(p, key));
   const world = new World(data);
   const canvas = $("view");
   const scene = new MarsScene(canvas, world, data);
-  await scene.init((p) => { $("loadBar").style.width = Math.round(70 + p * 30) + "%"; });
+  await scene.init((p) => loader.scene(p));
+  loader.done();
 
   const astro = new Astronaut(scene.scene);
   astro.tryLoadModel();
   const game = new Game(data, world, (x, z) => scene.heightAt(x, z), scene.colliders);
   const path = new Pathfinder(world);
   const alerts = new AlertSystem(data.alerts, game);
-  const hud = new Hud(game, world, data);
+  const geo = new GeoFrame(data.region);
+  const hud = new Hud(game, world, data, geo);
+  const atlas = new Atlas({ game, world, geo, data });
+  atlas.onClose = () => canvas.focus();
+  const applyProfile = (p) => { game.setProfile(p); astro.root.scale.setScalar(p.height / 175); };
+  applyProfile(loadProfile());
+  const profile = new ProfileScreen(game.o2CapacityG);
+  const openAtlas = (where) => { atlas.open(where); controls.unlock(); };
   const controls = new Controls(canvas);
-  const car = buildLandRover(scene);
+  const car = buildMarsRover(scene);
   let wasDriving = false, walkDist = controls.dist;
 
   // ---- marcadores y estructuras ------------------------------------------------
@@ -54,10 +68,12 @@ async function boot() {
   };
 
   // ---- idioma y pantallas ----------------------------------------------------------
-  const toggleLang = () => { setLang(getLang() === "es" ? "en" : "es"); hud.applyLang(); if (game.s.phase === "briefing") showBriefing(); };
+  const toggleLang = () => { setLang(getLang() === "es" ? "en" : "es"); hud.applyLang(); atlas.applyLang(); if (game.s.phase === "briefing") showBriefing(); };
   hud.applyLang();
-  show("scrLoading", false);
+  // la carga se desvanece sobre la portada
   show("scrTitle");
+  $("scrLoading").classList.add("out");
+  setTimeout(() => show("scrLoading", false), 700);
 
   function showBriefing() {
     const m = game.mission, o = game.objectives[m.objective_id];
@@ -148,12 +164,22 @@ async function boot() {
   });
 
   // ---- botones --------------------------------------------------------------------
+  // Comenzar: primero el perfil fisico del astronauta, luego la primera mision
   $("btnStart").onclick = () => {
     initAudio();
     show("scrTitle", false);
+    profile.open();
+  };
+  profile.onBack = () => show("scrTitle");
+  profile.onConfirm = (p) => {
+    applyProfile(p);
+    game.reset();
     controls.enabled = true;
     game.startMission(0);
   };
+  $("btnAtlas").onclick = () => openAtlas("global");
+  $("minimap").onclick = () => openAtlas("eva");
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape" && atlas.isOpen && game.s.phase !== "playing") atlas.close(); });
   $("btnBegin").onclick = () => {
     show("scrBriefing", false);
     game.beginMission();
@@ -161,23 +187,30 @@ async function boot() {
   };
   $("btnCardContinue").onclick = () => { show("scrCard", false); game.continueAfterCard(); };
   $("btnLang").onclick = toggleLang;
-  $("btnPauseLang").onclick = toggleLang;
   $("btnGuide").onclick = () => show("scrGuide");
-  $("btnPauseGuide").onclick = () => show("scrGuide");
   $("btnGuideClose").onclick = () => show("scrGuide", false);
   let paused = false;
-  const setPaused = (p) => { paused = p; show("scrPause", p); };
-  $("btnResume").onclick = () => setPaused(false);
+  const pause = new PauseMenu({
+    game, geo, world,
+    onResume: () => setPaused(false),
+    onAtlas: () => { setPaused(false); openAtlas("eva"); },
+    onGuide: () => show("scrGuide"),
+    onLang: toggleLang,
+    onRetry: () => { setPaused(false); hud.clearDialogs(); game.retry(); },
+    onMenu: () => location.reload(),
+  });
+  const setPaused = (p) => { paused = p; show("scrPause", p); if (p) { controls.unlock(); pause.open(); } else pause.close(); };
   document.querySelectorAll("#layerbar button").forEach((b) => {
     b.onclick = () => (b.dataset.layer === "route" ? game.setRoute() : game.setLayer(b.dataset.layer));
   });
 
   let wasLocked = false;
   controls.on("lock", (locked) => {
-    if (wasLocked && !locked && game.s.phase === "playing") setPaused(true);
+    if (wasLocked && !locked && game.s.phase === "playing" && !atlas.isOpen) setPaused(true);
     wasLocked = locked;
   });
   controls.on("key", (k, e) => {
+    if (atlas.isOpen) { if (k === "escape" || k === "m") atlas.close(); return; }
     if (game.s.phase !== "playing") return;
     if (k === "escape") { setPaused(!paused); return; }
     if (paused) return;
@@ -186,7 +219,8 @@ async function boot() {
     if (k === "r") game.setRoute();
     if (k === "e" && game.toggleVehicle()) sfx.blip();
     if (k === "h") show("scrGuide", $("scrGuide").hidden);
-    if (k === "m") $("minimapPanel").classList.toggle("big");
+    if (k === "m") openAtlas("eva");
+    if (k === "i") $("telem").hidden = !$("telem").hidden;
     if (DEBUG) {
       if (k === "t") game.triggerStorm();
       if (k === "n") { const o = game.target; game.s.x = o.world.x + 25; game.s.z = o.world.z + 25; game.s.y = null; }
@@ -213,13 +247,13 @@ async function boot() {
       scene.setTimeOfDay(9.5);
       scene.setFocus(cx, scene.heightAt(cx, cz), cz);
     } else {
-      if (s.phase === "playing" && !paused && $("scrGuide").hidden) {
+      if (s.phase === "playing" && !paused && $("scrGuide").hidden && !atlas.isOpen) {
         game.update(dt, controls.moveVector(), controls.jumpHeld());
         acc += dt;
         if (acc > 0.25) { acc = 0; alerts.check(now); }
       }
       const y = s.y ?? scene.heightAt(s.x, s.z);
-      // al subir al Land Rover se oculta el astronauta y la camara se aleja
+      // al subir al rover se oculta el astronauta y la camara se aleja
       if (s.driving !== wasDriving) {
         wasDriving = s.driving;
         astro.root.visible = !s.driving;
@@ -253,7 +287,7 @@ async function boot() {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  window.__msm = { game, scene, world, path, controls }; // para depurar desde la consola
+  window.__msm = { game, scene, world, path, controls, atlas, geo, car, astro }; // para depurar desde la consola
 }
 
 boot().catch((e) => {

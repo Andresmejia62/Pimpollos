@@ -1,5 +1,9 @@
-import { t, ui } from "../i18n.js";
+import { t, ui, getLang } from "../i18n.js";
 import { assetUrl } from "../data.js";
+import { gcDistance, gcBearing, pressureAt, fmtLat, fmtLon, fmtDist as fmtD, num } from "../geo.js";
+
+// Factor de calidad medio de la radiacion en la superficie (RAD: 0,64 mSv/dia / 0,21 mGy/dia; Hassler et al. 2014)
+const Q_RAD = 3.05;
 
 const $ = (id) => document.getElementById(id);
 const SPEAKER_ICON = { antenna: "i-antenna", helmet: "i-helmet", earth: "i-earth" };
@@ -21,7 +25,9 @@ const GUIDE = [
 ];
 
 export class Hud {
-  constructor(game, world, data) {
+  constructor(game, world, data, geo) {
+    this.geo = geo;
+    this._telemT = 0;
     this.game = game;
     this.world = world;
     this.data = data;
@@ -102,15 +108,53 @@ export class Hud {
       });
     }
 
-    // Land Rover: aviso para subir o bajar
+    // Rover: aviso para subir o bajar
     const canBoard = this.game.nearVehicle;
     $("carPrompt").hidden = !(s.phase === "playing" && (canBoard || (s.driving && !s.moving)));
     $("carPromptText").textContent = ui(s.driving ? "exitCar" : "boardCar");
 
     this._compass(tg);
+    if (now - this._telemT > 0.2 && !$("telem").hidden) { this._telemT = now; this._telemetry(tg); }
     this.minimap.draw(tg);
     this._dialogs(now);
     $("lockHint").textContent = this._lockHint || "";
+  }
+
+  // ---- telemetria: navegacion (lat/lon/elevacion reales) y fisiologia del astronauta -------------
+  _telemetry(tg) {
+    const g = this.game, s = g.s, b = s.bio, bio = g.bio, lang = getLang(), W = this.world;
+    const ll = this.geo.toLatLon(s.x, s.z);
+    const elev = W.demHeight(s.x, s.z) + W.yRef;
+    const az = ((-s.heading * 180) / Math.PI + 360) % 360;
+    const row = (k, v, cls = "") => `<dt>${k}</dt><dd class="${cls}">${v}</dd>`;
+    let tgt = "";
+    if (tg) {
+      const tl = { lat: tg.latlon[0], lon: tg.latlon[1] };
+      const d = gcDistance(ll.lat, ll.lon, tl.lat, tl.lon), brg = gcBearing(ll.lat, ll.lon, tl.lat, tl.lon);
+      const dz = tg.elevation_m - elev;
+      tgt = row(t({ es: "OBJ", en: "TGT" }), `${fmtD(d, lang)} · ${num(brg, 0, lang)}° · ${dz >= 0 ? "+" : ""}${num(dz, 0, lang)} m`);
+    }
+    $("tmNav").innerHTML =
+      row("LAT", fmtLat(ll.lat, 5)) + row("LON", fmtLon(ll.lon, 5)) +
+      row("ELEV", `${num(elev, 1, lang)} m <i>MOLA</i>`) +
+      row(t({ es: "PRES", en: "PRES" }), `${num(pressureAt(elev), 0, lang)} Pa`) +
+      row(t({ es: "RUMBO", en: "HDG" }), `${num(az, 0, lang).padStart(3, "0")}° · ${num(b.vReal, 2, lang)} m/s · ${b.grade >= 0 ? "+" : ""}${num(b.grade * 100, 0, lang)} %`) + tgt;
+    const pct = bio.pctVO2max(b.M);
+    const remG = (s.oxygen / 100) * g.o2CapacityG, remH = remG / bio.o2gPerH(b.M);
+    $("tmBioTitle").textContent = `BIO · ${bio.p.name} · ${num(bio.p.mass, 0, lang)} kg · ${num(bio.p.height, 0, lang)} cm`;
+    $("tmBio").innerHTML =
+      row("MET", `${num(b.M, 0, lang)} W · ${num(bio.kcalPerH(b.M), 0, lang)} kcal/h`) +
+      row("VO₂", `${num(bio.vo2Lmin(b.M), 2, lang)} L/min · ${Math.round(pct * 100)} %`, pct > 0.75 ? "bad" : pct > 0.55 ? "warn" : "") +
+      row(t({ es: "FC", en: "HR" }), `${Math.round(b.hr)} ${t({ es: "lpm", en: "bpm" })}`, b.hr > bio.hrMax * 0.9 ? "bad" : "") +
+      row("O₂", `${num(remG, 0, lang)} g · ${num(remH, 1, lang)} h ${t({ es: "a este ritmo", en: "at this rate" })}`, remH < 1 ? "bad" : "") +
+      row(t({ es: "GASTO", en: "USED" }), `${num(b.kcal, 0, lang)} kcal · O₂ ${num(b.o2g, 0, lang)} g · CO₂ ${num(b.co2g, 0, lang)} g`) +
+      row(t({ es: "DOSIS", en: "DOSE" }), `${num(b.doseUgy, 1, lang)} µGy · ${num(b.doseUgy * Q_RAD, 1, lang)} µSv`) +
+      row(t({ es: "TERRENO", en: "TERRAIN" }), `η ${num(b.eta, 1, lang)} ${b.eta >= 2 ? t({ es: "arena suelta", en: "loose sand" }) : b.eta > 1.3 ? t({ es: "crestas", en: "ridges" }) : t({ es: "regolito firme", en: "firm regolith" })}`, b.eta >= 2 ? "warn" : "");
+    const f = Math.round(b.fatigue);
+    $("tmFat").style.width = f + "%";
+    $("tmFat").parentElement.classList.toggle("low", f > 40 && f <= 75);
+    $("tmFat").parentElement.classList.toggle("crit", f > 75);
+    $("tmFatL").textContent = `${ui("fatigue")} ${f} %`;
   }
 
   _bar(k, v) {
@@ -295,7 +339,7 @@ class Minimap {
         if (isT) { ctx.beginPath(); ctx.arc(px, pz, 14, 0, Math.PI * 2); ctx.stroke(); }
       }
     }
-    // Land Rover aparcado (rombo naranja)
+    // Rover aparcado (rombo naranja)
     if (s.car && !s.driving) {
       const [cx, cz] = this.toPx(s.car.x, s.car.z);
       ctx.fillStyle = "#FF8A3D"; ctx.strokeStyle = "#000"; ctx.lineWidth = 2;

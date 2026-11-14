@@ -22,7 +22,9 @@ npm install
 npm run dev        # http://127.0.0.1:5173  (añade ?debug=1 para FPS y atajos)
 npm run build      # genera dist/ para GitHub Pages o Netlify
 ```
-Controles: **W A S D** caminar · **ratón** mirar (clic para capturar o arrastrar) · **rueda** distancia de cámara · **1–4** capas · **R** ruta A* · **H** guía de capas · **M** minimapa grande · **Esc** pausa.
+Controles: **W A S D** caminar · **ratón** mirar (clic para capturar o arrastrar) · **rueda** distancia de cámara · **1–4** capas · **R** ruta A* · **H** guía de capas · **M** atlas de Marte · **I** telemetría · **Esc** pausa.
+
+Antes de la primera misión se elige el **perfil fisiológico** del astronauta (masa, estatura, edad, sexo, VO₂max, traje): cambia la velocidad, el oxígeno, la batería y la fatiga (`docs/fisiologia.md`). El **atlas** (tecla M) es un mapa de todo Marte con elevación real MOLA, cráteres, misiones, fenómenos naturales con medidas de protección, la traza de Curiosity y tu propia traza exportable (`docs/atlas.md`).
 Atajos con `?debug=1`: **T** tormenta solar · **N** saltar cerca del objetivo · **K** recargar recursos.
 
 ### Motor (`src/`)
@@ -36,7 +38,14 @@ Atajos con `?debug=1`: **T** tormenta solar · **N** saltar cerca del objetivo �
 | `src/gameplay/game.js` | Recursos, misiones, escaneo, tormenta, refugios y puntaje según `rules.json` |
 | `src/gameplay/alerts.js` | Condiciones de `alerts.json` |
 | `src/gameplay/pathfinding.js` | A* sobre la cuadrícula de costos (512×512, celdas de 12 m) |
-| `src/ui/hud.js` | HUD de los wireframes, minimapa, brújula, diálogos |
+| `src/ui/hud.js` | HUD de los wireframes, minimapa, brújula, diálogos y telemetría NAV/BIO (tecla I) |
+| `src/ui/atlas.js` | Atlas de Marte: MOLA global + Gale + zona EVA, fenómenos, regla, perfil de elevación, exportar traza |
+| `src/ui/profile.js` | Pantalla del perfil fisiológico |
+| `src/engine/physiology.js` | Gasto metabólico (Pandolf a 0,379 g), VO₂, FC, fatiga |
+| `src/geo.js` | Lat/lon ↔ mundo, distancias de círculo máximo, presión y agua líquida |
+| `src/engine/marsrover.js` | Rover conducible estilo Curiosity/Perseverance: 6 ruedas, rocker-bogie que sigue el terreno, mástil, brazo y MMRTG |
+| `src/ui/screens.js` | Pantalla de carga (pasos reales de carga, "Marte ahora") y menú de pausa con pestañas |
+| `src/marsclock.js` | Marte en tiempo real: Ls, sol de Curiosity, hora local en Gale (Mars24) y distancia Tierra–Marte (JPL) |
 
 El terreno se genera directo del DEM (plan B del documento de estructura), así que el juego no depende de `terrain.glb`. Si M1 entrega `astronaut.glb` en `public/models/`, el juego lo carga solo.
 
@@ -59,6 +68,10 @@ python3 -m pip install rasterio
 python3 data/scripts/fetch_nasa.py            # descarga solo el recorte desde USGS (~23 MB)
 python3 data/scripts/build_layers.py          # capas reales (~10 s); --source synthetic para el placeholder
 ```
+Atlas (solo Node, sin dependencias; descarga ~43 MB de MOLA a `data/raw/mola/`, que no se sube a git):
+```bash
+node data/scripts/build_atlas.mjs             # genera public/atlas/ (MOLA global y Gale, traza y perforaciones de Curiosity)
+```
 Genera `public/layers/*`, `data/processed/report.json` (estadísticas y chequeo de que se pueden alcanzar todos los objetivos) y `data/processed/preview.png`.
 Requisitos: Python 3, numpy, Pillow y rasterio.
 
@@ -68,6 +81,8 @@ Requisitos: Python 3, numpy, Pillow y rasterio.
 - `docs/sistema_visual.md`: paleta, tipografía, código de peligro y layout del HUD
 - `docs/reglas.md`: del dato NASA a la regla del juego
 - `docs/fuentes.md`: productos NASA y cómo procesarlos
+- `docs/atlas.md`: atlas de Marte, telemetría y tracking (MOLA, Gazetteer, MMGIS)
+- `docs/fisiologia.md`: modelo de gasto de energía según el perfil del astronauta
 - `docs/wireframes/index.html`: wireframes interactivos del HUD (servir la carpeta del proyecto, p. ej. `python3 -m http.server`, y abrir `/docs/wireframes/`)
 - `docs/guion_video.md`: guion del video de 2 min, subtítulos EN y lista de capturas
 

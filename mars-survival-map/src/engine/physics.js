@@ -1,6 +1,6 @@
 // Fisica del juego: constantes de Marte, colisiones en planta (circulos y cajas orientadas, con altura)
 // y cuerpos sueltos (cajas, bidones, rocas) que caen, ruedan, resbalan y se empujan.
-// El terreno es un campo de alturas; el movimiento del jugador y del Land Rover se integra en gameplay/game.js.
+// El terreno es un campo de alturas; el movimiento del jugador y del rover se integra en gameplay/game.js.
 
 export const MARS = {
   g: 3.72,              // m/s^2 en la superficie (NASA Mars Fact Sheet)
@@ -27,11 +27,11 @@ export const PHYS = {
   slideK: 0.6,          // fraccion de g*sin(pendiente) que arrastra cuesta abajo en laderas de regolito suelto
   safeImpact: 5.5,      // m/s: caida libre de ~4 m en Marte (en la Tierra bastarian 1,5 m)
   impactDamage: 3,      // integridad perdida por cada m/s por encima del limite
-  // Land Rover
-  carRadius: 1.05,      // dos circulos, delante y detras
+  // Rover marciano (estilo Curiosity/Perseverance, escala para tripulacion)
+  carRadius: 1.35,      // dos circulos, delante y detras (vias de 2,8 m con las ruedas)
   carAxle: 1.3,
   carMass: 1800,
-  carClear: 0.45,       // altura libre: las rocas mas bajas se pasan por encima
+  carClear: 0.6,        // altura libre del rocker-bogie: pasa por encima de rocas de hasta ~60 cm
   carMu: 0.62,          // neumaticos sobre regolito: limita la frenada y la aceleracion
   carEngine: 9,         // m/s^2 que da el motor (si hay agarre)
   carTurn: 2.3,         // rad/s
@@ -266,7 +266,7 @@ export class Dynamics {
     }
   }
 
-  // Un empujador (astronauta o Land Rover) en p = {x, z} con radio r, velocidad v = {vx, vz} y masa `mass`
+  // Un empujador (astronauta o rover) en p = {x, z} con radio r, velocidad v = {vx, vz} y masa `mass`
   // choca con los cuerpos: les cede cantidad de movimiento y pierde la suya (accion y reaccion).
   // Si el cuerpo no puede apartarse (esta contra una pared), el que retrocede es el empujador.
   pushBy(p, r, v, mass, feetY, clear) {

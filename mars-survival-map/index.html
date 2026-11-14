@@ -23,6 +23,14 @@
       <div class="env" id="envLine"></div>
     </section>
 
+    <section class="panel telem" id="telem" aria-label="Telemetría">
+      <div class="th"><span>NAV · <span id="tmFix">MOLA/HiRISE</span></span><kbd>I</kbd></div>
+      <dl id="tmNav"></dl>
+      <div class="th"><span id="tmBioTitle">BIO</span></div>
+      <dl id="tmBio"></dl>
+      <div class="fat"><span id="tmFatL"></span><div class="bar"><i id="tmFat"></i></div></div>
+    </section>
+
     <section class="panel compass" aria-label="Brújula">
       <div class="strip" id="compassStrip"></div>
       <div class="tgt" id="compassTgt"><svg><use href="#i-target"/></svg><span id="compassDist"></span></div>
@@ -31,7 +39,7 @@
 
     <section class="panel minimap" id="minimapPanel" aria-label="Minimapa">
       <canvas id="minimap" width="512" height="512"></canvas>
-      <div class="cap"><span id="mapScale">6,1 km</span><span class="trav">━ Curiosity</span></div>
+      <div class="cap"><span id="mapScale">6,1 km</span><span class="trav">━ Curiosity</span><span><kbd>M</kbd> <span data-ui="atlas"></span></span></div>
     </section>
 
     <section class="panel legend" id="legend" hidden></section>
@@ -67,8 +75,24 @@
   </div>
 
   <!-- Pantallas -->
-  <div class="screen" id="scrLoading">
-    <div class="loading"><div class="eyebrow">Mars Survival Map</div><div class="loadbar"><i id="loadBar"></i></div><div class="muted" id="loadText">Cargando…</div></div>
+  <div class="screen load-screen" id="scrLoading">
+    <div class="stars" aria-hidden="true"></div>
+    <div class="load-grid">
+      <div class="globe-wrap" aria-hidden="true">
+        <div class="orbit"><i></i></div>
+        <div class="globe"><div class="surface"></div><div class="shade"></div></div>
+        <div class="globe-lbl">4,59° S · 137,44° E<br><b>CRÁTER GALE</b></div>
+      </div>
+      <div class="load-panel">
+        <div class="eyebrow">NASA Space Apps · Mars Survival Map</div>
+        <h1 class="load-title">EVA-1<span>Aeolis Mons · cráter Gale</span></h1>
+        <div class="load-pct"><b id="loadPct">0</b><span>%</span><em class="muted" id="loadText">Cargando…</em></div>
+        <div class="loadbar"><i id="loadBar"></i></div>
+        <ol class="load-steps" id="loadSteps"></ol>
+        <div class="load-now" id="loadNow"></div>
+        <p class="load-tip" id="loadTip" aria-live="polite"></p>
+      </div>
+    </div>
   </div>
 
   <div class="screen title-screen" id="scrTitle" hidden>
@@ -78,12 +102,56 @@
       <p class="subtitle" data-ui="tagline"></p>
       <div class="btnrow">
         <button class="btn primary" id="btnStart" data-ui="start"></button>
+        <button class="btn" id="btnAtlas" data-ui="atlasOpen"></button>
         <button class="btn" id="btnGuide" data-ui="guide"></button>
         <button class="btn" id="btnLang">ES · EN</button>
       </div>
       <p class="controls-line" data-ui="controlsList"></p>
     </div>
     <div class="credits" data-ui="credits"></div>
+  </div>
+
+  <div class="screen dim" id="scrProfile" hidden>
+    <div class="card profile">
+      <div class="eyebrow" data-ui="profileEyebrow"></div>
+      <h2 data-ui="profileTitle"></h2>
+      <p class="body muted" data-ui="profileIntro"></p>
+      <div class="pf-grid">
+        <div class="pf-form" id="pfForm"></div>
+        <div class="pf-out" id="pfOut"></div>
+      </div>
+      <div class="btnrow"><button class="btn primary" id="btnProfileGo" data-ui="profileGo"></button><button class="btn" id="btnProfileBack" data-ui="back"></button></div>
+    </div>
+  </div>
+
+  <div class="screen atlas" id="scrAtlas" hidden>
+    <div class="atlas-wrap">
+      <header class="atlas-top">
+        <div class="atlas-title"><span class="eyebrow" data-ui="atlas"></span><span class="small muted" id="atlasHint"></span></div>
+        <div class="atlas-tools">
+          <button class="btn sm" data-go="global" data-ui="goGlobal"></button>
+          <button class="btn sm" data-go="gale" data-ui="goGale"></button>
+          <button class="btn sm" data-go="eva" data-ui="goEva"></button>
+          <button class="btn sm" data-go="me" data-ui="goMe"></button>
+          <select id="atlasMode" aria-label="Modo"></select>
+          <button class="btn sm" id="atlasMeasure" aria-pressed="false" data-ui="ruler"></button>
+          <button class="btn sm" id="atlasExport" data-ui="exportCsv"></button>
+          <button class="btn sm primary" id="atlasClose" data-ui="closeMap"></button>
+        </div>
+      </header>
+      <aside class="atlas-side" id="atlasLayers"></aside>
+      <div class="atlas-map">
+        <canvas id="atlasCanvas" aria-label="Mapa de Marte"></canvas>
+        <div class="atlas-legend" id="atlasLegend"></div>
+        <div class="atlas-zoom"><button id="atlasZoomIn" aria-label="Acercar">+</button><button id="atlasZoomOut" aria-label="Alejar">−</button></div>
+      </div>
+      <aside class="atlas-info" id="atlasInfo"></aside>
+      <footer class="atlas-bottom">
+        <div class="atlas-readout" id="atlasReadout"></div>
+        <div class="atlas-prof-head"><div class="seg"><button data-prof="track" data-ui="profTrack"></button><button data-prof="measure" data-ui="profRuler"></button></div><span class="small" id="atlasStats"></span></div>
+        <canvas id="atlasProfile"></canvas>
+      </footer>
+    </div>
   </div>
 
   <div class="screen dim" id="scrBriefing" hidden>
@@ -114,11 +182,27 @@
     <div class="card endcard" id="endCard"></div>
   </div>
 
-  <div class="screen dim" id="scrPause" hidden>
-    <div class="card">
-      <h2 data-ui="paused"></h2>
-      <p class="body" data-ui="controlsList"></p>
-      <div class="btnrow"><button class="btn primary" id="btnResume" data-ui="resume"></button><button class="btn" id="btnPauseGuide" data-ui="guide"></button><button class="btn" id="btnPauseLang">ES · EN</button></div>
+  <div class="screen dim pause-screen" id="scrPause" hidden>
+    <div class="card pause">
+      <nav class="pause-nav" aria-label="Menú de pausa">
+        <div class="eyebrow" data-ui="paused"></div>
+        <div class="pause-clock" id="pauseClock"></div>
+        <button class="btn primary" id="btnResume" data-ui="resume"></button>
+        <button class="btn" id="btnPauseAtlas" data-ui="atlasOpen"></button>
+        <button class="btn" id="btnPauseGuide" data-ui="guide"></button>
+        <div class="pause-tabs" role="tablist">
+          <button role="tab" data-tab="status" aria-selected="true" data-ui="tabStatus"></button>
+          <button role="tab" data-tab="body" aria-selected="false" data-ui="tabBody"></button>
+          <button role="tab" data-tab="controls" aria-selected="false" data-ui="tabControls"></button>
+          <button role="tab" data-tab="mars" aria-selected="false" data-ui="tabMars"></button>
+        </div>
+        <div class="pause-foot">
+          <button class="btn sm" id="btnPauseLang">ES · EN</button>
+          <button class="btn sm" id="btnPauseRetry" data-ui="restartMission"></button>
+          <button class="btn sm" id="btnPauseMenu" data-ui="menu"></button>
+        </div>
+      </nav>
+      <section class="pause-body" id="pauseBody" role="tabpanel"></section>
     </div>
   </div>
 

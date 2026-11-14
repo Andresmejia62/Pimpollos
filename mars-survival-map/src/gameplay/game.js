@@ -1,11 +1,12 @@
 // Estado y reglas del juego. Implementa public/layers/rules.json (M3) tal cual
 // y la campana de public/story/missions.json (M4).
 import { MARS, PHYS, boxCollider } from "../engine/physics.js";
+import { Physiology, REF, REF_FLAT_W, TERRAIN_ETA, DEFAULT_PROFILE } from "../engine/physiology.js";
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
-// Land Rover: transporte rapido sin presurizar (no es refugio). Conducir no cansa ni desgasta el traje.
+// Rover marciano: transporte rapido sin presurizar (no es refugio). Conducir no cansa ni desgasta el traje.
 const DRIVE = { speed_k: 2.4, board_radius_m: 6, look_m: 3 };
 
 export class Game {
@@ -18,14 +19,24 @@ export class Game {
     this._p = { x: 0, z: 0, nx: 0, nz: 0, hit: false };
     this._v = { vx: 0, vz: 0 };
     // el mundo esta comprimido: la traccion se escala igual que la velocidad de marcha (ver PHYS.realWalkSpeed)
-    this.gripScale = this.rules.movement.walk_speed_mps / PHYS.realWalkSpeed;
     this.rules = data.rules;
+    this.gripScale = this.rules.movement.walk_speed_mps / PHYS.realWalkSpeed;
     this.objectives = Object.fromEntries(data.objectives.objectives.map((o) => [o.id, o]));
     this.missions = [...data.missions.missions].sort((a, b) => a.order - b.order);
     this.dialogs = Object.fromEntries(data.dialogs.dialogs.map((d) => [d.id, d]));
     this.facts = Object.fromEntries(data.facts.facts.map((f) => [f.id, f]));
     this.listeners = {};
+    this.setProfile(DEFAULT_PROFILE);
     this.reset();
+  }
+
+  // Perfil fisico del astronauta (engine/physiology.js): cambia la velocidad, el salto y el gasto de O2 y bateria
+  setProfile(profile) {
+    this.bio = new Physiology(profile);
+    this.speedK = this.bio.vDesign / REF.vDesign;              // pierna mas larga -> marcha mas rapida (Froude)
+    this.realPerWorld = REF.vDesign / this.rules.movement.walk_speed_mps;
+    // capacidad de O2 del traje: 8 h para el astronauta de referencia caminando en llano (rules.json -> oxygen)
+    this.o2CapacityG = REF.o2gPerH(REF_FLAT_W) * 8 * (this.rules.resources.oxygen.metabolic_calibration || 1);
   }
 
   on(evt, fn) { (this.listeners[evt] ||= []).push(fn); }
@@ -49,6 +60,9 @@ export class Game {
       y: null, vx: 0, vy: 0, vz: 0, grounded: true, air: 0,
       driving: false,
       car: { x: start.world.x + 13, z: start.world.z + 24, heading: 2.3 },
+      // fisiologia y telemetria acumulada de la EVA
+      bio: { M: this.bio ? this.bio.metabolic(0) : 150, grade: 0, eta: 1.2, fatigue: 0, kcal: 0, o2g: 0, co2g: 0, waterg: 0, doseUgy: 0, hr: 70, vReal: 0 },
+      track: [],
     };
     this.checkpoint = null;
   }
@@ -74,7 +88,7 @@ export class Game {
   distTo(o) { return Math.hypot(o.world.x - this.s.x, o.world.z - this.s.z); }
   radiusOf(o) { return Math.max(o.radius_m || 15, this.rules.science.scan_radius_m); }
 
-  // ---- Land Rover -------------------------------------------------------------------
+  // ---- Rover marciano -------------------------------------------------------------------
   get nearVehicle() { const s = this.s; return !s.driving && Math.hypot(s.car.x - s.x, s.car.z - s.z) < DRIVE.board_radius_m; }
 
   // Sube si esta cerca; si ya conduce, baja por un costado que no este bloqueado
@@ -223,16 +237,35 @@ export class Game {
     }
     if (s.inShelter && s.inShelter !== prevShelter) this.emit("shelter", this.objectives[s.inShelter]);
 
-    // Recursos (rules.json -> resources)
+    // Recursos (rules.json -> resources), a partir del gasto metabolico del astronauta (engine/physiology.js)
     const onFoot = s.moving && !s.driving;
-    let o2 = R.oxygen.base_drain_per_s * (onFoot ? 1 + slope / 25 : 1);
-    if (s.energy <= 0) o2 *= 1.5;
-    s.oxygen -= o2 * dt;
-    s.energy -= R.energy.base_drain_per_s * (1 + R.energy.cold.extra_per_deg * Math.max(0, R.energy.cold.comfort_c - temp)) * dt;
+    const bio = this.bio, b = s.bio;
+    const dtg = dt * this.rules.time.time_scale;                       // segundos en Marte
+    b.vReal = onFoot ? s.speed * this.realPerWorld : 0;
+    b.grade = onFoot ? this._grade || 0 : 0;
+    b.eta = TERRAIN_ETA[W.spectral(s.x, s.z)] ?? 1.2;
+    const Mnow = s.driving ? bio.metabolic(0) * 0.95 : bio.metabolic(b.vReal, b.grade, b.eta);
+    b.M += (Mnow - b.M) * Math.min(1, dt / 1.5);                       // cinetica del VO2 (~30 s en Marte)
+    const pct = bio.pctVO2max(b.M);
+    b.hr = bio.heartRate(b.M);
+    // fatiga: por encima de ~55 % del VO2max se acumula; por debajo se recupera
+    b.fatigue = clamp(b.fatigue + (pct > 0.55 ? (pct - 0.55) * 0.1 : -(0.55 - pct) * 0.12) * dtg, 0, 100);
+    b.kcal += (bio.kcalPerH(b.M) * dtg) / 3600;
+    const o2g = (bio.o2gPerH(b.M) * dtg) / 3600 * (s.energy <= 0 ? 1.5 : 1);
+    b.o2g += o2g;
+    b.co2g += (bio.co2gPerH(b.M) * dtg) / 3600;
+    b.waterg += (bio.waterGPerH(b.M) * dtg) / 3600;
+    s.oxygen -= (100 * o2g) / this.o2CapacityG;
+    // bateria: electronica + ventiladores/bomba (crecen con el calor metabolico) + calefaccion (crece con el frio
+    // y con la superficie corporal, y baja si el cuerpo produce mas calor)
+    const cold = R.energy.cold.extra_per_deg * Math.max(0, R.energy.cold.comfort_c - temp) * (bio.bsa / REF.bsa) * clamp(Math.sqrt(REF_FLAT_W / b.M), 0.7, 1.3);
+    s.energy -= R.energy.base_drain_per_s * (0.85 + 0.15 * (b.M / REF_FLAT_W)) * (1 + cold) * dt;
     const E = this.rules.events.solar_particle_event;
     const speMult = s.spe && s.spe.phase === "active" ? E.dose_multiplier : 1;
     const shelterK = s.inShelter ? E.shelter_factor : 1;
     s.integrity -= R.integrity.radiation.k_per_ugy_h * dose * speMult * shelterK * dt;
+    b.doseUgy += (dose * speMult * shelterK * dtg) / 3600;           // dosis absorbida real de la EVA (µGy)
+    this._track();
     if (onFoot && slope > R.integrity.slip.from_deg && slope <= R.integrity.slip.to_deg) s.integrity -= R.integrity.slip.drain_per_s * dt;
     if (s.inShelter) {
       const cap = s.inShelter === "rover" ? R.shelter_refill.rover_cap : 100;
@@ -296,7 +329,7 @@ export class Game {
   _ground(x, z) {
     const base = this.groundAt(x, z), s = this.s;
     if (!this.colliders || s.y == null) return base;
-    // el Land Rover sube a plataformas bajas, pero no se apoya en las rocas: las pasa con su altura libre
+    // el rover sube a plataformas bajas, pero no se apoya en las rocas: las pasa con su altura libre
     return s.driving ? this.colliders.groundOn(x, z, s.y, PHYS.carClear, base, false) : this.colliders.groundOn(x, z, s.y, PHYS.step, base);
   }
 
@@ -306,9 +339,10 @@ export class Game {
     if (s.y == null || Math.abs(s.y - this.groundAt(s.x, s.z)) > 60) { s.y = this._ground(s.x, s.z); s.vy = 0; s.grounded = true; }
     const slopeHere = W.slope(s.x, s.z);
     const slopeK = clamp(1 - (slopeHere - H.slope.slow_above_deg) / 26, 0.5, 1);
-    const top = this.rules.movement.walk_speed_mps * slopeK * (drv ? DRIVE.speed_k : s.energy <= 0 ? 0.4 : 1);
+    const fatigueK = 1 - 0.45 * Math.min(1, s.bio.fatigue / 100);
+    const top = this.rules.movement.walk_speed_mps * slopeK * (drv ? DRIVE.speed_k : (s.energy <= 0 ? 0.4 : 1) * this.speedK * fatigueK);
 
-    // velocidad deseada: a pie va hacia donde se pulsa; el Land Rover gira poco a poco y avanza de frente
+    // velocidad deseada: a pie va hacia donde se pulsa; el rover gira poco a poco y avanza de frente
     let tx = 0, tz = 0;
     if (move) {
       if (drv) {
@@ -377,7 +411,7 @@ export class Game {
         }
       } else {
         p.x = nx; p.z = nz;
-        const parked = boxCollider(s.car.x, s.car.z, 0.95, 2.35, s.car.heading);
+        const parked = boxCollider(s.car.x, s.car.z, 1.45, 2.0, s.car.heading);
         hit = C.resolve(p, PHYS.radius, s.y, PHYS.step, parked).hit;
         nx = p.x; nz = p.z;
       }
@@ -404,7 +438,7 @@ export class Game {
         if (vn < 0) {
           const bounce = drv ? PHYS.carBounce : 0;
           s.vx -= (1 + bounce) * vn * p.nx; s.vz -= (1 + bounce) * vn * p.nz;
-          // el Land Rover tiene 1800 kg de inercia: un choque frontal rapido se nota en el traje
+          // el rover tiene 1800 kg de inercia: un choque frontal rapido se nota en el traje
           if (drv && -vn > PHYS.carCrashSafe) {
             const damage = (-vn - PHYS.carCrashSafe) * PHYS.carCrashDamage;
             s.integrity -= damage;
@@ -418,6 +452,8 @@ export class Game {
     if (!s.grounded && this._ground(nx, nz) > s.y + PHYS.step * 1.5) { nx = x0; nz = z0; s.vx = s.vz = 0; }
     s.x = nx; s.z = nz;
     const moved = Math.hypot(nx - x0, nz - z0);
+    // pendiente a lo largo del movimiento (+ = cuesta arriba), para el gasto metabolico
+    if (moved > 1e-4) this._grade = (hx * (nx - x0) + hz * (nz - z0)) / moved;
     s.speed = moved / dt;
     s.moving = s.speed > 0.1;
     s.movedTotal += moved;
@@ -428,7 +464,7 @@ export class Game {
     const vG = clamp((this.groundAt(nx, nz) - g0) / dt, -s.speed * 1.2 - 0.5, s.speed * 1.2 + 0.5);
     if (s.grounded) {
       if (jump && !drv) {
-        s.vy = Math.max(0, vG) * 0.5 + PHYS.jumpV;
+        s.vy = Math.max(0, vG) * 0.5 + PHYS.jumpV * this.bio.jumpK;
         s.grounded = false;
         this.emit("jump");
       } else if (s.y - gNew > PHYS.step || vG < s.vy - MARS.g * dt - (drv ? PHYS.carCrestTol : PHYS.crestTol)) {
@@ -453,6 +489,14 @@ export class Game {
       }
     }
     s.air = s.grounded ? 0 : Math.max(0, s.y - gNew);
+  }
+
+  // Registro de la traza (cada 12 m o cada 2 min de Marte): [t_marte_s, x, z, elevacion_m, W, O2 %]
+  _track() {
+    const s = this.s, tr = s.track, last = tr[tr.length - 1];
+    if (last && Math.hypot(s.x - last[1], s.z - last[2]) < 12 && s.gameSeconds - last[0] < 120) return;
+    const elev = this.groundAt(s.x, s.z) + this.world.yRef;
+    tr.push([Math.round(s.gameSeconds), +s.x.toFixed(1), +s.z.toFixed(1), +elev.toFixed(1), Math.round(s.bio.M), +s.oxygen.toFixed(1)]);
   }
 
   // Tutorial de la mision 1 (missions.json -> tutorial)
