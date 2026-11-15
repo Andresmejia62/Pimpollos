@@ -236,6 +236,15 @@
       }
     },
     {
+      "id": "d_m3_rover",
+      "speaker": "base",
+      "duration_s": 6,
+      "text": {
+        "es": "Te dejamos el rover a tu lado. Pulsa E para subir: el canal queda lejos y así ahorras oxígeno.",
+        "en": "We parked the rover next to you. Press E to board: the channel is far and driving saves oxygen."
+      }
+    },
+    {
       "id": "d_shelter_rover",
       "speaker": "suit",
       "duration_s": 4,

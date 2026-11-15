@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { UP, std, glow, at, box, cyl, ball, castAll, MAT, dish, makeWheel } from "./props.js";
 import { addWalkIn } from "./interiors.js";
+import { skin } from "./tex64.js";
 
 // Estructuras que pueblan el mapa. Sus posiciones vienen de public/layers/structures.json, que
 // data/scripts/build_structures.mjs calcula con la traza de Curiosity y las capas de NASA.
@@ -32,6 +33,11 @@ const M = {
   water: glow("#5ab8ff", 1.2),
   hot: glow("#ff7a2e", 1.6),
 };
+// texturas de 64 x 64 px (engine/tex64.js); el segundo numero es lo que mide un mosaico en metros
+skin(M.white, "panel", 2.4, 1.2); skin(M.foil, "foil", 0.7, 1.5); skin(M.black, "rubber", 0.8); skin(M.alu, "brushed", 0.9);
+skin(M.tarp, "fabric", 0.9, 1.2); skin(M.chute, "fabric", 0.9); skin(M.tailings, "grain", 1.2, 1.0); skin(M.warn, "paint", 1.2);
+skin(M.radiator, "brushed", 0.6); skin(M.bag, "fabric", 0.5, 1.2); skin(M.membrane, "fabric", 1.1, 1.4); skin(M.carbon, "rubber", 0.6);
+
 
 // numero pseudoaleatorio estable por estructura (0..1)
 function seeded(id) {
@@ -435,7 +441,7 @@ function buildCommDish(ms, e, rnd) {
   el.position.y = 2.3;
   el.rotation.x = -0.75;
   const R = 3.2;
-  const bowl = new THREE.Mesh(new THREE.SphereGeometry(R * 1.6, 32, 8, 0, Math.PI * 2, 0, 0.66), std("#e9e6df", 0.5, 0.25, { side: THREE.DoubleSide }));
+  const bowl = new THREE.Mesh(new THREE.SphereGeometry(R * 1.6, 32, 8, 0, Math.PI * 2, 0, 0.66), skin(std("#e9e6df", 0.5, 0.25, { side: THREE.DoubleSide }), "panel", 2.4));
   bowl.rotation.x = Math.PI;
   bowl.position.y = R * 1.6 - 0.1;
   el.add(bowl);
@@ -502,12 +508,12 @@ function buildWorkshop(ms, e, rnd) {
   let lo = Infinity;
   for (let j = -4; j <= 4; j++) for (const sx of [-1, 1]) lo = Math.min(lo, gy(sx * R, (j / 4) * (L / 2)));
   for (let i = -4; i <= 4; i++) lo = Math.min(lo, gy((i / 4) * R, -L / 2));
-  const arch = at(new THREE.Mesh(new THREE.CylinderGeometry(R, R, L, 28, 1, true, Math.PI / 2, Math.PI), std("#d8d2c6", 0.85, 0, { side: THREE.DoubleSide })), 0, lo, 0);
+  const arch = at(new THREE.Mesh(new THREE.CylinderGeometry(R, R, L, 28, 1, true, Math.PI / 2, Math.PI), skin(std("#d8d2c6", 0.85, 0, { side: THREE.DoubleSide }), "panel", 2.4, 1.2)), 0, lo, 0);
   arch.rotation.x = Math.PI / 2;      // eje a lo largo de z, media cana hacia arriba
   g.add(arch);
   for (let i = 0; i <= 4; i++) g.add(at(new THREE.Mesh(new THREE.TorusGeometry(R + 0.04, 0.07, 6, 24, Math.PI), M.alu), 0, lo, -L / 2 + (i * L) / 4));
   // pared trasera (con faldon hacia abajo para cerrar el hueco con el terreno)
-  g.add(at(new THREE.Mesh(new THREE.CircleGeometry(R, 28, 0, Math.PI), std("#cfc9bd", 0.85, 0, { side: THREE.DoubleSide })), 0, lo, -L / 2), box(2 * R, 1.2, 0.05, MAT.hull2, 0, lo - 0.6, -L / 2));
+  g.add(at(new THREE.Mesh(new THREE.CircleGeometry(R, 28, 0, Math.PI), skin(std("#cfc9bd", 0.85, 0, { side: THREE.DoubleSide }), "panel", 2.4)), 0, lo, -L / 2), box(2 * R, 1.2, 0.05, MAT.hull2, 0, lo - 0.6, -L / 2));
   // interior: banco, herramientas colgadas, luz calida; cada cosa apoyada en su punto del suelo
   const bz = -L / 2 + 0.8, by = Math.max(gy(-2.6, bz), gy(0.2, bz));
   g.add(box(3.2, 0.9 + by - gy(-1.2, bz) + 0.3, 0.9, MAT.dark, -1.2, (by + 0.9 + gy(-1.2, bz) - 0.3) / 2, bz), box(3.2, 0.06, 0.95, M.alu, -1.2, by + 0.92, bz));
@@ -595,7 +601,7 @@ function buildWaterExtractor(ms, e, rnd) {
   sv.g.add(g);
   const gy = (lx, lz) => sv.gy(lx, lz) - g.position.y;
   // tolva donde se vierte el regolito excavado
-  g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(1.2, 0.45, 1.4, 4, 1, true), std("#9da2ab", 0.5, 0.5, { side: THREE.DoubleSide })), -1.6, 2.6, -0.8).rotateY(Math.PI / 4));
+  g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(1.2, 0.45, 1.4, 4, 1, true), skin(std("#9da2ab", 0.5, 0.5, { side: THREE.DoubleSide }), "brushed", 0.9)), -1.6, 2.6, -0.8).rotateY(Math.PI / 4));
   for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) g.add(strut(-1.6 + sx * 0.6, 0.15, -0.8 + sz * 0.6, -1.6 + sx * 0.45, 1.95, -0.8 + sz * 0.45, 0.05, M.alu));
   // horno rotatorio (aqui sale el agua como vapor) y condensador
   const kiln = cyl(0.55, 0.55, 3.2, MAT.metal, 0.4, 1.1, 0.4, 16);
@@ -645,7 +651,7 @@ function buildCuriosity(ms, e) {
   const yaw = e.heading_rad || 0;
   g.position.set(e.x, ms.heightAt(e.x, e.z), e.z);
   g.quaternion.setFromUnitVectors(UP, ms.normalAt(e.x, e.z)).multiply(new THREE.Quaternion().setFromAxisAngle(UP, yaw));
-  const dusty = std("#b9aa98", 0.85), wheelMat = std("#8d8880", 0.5, 0.6);
+  const dusty = skin(std("#b9aa98", 0.85), "paint", 0.8), wheelMat = skin(std("#8d8880", 0.5, 0.6), "brushed", 0.5);
   const R = 0.26, WX = 1.2, WZ = [-1.2, 0.1, 1.15];
   for (const s of [-1, 1]) {
     for (const wz of WZ) {

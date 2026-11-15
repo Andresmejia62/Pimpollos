@@ -140,9 +140,11 @@
       "hazard_main": "temperature",
       "layer_hint": "thermal",
       "points": 150,
+      "vehicle": "beside",
       "dialogs_start": [
         "d_m2_start_1",
-        "d_m2_start_2"
+        "d_m2_start_2",
+        "d_m3_rover"
       ],
       "dialogs_complete": [
         "d_m2_done"

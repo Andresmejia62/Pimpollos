@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { std, glow, at, box, cyl, castAll, MAT } from "./props.js";
 import { addWalkIn } from "./interiors.js";
+import { skin } from "./tex64.js";
 
 // Colonia Aeolis: cupula presurizada con cultivos y modulos habitables, unida al habitat por una tuberia,
 // con un campo solar y un modulo exterior conectado por un tunel. El sitio se elige con el DTM real:
@@ -32,6 +33,10 @@ const M = {
   screen: std("#0b1a24", 0.3, 0, { emissive: "#3fa9ff", emissiveIntensity: 1.2 }),
   umbrella: std("#d4541c", 0.8, 0, { side: THREE.DoubleSide }),
 };
+// texturas de 64 x 64 px (engine/tex64.js)
+skin(M.sinter, "grain", 1.6, 1.0); skin(M.path, "grain", 1.2); skin(M.white, "panel", 2.4, 1.2); skin(M.stripe, "paint", 1.2);
+M.panel.color.set("#ffffff"); skin(M.panel, "solar", 1.2);
+
 
 // Mobiliario de la plaza central: bancos, mesas con sombrilla, quiosco con el mapa y jardineras.
 // Devuelve los obstaculos (locales) para registrarlos con la altura del suelo.

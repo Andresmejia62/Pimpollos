@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { MARS } from "./physics.js";
 import { addWalkIn } from "./interiors.js";
+import { skin, tex64 } from "./tex64.js";
 
 // Estructuras y vehiculos hechos con primitivas (sin modelos externos).
 // Convencion: los vehiculos miran hacia -Z, igual que el rumbo del juego (rotation.y = heading).
@@ -29,6 +30,14 @@ const MAT = {
   hullIn: std("#e2ddd3", 0.85, 0, { side: THREE.DoubleSide }),
   deck: std("#4a4d55", 0.7, 0.3),
 };
+// Texturas de 64 x 64 px (engine/tex64.js): multiplican el color del material y dan relieve. El segundo numero es
+// lo que mide un mosaico en metros.
+skin(MAT.hull, "panel", 2.4, 1.2); skin(MAT.hull2, "panel", 2.4, 1.2); skin(MAT.hullIn, "panel", 2.4);
+skin(MAT.base, "grain", 1.6, 1.0); skin(MAT.regolith, "grain", 1.2, 1.2);
+skin(MAT.dark, "rubber", 0.8); skin(MAT.tire, "rubber", 0.4);
+skin(MAT.metal, "brushed", 0.9); skin(MAT.accent, "paint", 1.2);
+skin(MAT.deck, "tread", 0.6, 1.0);
+MAT.solar.color.set("#ffffff"); skin(MAT.solar, "solar", 1.2);       // la textura de celulas ya lleva el color
 
 // Panel solar sobre un poste, inclinado hacia el norte (por donde pasa el sol a esta latitud)
 function solarPanel(w = 4, d = 2.4, postH = 1.6) {
@@ -53,7 +62,7 @@ function beaconMast(h, color) {
 
 function dish(r = 0.9) {
   const g = new THREE.Group();
-  const bowl = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 8, 0, Math.PI * 2, 0, Math.PI * 0.32), std("#e3e0d8", 0.6, 0.2, { side: THREE.DoubleSide }));
+  const bowl = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 8, 0, Math.PI * 2, 0, Math.PI * 0.32), skin(std("#e3e0d8", 0.6, 0.2, { side: THREE.DoubleSide }), "panel", 2.4));
   bowl.rotation.x = Math.PI;       // la concavidad mira hacia arriba
   bowl.position.y = r;
   g.add(bowl, cyl(0.02, 0.02, r * 0.75, MAT.metal, 0, r * 0.4, 0, 6), ball(0.06, MAT.dark, 0, r * 0.78, 0, 8));
@@ -73,32 +82,13 @@ function siteFrame(ms, x, z, g, front) {
 }
 
 // ---- Interior del habitat ----------------------------------------------------------------------
-// Texturas de lienzo: paneles acolchados de la pared (como el aislamiento de los modulos de la ISS) y suelo
+// Texturas de lienzo de 64 x 64 px (engine/tex64.js): paneles acolchados de la pared (como el aislamiento de los modulos de la ISS) y suelo
 // de placas con rejilla. Se crean una vez.
 let _tex = null;
 function interiorTextures() {
   if (_tex) return _tex;
-  const mk = (w, h, draw) => { const c = document.createElement("canvas"); c.width = w; c.height = h; draw(c.getContext("2d"), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return t; };
-  const wall = mk(256, 256, (x, w, h) => {
-    x.fillStyle = "#e9e5dc"; x.fillRect(0, 0, w, h);
-    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
-      const gr = x.createRadialGradient(i * 64 + 32, j * 64 + 32, 4, i * 64 + 32, j * 64 + 32, 44);
-      gr.addColorStop(0, "#f4f1ea"); gr.addColorStop(1, "#cfc9bd");
-      x.fillStyle = gr; x.fillRect(i * 64 + 2, j * 64 + 2, 60, 60);
-    }
-    x.strokeStyle = "#a8a296"; x.lineWidth = 2;
-    for (let i = 0; i <= 4; i++) { x.beginPath(); x.moveTo(i * 64, 0); x.lineTo(i * 64, h); x.stroke(); x.beginPath(); x.moveTo(0, i * 64); x.lineTo(w, i * 64); x.stroke(); }
-    x.fillStyle = "#8d8679"; for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { x.beginPath(); x.arc(i * 64 + 4, j * 64 + 4, 2.2, 0, 7); x.fill(); }
-  });
-  wall.repeat.set(10, 3);
-  const floor = mk(256, 256, (x, w, h) => {
-    x.fillStyle = "#565a62"; x.fillRect(0, 0, w, h);
-    x.strokeStyle = "#3a3d44"; x.lineWidth = 3;
-    for (let i = 0; i <= 2; i++) { x.beginPath(); x.moveTo(i * 128, 0); x.lineTo(i * 128, h); x.stroke(); x.beginPath(); x.moveTo(0, i * 128); x.lineTo(w, i * 128); x.stroke(); }
-    x.fillStyle = "#6a6e77";
-    for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) for (let a = 0; a < 6; a++) for (let b = 0; b < 6; b++) x.fillRect(i * 128 + 14 + a * 17, j * 128 + 14 + b * 17, 10, 10);
-  });
-  floor.repeat.set(3, 3);
+  // 64 x 64 px: un panel acolchado por mosaico (40 x 12 paneles en la pared) y una placa por mosaico (6 x 6 en el suelo)
+  const wall = tex64("wall", 40, 12), floor = tex64("floor", 6, 6);
   return (_tex = { wall, floor });
 }
 

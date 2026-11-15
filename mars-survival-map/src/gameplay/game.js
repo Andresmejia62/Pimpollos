@@ -232,6 +232,8 @@ export class Game {
     s.tutorialStep = 0;
     s.tutorialTimer = 0;
     s.subs = this._makeSubs(this.mission);
+    // misiones con "vehicle": "beside" (mision 3): el rover aparece aparcado junto al astronauta
+    if (!s.free && this.mission.vehicle === "beside") this.summonVehicle();
     s.phase = "briefing";
     this.checkpoint = JSON.parse(JSON.stringify(s));
     this.emit("mission", this.mission);

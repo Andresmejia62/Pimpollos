@@ -8,6 +8,7 @@ import { buildHabitat, buildRover, buildShelter } from "./engine/props.js";
 import { buildMarsRover } from "./engine/marsrover.js";
 import { buildStructures } from "./engine/structures.js";
 import { buildColony } from "./engine/colony.js";
+import { metricUVs } from "./engine/tex64.js";
 import { INTERIORS, makeGround } from "./engine/interiors.js";
 import { Achievements, ACHIEVEMENTS } from "./gameplay/achievements.js";
 import { MINERALS, drawSpectrum } from "./ui/spectrum.js";
@@ -181,6 +182,8 @@ async function boot() {
       world: { x: it.x, y: it.floorY - world.yRef, z: it.z }, latlon: [ll.lat, ll.lon], elevation_m: it.floorY + world.yRef };
   }
   blockers.push(...scene.structures);
+  // texturas de 64 x 64 de las estructuras: UV en metros para que el mosaico mida lo mismo en todas las piezas
+  metricUVs(scene.scene);
   // fusion de la geometria estatica de cada estructura (menos llamadas de dibujo y de sombra; engine/merge.js)
   {
     const seen = new Set();
