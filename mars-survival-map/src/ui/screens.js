@@ -4,6 +4,7 @@ import { marsNow, seasonOf, hhmm } from "../marsclock.js";
 import { gcDistance, gcBearing, fmtLat, fmtLon, fmtDist, num } from "../geo.js";
 import { SUITS } from "../engine/physiology.js";
 import { marsSkyEphemeris, NAKED_EYE, DUST_NOTE } from "../engine/planets.js";
+import { REFERENCE_EVENT, LEVEL_TEXT, LEVEL_COLOR } from "../spaceweather.js";
 
 const $ = (id) => document.getElementById(id);
 const L = (es, en) => ({ es, en });
@@ -172,12 +173,28 @@ export class PauseMenu {
       <p class="small muted">${t(L("El perfil se elige al empezar la expedición. Modelo: Pandolf a 0,379 g + Mifflin-St Jeor (docs/fisiologia.md).", "The profile is chosen when the expedition starts. Model: Pandolf at 0.379 g + Mifflin-St Jeor (docs/fisiologia.md)."))}</p>`;
   }
 
+  _spaceWeather(lang) {
+    const sw = this.sw || { level: "reference", source: "reference" };
+    const src = { live: L("NASA DONKI en vivo", "Live NASA DONKI"), snapshot: L("copia guardada de NASA DONKI", "saved NASA DONKI copy"), reference: L("sin conexión con DONKI", "no DONKI connection") }[sw.source];
+    let body = "";
+    if (sw.source === "reference") {
+      body = `<p class="small">${t(L("No se pudo consultar DONKI (sin red o límite de la clave DEMO_KEY). La tormenta del juego usa este evento real como referencia:", "DONKI could not be reached (offline or DEMO_KEY limit). The in-game storm uses this real event as reference:"))}</p><p class="small"><b>${t(REFERENCE_EVENT.text)}</b> <span class="muted">${REFERENCE_EVENT.src}</span></p>`;
+    } else {
+      const fl = sw.flares.slice(0, 5).map((f) => `<tr><td>${f.cls}${f.region ? ` · AR ${f.region}` : ""}</td><td>${f.time.replace("T", " ").replace("Z", " UTC")}</td></tr>`).join("");
+      const mh = sw.marsHits.slice(-3).map((h) => `<tr><td>${t(L("CME llega a Marte", "CME reaches Mars"))}${h.glancing ? ` (${t(L("roce", "glancing"))})` : ""}</td><td>${h.time.replace("T", " ").replace("Z", " UTC")}</td></tr>`).join("");
+      body = `<table class="kv"><tr><th colspan="2">${t(L("Últimos 30 días", "Last 30 days"))}: ${sw.counts.flaresMX} ${t(L("fulguraciones M/X", "M/X flares"))} · ${sw.counts.sep} SEP · ${sw.counts.mars} ${t(L("impactos de CME previstos en Marte", "CME impacts forecast at Mars"))}</th></tr>${fl}${mh}</table>
+        <p class="small muted">${t(L("Las tormentas de partículas (SEP) siguen a fulguraciones fuertes y a CME rápidas. En mayo de 2024, una X12 multiplicó por ~39 la dosis diaria en Gale (RAD).", "Particle storms (SEP) follow strong flares and fast CMEs. In May 2024 an X12 flare raised the daily dose in Gale ~39-fold (RAD)."))}</p>`;
+    }
+    return `<h3 class="sky-h">${t(L("Clima espacial", "Space weather"))} · <span style="color:${LEVEL_COLOR[sw.level]}">${t(LEVEL_TEXT[sw.level])}</span> <span class="small muted">(${t(src)})</span></h3>${body}`;
+  }
+
   _controls() {
     const K = (...k) => k.map((x) => `<kbd>${x}</kbd>`).join("");
     const rows = [
       [K("W", "A", "S", "D"), L("Caminar · conducir el rover", "Walk · drive the rover")],
       [K(t(L("Espacio", "Space"))), L("Saltar (en Marte subes ~1,5 m)", "Jump (on Mars you rise ~1.5 m)")],
       [K("E"), L("Subir o bajar del rover", "Board or leave the rover")],
+      [K("F"), L("Mantener para ayudar a EVA-2 si queda atrapado", "Hold to help EVA-2 if they get stuck")],
       [K(t(L("Ratón", "Mouse"))), L("Mirar (clic para capturar)", "Look (click to capture)")],
       [K(t(L("Rueda", "Wheel"))), L("Distancia de la cámara", "Camera distance")],
       [K("1", "2", "3", "4"), L("Capas: pendiente · radiación · temperatura · minerales", "Layers: slope · radiation · temperature · minerals")],
@@ -210,6 +227,7 @@ export class PauseMenu {
       <table class="kv sky-t"><tr><th>${t(L("Planeta", "Planet"))}</th><th>${t(L("Magnitud", "Magnitude"))}</th><th>${t(L("Del Sol", "From Sun"))}</th><th>${t(L("¿Visible hoy?", "Visible today?"))}</th></tr>
         ${pl.map((p) => `<tr title="${t(NAKED_EYE[p.id])}"><td><b>${t(p.name)}</b><br><span class="small muted">${t(NAKED_EYE[p.id])}</span></td><td>${num(p.mag, 1, lang)}</td><td>${Math.round(p.elong)}°</td><td>${vis(p)}</td></tr>`).join("")}
       </table>
+      ${this._spaceWeather(lang)}
       <p class="small">${t(L("Separación Tierra–Luna vista desde Marte hoy", "Earth–Moon separation seen from Mars today"))}: <b>${num(earth.moonSepArcmin, 1, lang)}′</b> (${t(L("el ojo distingue ~1′; en el juego se dibuja ×3", "the eye resolves ~1′; drawn ×3 in the game"))}). ${t(DUST_NOTE)}</p>
       <p class="small muted">${t(L("Magnitud aproximada (m = H + 5 log rΔ + β·α), sin la extinción del polvo. ", "Approximate magnitude (m = H + 5 log rΔ + β·α), before dust extinction. "))}${t(L("Ls y hora: algoritmo Mars24 (Allison y McEwen 2000, NASA GISS). Distancia: elementos orbitales medios de JPL (Standish). La hora del juego es la de la expedición ficticia, no la real.", "Ls and time: Mars24 algorithm (Allison & McEwen 2000, NASA GISS). Distance: JPL mean orbital elements (Standish). The in-game clock belongs to the fictional expedition, not the real one."))}</p>`;
   }

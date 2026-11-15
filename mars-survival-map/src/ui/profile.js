@@ -74,6 +74,7 @@ export class ProfileScreen {
     const warn = [];
     if (!b.fitOK) warn.push(t(L(`Fuera del rango de estatura de NASA (${NASA_HEIGHT[0]}–${NASA_HEIGHT[1]} cm): el traje no ajusta bien y el gasto sube un 8 %.`, `Outside NASA's height range (${NASA_HEIGHT[0]}–${NASA_HEIGHT[1]} cm): the suit fits poorly and energy cost rises 8 %.`)));
     if (b.bmi < 18.5 || b.bmi > 30) warn.push(t(L("IMC fuera del rango saludable (18,5–30).", "BMI outside the healthy range (18.5–30).")));
+    if (this.p.suit !== "mars") warn.push(t(L(`Traje de ${SUITS[this.p.suit].mass} kg: en Marte pesa ${num(SUITS[this.p.suit].mass * 0.379, 0, lang)} kg-fuerza extra. En la prueba automática de la campaña completa no se terminó ni recargando en los refugios: modo muy difícil. Por eso los trajes para Marte se diseñan más ligeros.`, `${SUITS[this.p.suit].mass} kg suit: on Mars it adds ${num(SUITS[this.p.suit].mass * 0.379, 0, lang)} kg-force. In the automated full-campaign test it could not be finished even with shelter recharges: very hard mode. That's why Mars suits are designed lighter.`)));
     if (pct(S.up10) > 75) warn.push(t(L("Subir pendientes de 10° te lleva a más del 75 % de tu VO₂max: te fatigarás rápido.", "Climbing 10° slopes takes you above 75 % of your VO₂max: you will tire quickly.")));
     $("pfOut").innerHTML = `
       <table class="kv">

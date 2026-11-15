@@ -364,6 +364,13 @@ class Minimap {
       ctx.fillStyle = "#FF8A3D"; ctx.strokeStyle = "#000"; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(cx, cz - 9); ctx.lineTo(cx + 9, cz); ctx.lineTo(cx, cz + 9); ctx.lineTo(cx - 9, cz); ctx.closePath(); ctx.fill(); ctx.stroke();
     }
+    // EVA-2 (circulo azul; rojo si necesita ayuda)
+    const bd = this.buddy;
+    if (bd && !bd.riding) {
+      const [bx, bz] = this.toPx(bd.x, bd.z);
+      ctx.fillStyle = bd.mode === "stuck" ? "#FF4D4D" : "#5aa9ff"; ctx.strokeStyle = "#000"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(bx, bz, bd.mode === "stuck" ? 9 : 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
     // jugador (triangulo orientado al rumbo)
     const [px, pz] = this.toPx(s.x, s.z);
     ctx.save(); ctx.translate(px, pz); ctx.rotate(-s.heading);

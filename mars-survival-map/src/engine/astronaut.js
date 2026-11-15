@@ -7,7 +7,9 @@ const lerp = (a, b, k) => a + (b - a) * k;
 // Astronauta. Usa public/models/astronaut.glb de M1 si existe; si no, un traje EVA articulado hecho con primitivas.
 // El modelo mira hacia -Z (igual que el rumbo del juego) y mide ~1,9 m con los pies en y = 0.
 export class Astronaut {
-  constructor(scene) {
+  // opts.accent: color de las franjas del traje (EVA-2 lleva otro color para distinguirlo)
+  constructor(scene, opts = {}) {
+    this.opts = opts;
     this.root = new THREE.Group();
     this.phase = 0;
     this.gait = 0;     // 0 parado .. 1 a paso completo (suavizado)
@@ -49,7 +51,7 @@ export class Astronaut {
       fabric: std("#9a9ca3", 0.95),            // fuelles de las articulaciones
       dark: std("#2c2e34", 0.9),
       sole: std("#55585f", 0.95),
-      accent: std("#d4541c", 0.7),
+      accent: std(this.opts.accent || "#d4541c", 0.7),
       metal: std("#c3c7cf", 0.35, 0.75),
       // sin mapa de entorno un metal puro se veria negro: el dorado sale de un emisivo suave
       visor: std("#e0a437", 0.16, 0.55, { emissive: "#6b3d06", emissiveIntensity: 0.75 }),

@@ -21,6 +21,7 @@
       <div class="row energy"><svg><use href="#i-battery"/></svg><div class="bar"><i id="barEn"></i></div><span class="pct" id="pctEn">100%</span></div>
       <div class="row integrity"><svg><use href="#i-shield"/></svg><div class="bar"><i id="barIn"></i></div><span class="pct" id="pctIn">100%</span></div>
       <div class="env" id="envLine"></div>
+      <div class="buddy" id="buddyLine"></div>
     </section>
 
     <section class="panel telem" id="telem" aria-label="Telemetría">
@@ -71,6 +72,7 @@
     <div class="scanring" id="scanring" hidden><div class="ring" id="scanRingFill"></div><div class="lbl" id="scanLbl"></div></div>
     <div class="countdown" id="countdown" hidden><div class="n" id="countN"></div><div class="l" id="countL"></div></div>
     <div class="prompt" id="carPrompt" hidden><kbd>E</kbd><span id="carPromptText"></span></div>
+    <div class="prompt buddy-prompt" id="buddyPrompt" hidden><kbd>F</kbd><span id="buddyPromptText"></span><i id="buddyAssist"></i></div>
     <div class="hint" id="lockHint"></div>
     <div class="clock" id="clock"></div>
     <div class="fps" id="fps" hidden></div>
@@ -157,6 +159,19 @@
     </div>
   </div>
 
+  <div class="screen dim" id="scrPlan" hidden>
+    <div class="card plan">
+      <header class="plan-head">
+        <div><div class="eyebrow" data-ui="planEyebrow"></div><h2 id="planTitle"></h2></div>
+        <div class="btnrow"><select id="planLayer" aria-label="Capa"></select><button class="btn sm" id="planClear" data-ui="planClear"></button><button class="btn sm" id="planBack" data-ui="back"></button><button class="btn sm primary" id="planUse" data-ui="planUse"></button></div>
+      </header>
+      <div class="plan-grid">
+        <div class="plan-map"><canvas id="planMap" aria-label="Mapa de planificación"></canvas><div class="plan-hint small" id="planHint"></div></div>
+        <div class="plan-side"><div id="planRoutes"></div><canvas id="planProfile"></canvas><div id="planDetail"></div></div>
+      </div>
+    </div>
+  </div>
+
   <div class="screen dim" id="scrBriefing" hidden>
     <div class="card briefing">
       <div class="eyebrow" id="briefNum"></div>
@@ -164,7 +179,8 @@
       <p class="body" id="briefText"></p>
       <figure class="pov" id="briefPov" hidden><img alt=""><figcaption></figcaption></figure>
       <div class="chips" id="briefChips"></div>
-      <div class="btnrow"><button class="btn primary" id="btnBegin" data-ui="startMission"></button></div>
+      <div class="btnrow"><button class="btn primary" id="btnBegin" data-ui="startMission"></button><button class="btn" id="btnPlan" data-ui="planEva"></button></div>
+      <p class="small muted" id="briefPlanNote"></p>
     </div>
   </div>
 

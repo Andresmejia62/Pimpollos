@@ -45,6 +45,9 @@ Atajos con `?debug=1`: **T** tormenta solar · **N** saltar cerca del objetivo �
 | `src/geo.js` | Lat/lon ↔ mundo, distancias de círculo máximo, presión y agua líquida |
 | `src/engine/marsrover.js` | Rover conducible estilo Curiosity/Perseverance: 6 ruedas, rocker-bogie que sigue el terreno, mástil, brazo y MMRTG |
 | `src/ui/screens.js` | Pantalla de carga (pasos reales de carga, "Marte ahora") y menú de pausa con pestañas |
+| `src/ui/planner.js`, `src/gameplay/planner.js` | Planificación antes de salir: compara rutas (A*, línea recta, con escala en un refugio, propia), perfil de elevación y estimación de O₂, batería, fatiga y dosis |
+| `src/gameplay/companion.js` | EVA-2: compañero que te sigue, hace una medición secundaria en cada objetivo y puede quedar atrapado (rescate con F) |
+| `src/spaceweather.js` | Pronóstico de clima espacial con NASA DONKI (en vivo → copia guardada → evento real de referencia de mayo de 2024) |
 | `src/engine/planets.js` | Planetas en el cielo de Gale: posiciones reales de hoy (JPL), magnitud y extinción por polvo; la Tierra con la Luna |
 | `src/marsclock.js` | Marte en tiempo real: Ls, sol de Curiosity, hora local en Gale (Mars24) y distancia Tierra–Marte (JPL) |
 
@@ -69,6 +72,16 @@ python3 -m pip install rasterio
 python3 data/scripts/fetch_nasa.py            # descarga solo el recorte desde USGS (~23 MB)
 python3 data/scripts/build_layers.py          # capas reales (~10 s); --source synthetic para el placeholder
 ```
+Texturas HD del terreno (ortoimágenes HiRISE de 1 m igualadas a CTX + normales y oclusión del DTM HiRISE):
+```bash
+python3 data/scripts/build_textures.py        # genera public/textures/ (requiere numpy, rasterio, Pillow)
+```
+Clima espacial (opcional, guarda una copia de DONKI para jugar sin red; clave gratis en api.nasa.gov):
+```bash
+NASA_API_KEY=tu_clave node data/scripts/fetch_donki.mjs
+```
+Para usar DONKI en vivo con tu clave en el navegador: `VITE_NASA_API_KEY=tu_clave npm run dev`.
+
 Atlas (solo Node, sin dependencias; descarga ~43 MB de MOLA a `data/raw/mola/`, que no se sube a git):
 ```bash
 node data/scripts/build_atlas.mjs             # genera public/atlas/ (MOLA global y Gale, traza y perforaciones de Curiosity)
@@ -84,6 +97,7 @@ Requisitos: Python 3, numpy, Pillow y rasterio.
 - `docs/fuentes.md`: productos NASA y cómo procesarlos
 - `docs/atlas.md`: atlas de Marte, telemetría y tracking (MOLA, Gazetteer, MMGIS)
 - `docs/fisiologia.md`: modelo de gasto de energía según el perfil del astronauta
+- `docs/prueba_completa.md`: partida automática de principio a fin (resultados por perfil)
 - `docs/wireframes/index.html`: wireframes interactivos del HUD (servir la carpeta del proyecto, p. ej. `python3 -m http.server`, y abrir `/docs/wireframes/`)
 - `docs/guion_video.md`: guion del video de 2 min, subtítulos EN y lista de capturas
 

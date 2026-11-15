@@ -17,6 +17,9 @@ import { ProfileScreen } from "./ui/profile.js";
 import { loadProfile } from "./engine/physiology.js";
 import { LoadingScreen, PauseMenu } from "./ui/screens.js";
 import { SkyPlanets } from "./engine/planets.js";
+import { Planner } from "./ui/planner.js";
+import { Companion } from "./gameplay/companion.js";
+import { loadSpaceWeather, REFERENCE_EVENT, LEVEL_TEXT, LEVEL_COLOR } from "./spaceweather.js";
 import { Vector3 as THREE_V } from "three";
 
 const $ = (id) => document.getElementById(id);
@@ -34,6 +37,8 @@ async function boot() {
   loader.done();
 
   const astro = new Astronaut(scene.scene);
+  const buddyAstro = new Astronaut(scene.scene, { accent: "#2f7de1" });   // EVA-2: franjas azules
+  buddyAstro.root.visible = false;
   astro.tryLoadModel();
   const game = new Game(data, world, (x, z) => scene.heightAt(x, z), scene.colliders);
   const path = new Pathfinder(world);
@@ -46,6 +51,22 @@ async function boot() {
   applyProfile(loadProfile());
   const profile = new ProfileScreen(game.o2CapacityG);
   const openAtlas = (where) => { atlas.open(where); controls.unlock(); };
+  const planner = new Planner({ game, world, path });
+  // clima espacial: se carga en segundo plano (DONKI en vivo -> copia guardada -> evento de referencia)
+  let sw = { level: "reference", flares: [], seps: [], marsHits: [], upcoming: [], source: "reference" };
+  loadSpaceWeather(assetUrl).then((r) => { sw = r; pause.sw = r; if (game.s.phase === "briefing") showBriefing(); });
+  // texto de la alerta de tormenta: el evento real mas fuerte reciente o el de referencia de mayo de 2024
+  const stormText = () => {
+    const f = sw.flares && sw.flares[0];
+    if (sw.source !== "reference" && f) return { es: `Alerta basada en NASA DONKI: fulguración ${f.cls} (${f.time.slice(0, 10)}). Las partículas llegan en minutos u horas. ¡Busca refugio!`, en: `Alert based on NASA DONKI: ${f.cls} flare (${f.time.slice(0, 10)}). Particles arrive within minutes to hours. Find shelter!` };
+    return { es: `Tormenta de referencia: ${REFERENCE_EVENT.text.es} ¡Busca refugio!`, en: `Reference storm: ${REFERENCE_EVENT.text.en} Find shelter!` };
+  };
+  // ruta planificada: la sigue el minimapa y la linea del suelo mientras el objetivo no cambie
+  const usePlan = (pts, kind) => {
+    game.s.plan = { targetId: game.target.id, pts, kind };
+    game.setRoute(true);
+    scene.setRoute(pts); hud.minimap.setRoute(pts);
+  };
   const controls = new Controls(canvas);
   const car = buildMarsRover(scene);
   // planetas en el cielo: posiciones reales de hoy vistas desde Gale (engine/planets.js). P = etiquetas
@@ -113,22 +134,55 @@ async function boot() {
     $("briefTitle").textContent = t(m.title);
     $("briefText").textContent = t(m.brief);
     povFigure("briefPov", m.objective_id, "arrival");
+    const pl = s.plan && s.plan.targetId === o.id ? s.plan : null;
+    $("briefPlanNote").textContent = pl
+      ? t({ es: "✓ Ruta planificada lista: la verás en el minimapa y en el suelo.", en: "✓ Planned route ready: you'll see it on the minimap and on the ground." })
+      : t({ es: "Antes de salir puedes comparar rutas y estimar cuánto O₂ y batería gastarás.", en: "Before heading out you can compare routes and estimate your O₂ and battery use." });
     $("briefChips").innerHTML = `
       <span class="chip danger"><svg><use href="#${hazardIcon}"/></svg>${ui("hazard")}: ${ui("hazards." + m.hazard_main)}</span>
       <span class="chip"><svg><use href="#i-layers"/></svg>${ui("layerHint")}: <kbd>${keyOf[m.layer_hint] || "R"}</kbd> ${ui("layers." + (m.layer_hint || "route"))}</span>
       <span class="chip"><svg><use href="#i-target"/></svg>${(d / 1000).toFixed(1).replace(".", ",")} km · ${climb >= 0 ? "+" : ""}${climb} m</span>
-      <span class="chip safe"><svg><use href="#i-shelter"/></svg>${ui("shelterNear")}: ${t(sh.name)}</span>`;
+      <span class="chip safe"><svg><use href="#i-shelter"/></svg>${ui("shelterNear")}: ${t(sh.name)}</span>
+      <span class="chip" style="color:${LEVEL_COLOR[sw.level]};border-color:${LEVEL_COLOR[sw.level]}"><svg><use href="#i-radiation"/></svg>${t({ es: "Clima espacial (NASA DONKI)", en: "Space weather (NASA DONKI)" })}: ${t(LEVEL_TEXT[sw.level])}</span>`;
+    const stormMission = (m.events || []).some((e) => e.event === "solar_particle_event");
+    $("briefPlanNote").textContent += stormMission ? " " + t({ es: "Pronóstico: probable tormenta de partículas solares durante esta misión. Ten un refugio cerca.", en: "Forecast: a solar particle event is likely during this mission. Keep a shelter nearby." }) : "";
     show("scrBriefing");
     show("hud");
     controls.unlock();
   }
 
-  game.on("mission", () => { hud.clearAlerts(); updateBeacons(); showBriefing(); });
+  game.on("mission", () => { hud.clearAlerts(); updateBeacons(); showBriefing(); buddy.snapTo(game.s); });
+
+  // ---- EVA-2 -------------------------------------------------------------------------
+  const buddy = new Companion(game, world, path, (x, z) => scene.heightAt(x, z));
+  hud.minimap.buddy = buddy.st;
+  data.dialogs.speakers.buddy = { name: { es: "EVA-2 · Compañero", en: "EVA-2 · Partner" }, icon: "helmet", color: "#5aa9ff" };
+  const say = (text, dur = 7) => hud.dialogQueue.push({ speaker: "buddy", duration_s: dur, text });
+  const n1 = (v, d = 0) => v.toFixed(d).replace(".", getLang() === "es" ? "," : ".");
+  buddy.on("task", ({ obj, reading: r }) => say({
+    es: `Medición secundaria junto a ${obj.name.es}: suelo ${n1(r.temp)} °C, ${n1(r.dose, 2)} µGy/h, pendiente ${n1(r.slope)}°, ${r.mineral.es.toLowerCase()}. +15 ciencia.`,
+    en: `Secondary reading next to ${obj.name.en}: ground ${n1(r.temp)} °C, ${n1(r.dose, 2)} µGy/h, slope ${n1(r.slope)}°, ${r.mineral.en.toLowerCase()}. +15 science.` }, 8));
+  buddy.on("stuck", () => {
+    sfx.klaxon();
+    hud.showAlert({ id: "a_buddy_stuck", severity: "danger", text: { es: "EVA-2 resbaló y tiene una fuga en la rodilla. Llega hasta él y mantén F para ayudarlo.", en: "EVA-2 slipped and has a knee-joint leak. Reach them and hold F to help." } });
+    say({ es: "¡Me caí en la ladera del canal! Tengo una fuga, el O₂ baja rápido. ¿Puedes venir?", en: "I fell on the channel slope! I've got a leak, O₂ is dropping fast. Can you come?" }, 6);
+  });
+  buddy.on("rescued", ({ bonus }) => {
+    sfx.success();
+    hud.clearAlert({ id: "a_buddy_stuck" });
+    hud.showAlert({ id: "a_buddy_ok", severity: "info", text: { es: `Rescate completado: sellaste la fuga y le pasaste O₂ por la manguera de emergencia (−8 % para ti). +${bonus} ciencia.`, en: `Rescue complete: you sealed the leak and shared O₂ through the emergency hose (−8 % for you). +${bonus} science.` } });
+    say({ es: "Gracias. Nunca salgas solo: por eso vamos de dos en dos.", en: "Thanks. Never go out alone: that's why we go in pairs." }, 5);
+  });
+  buddy.on("aborted", () => {
+    hud.clearAlert({ id: "a_buddy_stuck" });
+    hud.showAlert({ id: "a_buddy_abort", severity: "caution", text: { es: "EVA-2 se quedó sin margen de O₂ y aborta hacia el rover. Sigues tú.", en: "EVA-2 ran out of O₂ margin and is aborting to the rover. You carry on." } });
+  });
+  buddy.on("rejoined", () => say({ es: "Recargué en el rover. Vuelvo contigo.", en: "Recharged at the rover. Back with you." }, 4));
   game.on("layer", (l) => { scene.setOverlay(l); hud.setLayer(l); });
   game.on("route", (on) => { scene.setRouteVisible(on); hud.setRoute(on); lastRoute = -99; });
   game.on("suggestLayer", (l) => { if (!game.s.layer && game.s.missionIndex > 0) game.setLayer(l); });
   game.on("shelter", (o) => { const d = game.dialogs[o.id === "rover" ? "d_shelter_rover" : "d_shelter_habitat"]; if (d) hud.dialogQueue.push(d); });
-  game.on("spe", (sp) => { if (sp.phase === "warning") { sfx.klaxon(); if (game.s.layer !== "radiation") game.setLayer("radiation"); game.setRoute(true); } updateBeacons(); });
+  game.on("spe", (sp) => { if (sp.phase === "warning") { hud.dialogQueue.unshift({ speaker: "base", duration_s: 9, text: stormText() }); sfx.klaxon(); if (game.s.layer !== "radiation") game.setLayer("radiation"); game.setRoute(true); } updateBeacons(); });
   game.on("scanStart", () => sfx.scan());
   game.on("cargoUnload", ({ n, kg, where }) => hud.showAlert({ id: "a_cargo_unload", severity: "info", text: {
     es: `Dejaste ${n} muestra${n > 1 ? "s" : ""} (${kg.toFixed(1).replace(".", ",")} kg) en ${where.name.es}. Caminas más ligero.`,
@@ -211,6 +265,8 @@ async function boot() {
   $("btnAtlas").onclick = () => openAtlas("global");
   $("minimap").onclick = () => openAtlas("eva");
   window.addEventListener("keydown", (e) => { if (e.key === "Escape" && atlas.isOpen && game.s.phase !== "playing") atlas.close(); });
+  $("btnPlan").onclick = () => { show("scrBriefing", false); planner.open(usePlan); };
+  planner.onClose = () => showBriefing();
   $("btnBegin").onclick = () => {
     show("scrBriefing", false);
     game.beginMission();
@@ -300,6 +356,17 @@ async function boot() {
         else controls.dist = walkDist;
       }
       astro.update(dt, s.driving ? 0 : s.speed, s.x, y, s.z, s.heading, s.air);
+      // EVA-2
+      if (s.phase === "playing" && !paused && $("scrGuide").hidden && !atlas.isOpen) buddy.update(dt, controls.keys.has("f"));
+      const bs = buddy.st;
+      buddyAstro.root.visible = !bs.riding;
+      buddyAstro.update(dt, bs.mode === "stuck" ? 0 : bs.speed, bs.x, scene.heightAt(bs.x, bs.z), bs.z, bs.heading, 0);
+      const dB = Math.hypot(bs.x - s.x, bs.z - s.z);
+      $("buddyPrompt").hidden = !(bs.mode === "stuck" && dB < 4.5 && s.phase === "playing");
+      if (!$("buddyPrompt").hidden) { $("buddyPromptText").textContent = t({ es: "Mantén F para ayudar a EVA-2", en: "Hold F to help EVA-2" }); $("buddyAssist").style.width = (100 * bs.assist / 3) + "%"; }
+      const bl = $("buddyLine");
+      bl.classList.toggle("alert", bs.mode === "stuck");
+      bl.innerHTML = `<span>EVA-2</span><div class="bar"><i style="width:${Math.max(0, bs.o2)}%"></i></div><em>${Math.round(bs.o2)} % · ${t(buddy.statusText())}${bs.mode === "stuck" ? " · " + Math.round(dB) + " m" : ""}</em>`;
       controls.updateCamera(scene.camera, { x: s.x, y: y + (s.driving ? 0.6 : 0), z: s.z }, (x, z) => scene.heightAt(x, z));
       hud.camYaw = controls.yaw;
       scene.setTimeOfDay(game.hour);
@@ -309,7 +376,14 @@ async function boot() {
       if (s.routeOn && now - lastRoute > 1.5) {
         lastRoute = now;
         const tg = game.target;
-        const r = tg ? path.find(s.x, s.z, tg.world.x, tg.world.z) : null;
+        let r = null;
+        if (tg && s.plan && s.plan.targetId === tg.id) {
+          // tramo restante de la ruta planificada, desde el punto mas cercano
+          const P = s.plan.pts;
+          let bi = 0, bd = Infinity;
+          P.forEach(([x, z], i) => { const d = Math.hypot(x - s.x, z - s.z); if (d < bd) { bd = d; bi = i; } });
+          r = bd < 60 ? [[s.x, s.z], ...P.slice(bi + 1)] : path.find(s.x, s.z, tg.world.x, tg.world.z);
+        } else if (tg) r = path.find(s.x, s.z, tg.world.x, tg.world.z);
         if (r) { scene.setRoute(r); hud.minimap.setRoute(r); }
       }
       scene.setRouteVisible(s.routeOn);
@@ -327,7 +401,7 @@ async function boot() {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  window.__msm = { game, scene, world, path, controls, atlas, geo, car, astro, sky }; // para depurar desde la consola
+  window.__msm = { game, scene, world, path, controls, atlas, geo, car, astro, sky, buddy, planner }; // para depurar desde la consola
 }
 
 boot().catch((e) => {
