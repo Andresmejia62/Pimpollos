@@ -56,9 +56,12 @@ export async function loadSpaceWeather(assetUrl) {
   try { failedRecently = Date.now() - +(localStorage.getItem(CACHE + "-fail") || 0) < 30 * 60 * 1000; } catch (e) { /* ignorar */ }
   if (!failedRecently) try {
     const q = `startDate=${range[0]}&endDate=${range[1]}&api_key=${KEY}`;
-    const [FLR, SEP, WSAEnlilSimulations] = await Promise.all([
+    // un servicio caido (p. ej. FLR devolvio 404 en nov 2026) cuenta como sin datos; solo falla si caen todos
+    const got = await Promise.allSettled([
       getJSON(`${API}/FLR?${q}`), getJSON(`${API}/SEP?${q}`), getJSON(`${API}/WSAEnlilSimulations?${q}`),
     ]);
+    if (got.every((g) => g.status === "rejected")) throw got[0].reason;
+    const [FLR, SEP, WSAEnlilSimulations] = got.map((g) => (g.status === "fulfilled" ? g.value : []));
     const raw = { FLR, SEP, WSAEnlilSimulations };
     try { localStorage.setItem(CACHE, JSON.stringify({ at: Date.now(), raw, range })); } catch (e) { /* ignorar */ }
     return { ...summarize(raw), source: "live", fetchedAt: Date.now(), range };

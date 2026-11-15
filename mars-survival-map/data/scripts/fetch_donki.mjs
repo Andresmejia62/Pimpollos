@@ -15,11 +15,17 @@ async function main() {
   for (const type of ["FLR", "SEP", "WSAEnlilSimulations"]) {
     const url = `https://api.nasa.gov/DONKI/${type}?startDate=${range[0]}&endDate=${range[1]}&api_key=${KEY}`;
     const r = await fetch(url);
-    if (!r.ok) {
-      const why = r.status === 429 ? "limite de consultas de la clave superado (DEMO_KEY: ~30 por hora y por IP). Usa tu propia clave en NASA_API_KEY o espera una hora." : await r.text();
+    if (r.status === 429 || r.status === 403) {
+      const why = r.status === 429 ? "limite de consultas de la clave superado (DEMO_KEY: ~30 por hora y por IP). Usa tu propia clave en NASA_API_KEY o espera una hora." : "clave rechazada: " + (await r.text());
       console.error(type, r.status, why);
       process.exitCode = 1;            // sin process.exit(): en Windows cortar con una peticion abierta hace fallar a libuv
       return;
+    }
+    if (!r.ok) {
+      // un servicio caido en NASA (p. ej. FLR con 404) no impide guardar los demas: queda sin datos
+      console.warn(type, r.status, "servicio no disponible en NASA; se guarda vacio");
+      raw[type] = [];
+      continue;
     }
     raw[type] = await r.json();
     console.log(type, Array.isArray(raw[type]) ? raw[type].length : 0, "registros");
