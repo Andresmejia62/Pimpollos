@@ -15,6 +15,7 @@
   <div id="hud" hidden>
     <div class="visor"></div>
     <div class="storm-tint" id="stormTint" hidden></div>
+    <canvas class="storm-fx" id="stormFx" width="480" height="270" hidden aria-hidden="true"></canvas>
 
     <section class="panel res" aria-label="Recursos del traje">
       <div class="row o2"><svg><use href="#i-o2"/></svg><div class="bar"><i id="barO2"></i></div><span class="pct" id="pctO2">100%</span></div>
@@ -106,15 +107,17 @@
       <div class="eyebrow">NASA Space Apps · <span id="campaignName"></span></div>
       <h1 class="title">MARS<br>SURVIVAL MAP</h1>
       <p class="subtitle" data-ui="tagline"></p>
-      <div class="btnrow">
-        <button class="btn primary" id="btnStart" data-ui="start"></button>
-        <button class="btn" id="btnFree" data-ui="freeMode"></button>
-        <button class="btn" id="btnAtlas" data-ui="atlasOpen"></button>
-        <button class="btn" id="btnGuide" data-ui="guide"></button>
-        <button class="btn" id="btnLang">ES · EN</button>
+      <!-- dos acciones principales, cada una con su descripcion; lo secundario va debajo, mas pequeno -->
+      <div class="menu-main">
+        <button class="btn primary menu-btn" id="btnStart"><span data-ui="start"></span><small data-ui="startDesc"></small></button>
+        <button class="btn menu-btn" id="btnFree"><span data-ui="freeMode"></span><small data-ui="freeDesc"></small></button>
       </div>
-      <p class="modes-line" data-ui="modesLine"></p>
-      <p class="controls-line" data-ui="controlsList"></p>
+      <div class="btnrow menu-sub">
+        <button class="btn sm" id="btnAtlas" data-ui="atlasOpen"></button>
+        <button class="btn sm" id="btnGuide" data-ui="guide"></button>
+        <button class="btn sm" id="btnLang">ES · EN</button>
+      </div>
+      <details class="menu-controls"><summary data-ui="controls"></summary><p class="controls-line" data-ui="controlsList"></p></details>
     </div>
     <div class="sky-caption" id="skyCaption"></div>
     <div class="credits" data-ui="credits"></div>
@@ -169,6 +172,13 @@
         <canvas id="atlasGl" aria-hidden="true"></canvas>
         <canvas id="atlasCanvas" aria-label="Mapa de Marte"></canvas>
         <div class="atlas-legend" id="atlasLegend"></div>
+        <form class="atlas-search" id="atlasSearchForm" autocomplete="off">
+          <input id="atlasSearch" list="atlasSearchList" spellcheck="false" aria-label="Buscar lugar o coordenadas">
+          <datalist id="atlasSearchList"></datalist>
+          <button class="btn sm" type="submit" id="atlasSearchGo"></button>
+          <div class="atlas-search-msg" id="atlasSearchMsg" hidden></div>
+        </form>
+        <div class="atlas-tip" id="atlasTip" hidden></div>
         <div class="atlas-zoom"><button id="atlasZoomIn" aria-label="Acercar">+</button><button id="atlasZoomOut" aria-label="Alejar">−</button></div>
       </div>
       <aside class="atlas-info" id="atlasInfo"></aside>

@@ -40,6 +40,9 @@ export const sfx = {
   success: () => { [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.35, "triangle", 0.09, i * 0.11)); },
   fail: () => { [392, 330, 262].forEach((f, i) => tone(f, 0.45, "sawtooth", 0.06, i * 0.22)); },
   step: () => tone(90 + Math.random() * 30, 0.06, "sine", 0.04),
+  // chasquido de dosimetro: cada particula que cruza el detector
+  geiger: () => tone(1800 + Math.random() * 900, 0.018, "square", 0.035),
+  emote: () => tone(620, 0.09, "triangle", 0.05, 0, 180),
 };
 
 export function setWind(level) { if (wind) wind.gain.value = level; }

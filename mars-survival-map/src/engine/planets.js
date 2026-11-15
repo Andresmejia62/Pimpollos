@@ -131,6 +131,19 @@ export class SkyPlanets {
       scene.add(sp);
       return { c, tex, sp, text: "" };
     });
+    // dos etiquetas mas para Fobos y Deimos (los discos los dibuja el cielo; aqui solo el nombre)
+    this.moonLabels = [0, 1].map(() => {
+      const c = document.createElement("canvas"); c.width = 256; c.height = 64;
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, sizeAttenuation: false, fog: false }));
+      sp.scale.set(0.2, 0.05, 1);
+      sp.center.set(-0.1, 1.15);
+      sp.renderOrder = 2;
+      sp.visible = false;
+      scene.add(sp);
+      return { c, tex, sp, text: "" };
+    });
     this.eph = null; this.ephT = 0;
     this.visible = [];
     this._v = new THREE.Vector3();
@@ -160,6 +173,28 @@ export class SkyPlanets {
       L.text = text;
     }
     L.sp.material.opacity = alpha;
+  }
+
+  // Etiquetas de Fobos y Deimos. moons = estado de engine/moons.js; text(m) da el rotulo
+  updateMoons(camera, moons, text) {
+    this.moonLabels.forEach((L, i) => {
+      const m = moons[i];
+      const show = this.labelsOn && !!m && m.dir[1] > 0.02 && !m.eclipsed;
+      L.sp.visible = show;
+      if (!show) return;
+      L.sp.position.set(camera.position.x + m.dir[0] * this.radius, camera.position.y + m.dir[1] * this.radius, camera.position.z + m.dir[2] * this.radius);
+      const tx = text(m);
+      if (L.text !== tx) {
+        const ctx = L.c.getContext("2d");
+        ctx.clearRect(0, 0, 256, 64);
+        ctx.font = "600 26px Rajdhani, sans-serif";
+        ctx.lineWidth = 5; ctx.strokeStyle = "rgba(0,0,0,.75)"; ctx.strokeText(tx, 6, 40);
+        ctx.fillStyle = "#f6ede4"; ctx.fillText(tx, 6, 40);
+        L.tex.needsUpdate = true;
+        L.text = tx;
+      }
+      L.sp.material.opacity = 0.85;
+    });
   }
 
   // day: 0 noche ... 1 pleno dia (scene.skyMat uDay); tau: opacidad del polvo

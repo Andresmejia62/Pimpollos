@@ -93,7 +93,11 @@ export class Hud {
     // tormenta
     const sp = s.spe;
     const cd = $("countdown");
-    $("stormTint").hidden = !(sp && sp.phase !== "ended");
+    const tint = $("stormTint");
+    tint.hidden = !(sp && sp.phase !== "ended");
+    tint.classList.toggle("active", !!sp && sp.phase === "active" && !s.inShelter);
+    tint.classList.toggle("safe", !!sp && sp.phase === "active" && !!s.inShelter);
+    this._stormFx(now, sp, !!s.inShelter);
     if (sp && sp.phase !== "ended") {
       cd.hidden = false;
       const secs = Math.max(0, Math.ceil(sp.t));
@@ -188,6 +192,40 @@ export class Hud {
       $("povHudImg").alt = t(img.caption);
     }
     $("povHudLbl").innerHTML = `<span>${ui("povShort")}</span><b>${fmtDist(d)}</b>`;
+  }
+
+  // Impactos de particulas: durante la tormenta de mayo de 2024 las camaras de Curiosity se llenaron de puntos y
+  // rayas blancas (protones que atraviesan el sensor). Aqui se dibujan igual sobre la vista; a cubierto casi desaparecen.
+  // Devuelve la intensidad 0..1 (la usa el sonido del dosimetro).
+  _stormFx(now, sp, sheltered) {
+    const cv = $("stormFx");
+    const target = sp && sp.phase === "active" ? (sheltered ? 0.12 : 1) : 0;
+    this._fx = (this._fx || 0) + (target - (this._fx || 0)) * 0.06;
+    const k = this._fx;
+    this.stormLevel = k;
+    if (k < 0.01) { if (!cv.hidden) cv.hidden = true; return; }
+    if (cv.hidden) cv.hidden = false;
+    const ctx = cv.getContext("2d"), W = cv.width, H = cv.height;
+    // las trazas de los fotogramas anteriores se apagan poco a poco (persistencia del sensor)
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = "lighter";
+    const n = Math.round(26 * k + Math.random() * 16 * k);
+    for (let i = 0; i < n; i++) {
+      const x = Math.random() * W, y = Math.random() * H, a = 0.35 + Math.random() * 0.65;
+      if (Math.random() < 0.72) {
+        ctx.fillStyle = `rgba(235,240,255,${a})`;
+        ctx.fillRect(x, y, 1, 1);                       // impacto puntual
+      } else {
+        const ang = Math.random() * Math.PI * 2, len = 2 + Math.random() * 9;   // particula que cruza de lado
+        ctx.strokeStyle = `rgba(215,225,255,${a * 0.8})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(ang) * len, y + Math.sin(ang) * len); ctx.stroke();
+      }
+    }
+    // de vez en cuando, una banda de ruido como las que saturan una fila del sensor
+    if (Math.random() < 0.05 * k) { ctx.fillStyle = "rgba(200,215,255,0.10)"; ctx.fillRect(0, Math.random() * H, W, 1 + Math.random() * 2); }
   }
 
   setLockHint(text) { this._lockHint = text; }

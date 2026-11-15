@@ -2,7 +2,7 @@ import { loadAll, assetUrl } from "./data.js";
 import { t, ui, getLang, setLang } from "./i18n.js";
 import { World } from "./engine/world.js";
 import { MarsScene } from "./engine/scene.js";
-import { Astronaut } from "./engine/astronaut.js";
+import { Astronaut, EMOTES } from "./engine/astronaut.js";
 import { buildHabitat, buildRover, buildShelter } from "./engine/props.js";
 import { buildMarsRover } from "./engine/marsrover.js";
 import { buildStructures } from "./engine/structures.js";
@@ -86,7 +86,11 @@ async function boot() {
     const name = (p) => `<b>${t(p.name)}</b> (m ${p.mag.toFixed(1).replace(".", lang === "es" ? "," : ".")}, ${Math.round(p.elong)}° ${t({ es: "del Sol", en: "from the Sun" })}, ${t(p.evening ? { es: "al anochecer", en: "at dusk" } : { es: "al amanecer", en: "at dawn" })})`;
     $("skyCaption").innerHTML = `<div class="ttl">${t({ es: "Cielo real de hoy desde Gale", en: "Today's real sky from Gale" })}</div>${vis.map(name).join(" · ")}. ${t({ es: "Neptuno no se ve sin telescopio. Pulsa P en la EVA para ocultar las etiquetas.", en: "Neptune needs a telescope. Press P during the EVA to hide the labels." })}`;
   };
-  const updateSky = (hour) => sky.update(scene.camera, hour, scene.skyMat.uniforms.uDay.value, skyTau(), innerHeight);
+  const moonLabel = (m) => `${t(m.name)}  ${(m.radius * 2 * 180 / Math.PI * 60).toFixed(0)}′`;   // nombre y diametro aparente en minutos de arco
+  const updateSky = (hour) => {
+    sky.update(scene.camera, hour, scene.skyMat.uniforms.uDay.value, skyTau(), innerHeight);
+    sky.updateMoons(scene.camera, scene.moons, moonLabel);
+  };
   let wasDriving = false, walkDist = controls.dist;
 
   // ---- marcadores y estructuras ------------------------------------------------
@@ -371,7 +375,19 @@ async function boot() {
   };
   $("btnAtlas").onclick = () => openAtlas("global");
   $("minimap").onclick = () => openAtlas("eva");
-  window.addEventListener("keydown", (e) => { if (e.key === "Escape" && atlas.isOpen && game.s.phase !== "playing") atlas.close(); });
+  // Cerrar el atlas con M o Esc funciona siempre, tambien abierto desde la portada o la pausa (antes dependia de
+  // los controles del juego, que solo se activan al empezar la EVA). En fase de captura y cortando el evento,
+  // para que la misma pulsacion no lo vuelva a abrir ni abra la pausa.
+  window.addEventListener("keydown", (e) => {
+    if (!atlas.isOpen || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key.toLowerCase(), tag = e.target && e.target.tagName;
+    // escribiendo en el buscador o en el nombre de un marcador, las teclas son texto (Esc solo sale del campo)
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    if (k !== "escape" && k !== "m") return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    atlas.close();
+  }, true);
   $("btnPlan").onclick = () => { show("scrBriefing", false); planner.open(usePlan); };
   planner.onClose = () => { if (game.s.phase === "briefing") showBriefing(); else canvas.focus(); };
   $("btnBegin").onclick = () => {
@@ -419,6 +435,13 @@ async function boot() {
     if (k === "m") openAtlas("eva");
     if (k === "i") $("telem").hidden = !$("telem").hidden;
     if (k === "p") sky.labelsOn = !sky.labelsOn;
+    // gestos del personaje (a pie): Z saludar, X pulgar, C sentarse, V bailar, B estirarse
+    const em = !game.s.driving && Object.keys(EMOTES).find((n) => EMOTES[n].key === k);
+    if (em && astro.playEmote(em)) {
+      sfx.emote();
+      // EVA-2 devuelve el saludo si esta cerca
+      if (em === "wave" && buddyOn && !buddy.st.riding && Math.hypot(buddy.st.x - game.s.x, buddy.st.z - game.s.z) < 14) setTimeout(() => buddyAstro.playEmote("wave"), 700);
+    }
     if (game.s.free) {
       // herramientas del modo libre
       if (k === "g") openFreePlanner();
@@ -434,7 +457,7 @@ async function boot() {
   if (DEBUG) show("fps");
 
   // ---- bucle ------------------------------------------------------------------------
-  let last = performance.now(), acc = 0, lastRoute = -99, frames = 0, fpsT = 0;
+  let last = performance.now(), acc = 0, lastRoute = -99, frames = 0, fpsT = 0, aurora = 0;
   const titleCenter = game.objectives.habitat.world;
   const TITLE_HOUR = 17.82, titleDir = new THREE_V();
   function frame(nowMs) {
@@ -495,6 +518,12 @@ async function boot() {
       scene.setTimeOfDay(game.hour);
       updateSky(game.hour);
       scene.setFocus(s.x, y, s.z);
+      // tormenta solar: la aurora sube durante el aviso y llega al maximo con la tormenta activa
+      const sp = s.spe, auroraTo = sp && sp.phase !== "ended" ? (sp.phase === "active" ? 1 : 0.3) : 0;
+      aurora += (auroraTo - aurora) * Math.min(1, dt * 0.8);
+      scene.setAurora(aurora);
+      // dosimetro: chasquidos al azar, mas seguidos cuanto mas intensa (casi callado a cubierto)
+      if (running && hud.stormLevel > 0.02 && Math.random() < dt * (3 + 34 * hud.stormLevel)) sfx.geiger();
       // ruta sugerida (A*) recalculada cada 1,5 s
       if (s.routeOn && now - lastRoute > 1.5) {
         lastRoute = now;

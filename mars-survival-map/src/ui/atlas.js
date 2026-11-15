@@ -13,6 +13,34 @@ const $ = (id) => document.getElementById(id);
 const D2R = Math.PI / 180;
 const M_PER_DEG = MARS_GEO.R_mean * D2R;
 const L = (es, en) => ({ es, en });
+const PINS_KEY = "msm-atlas-pins-v1";
+const norm = (v) => String(v).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+// Lee "lat, lon" escrito a mano: decimales con punto o coma, grados opcionales y hemisferio (N/S, E/O/W).
+// Ejemplos: "-4.59, 137.44" · "4,59 S 137,44 E" · "4.59°S; 222.56°W". Devuelve {lat, lon} (lon Este 0-360) o null.
+export function parseCoords(text) {
+  let q = String(text).trim().replace(/[−–]/g, "-");
+  if (!q) return null;
+  let parts = q.split(/\s*;\s*|,\s+|\s+(?=[-+\d])/).filter(Boolean);
+  if (parts.length === 1 && (q.match(/,/g) || []).length === 1) parts = q.split(",");
+  // "4,59 S 137,44 E": el hemisferio queda pegado al numero anterior
+  if (parts.length !== 2) {
+    const m = q.match(/^([-+]?\d+(?:[.,]\d+)?)\s*°?\s*([NSns])?[\s,;]+([-+]?\d+(?:[.,]\d+)?)\s*°?\s*([EeWwOo])?$/);
+    if (!m) return null;
+    parts = [m[1] + (m[2] || ""), m[3] + (m[4] || "")];
+  }
+  const one = (p) => {
+    const m = p.trim().match(/^([-+]?\d+(?:[.,]\d+)?)\s*°?\s*([A-Za-z])?$/);
+    if (!m) return null;
+    return { v: parseFloat(m[1].replace(",", ".")), h: (m[2] || "").toUpperCase() };
+  };
+  const a = one(parts[0]), b = one(parts[1]);
+  if (!a || !b || (a.h && !"NS".includes(a.h)) || (b.h && !"EWO".includes(b.h))) return null;
+  const lat = a.h === "S" ? -Math.abs(a.v) : a.v;
+  const lon = b.h === "W" || b.h === "O" ? 360 - Math.abs(b.v) : b.v;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 360) return null;
+  return { lat, lon: wrapLon(lon) };
+}
 
 const RAMPS = {
   hypso: [[-8200, "#1a237e"], [-6000, "#1565c0"], [-4000, "#26a69a"], [-2000, "#66bb6a"], [0, "#d4e157"], [2000, "#ffca28"], [4000, "#ff7043"], [8000, "#c62828"], [14000, "#8d6e63"], [21200, "#ffffff"]],
@@ -66,6 +94,9 @@ export class Atlas {
     this.hover = null;
     this.hits = [];
     this.profileMode = "track";
+    this.pins = [];          // marcadores del usuario: { id, name, lat, lon } (se guardan en el navegador)
+    try { const saved = JSON.parse(localStorage.getItem(PINS_KEY) || "[]"); if (Array.isArray(saved)) this.pins = saved.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon)); } catch (e) { /* sin almacenamiento */ }
+    this.hoverHit = null;
     this.is3d = true;        // globo 3D por defecto; el boton 3D vuelve al mapa plano
     this.g3 = null;
     this.ready = this._load();
@@ -86,6 +117,7 @@ export class Atlas {
     this._shade(this.rGale, 4);
     this._paint();
     this._buildSide();
+    this._buildSearch();
     this.dirty = true;
   }
 
@@ -198,6 +230,7 @@ export class Atlas {
     cv.addEventListener("pointermove", (e) => {
       const p = this._evt(e);
       this.hover = this.unproject(p.x, p.y);
+      this._hoverAt(p, !!drag);
       if (touches.has(e.pointerId)) touches.set(e.pointerId, [e.clientX, e.clientY]);
       // pellizco con dos dedos: zoom alrededor del punto medio
       if (touches.size === 2) {
@@ -226,7 +259,21 @@ export class Atlas {
     $("atlasExag").onchange = (e) => { if (this.g3) this.g3.exagMode = e.target.value; this.dirty = true; };
     $("atlasZoomIn").onclick = () => this.zoomAt(this.W / 2, this.H / 2, 1.8);
     $("atlasZoomOut").onclick = () => this.zoomAt(this.W / 2, this.H / 2, 1 / 1.8);
-    cv.addEventListener("pointerleave", () => { this.hover = null; this._readout(); });
+    cv.addEventListener("pointerleave", () => { this.hover = null; this.hoverHit = null; this.cursor = null; $("atlasTip").hidden = true; this._readout(); this.dirty = true; });
+    // doble clic: acercarse a ese punto
+    cv.addEventListener("dblclick", (e) => {
+      const p = this._evt(e), ll = this.unproject(p.x, p.y);
+      if (!ll) return;
+      if (this.on3d) this.flyTo(ll.lat, ll.lon, this.view.s * 2.4); else this.zoomAt(p.x, p.y, 2.4);
+    });
+    // buscador: coordenadas o nombre de un lugar
+    $("atlasSearchForm").addEventListener("submit", (e) => { e.preventDefault(); this.search($("atlasSearch").value); });
+    $("atlasSearch").addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { e.preventDefault(); $("atlasSearch").blur(); this.cv.focus(); }
+      e.stopPropagation();           // escribir (una "m", un "+") no debe cerrar el atlas ni hacer zoom
+    });
+    $("atlasSearch").addEventListener("input", () => { $("atlasSearchMsg").hidden = true; });
+    cv.tabIndex = 0;
     cv.addEventListener("wheel", (e) => {
       e.preventDefault();
       const p = this._evt(e);
@@ -241,12 +288,143 @@ export class Atlas {
     window.addEventListener("resize", () => { if (this.isOpen) { this._resize(); this._profile(); } });
     window.addEventListener("keydown", (e) => {
       if (!this.isOpen) return;
+      const tag = e.target && e.target.tagName;
+      if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
       if (e.key === "+" || e.key === "=") this.zoomAt(this.W / 2, this.H / 2, 1.5);
       if (e.key === "-") this.zoomAt(this.W / 2, this.H / 2, 1 / 1.5);
+      // flechas: desplazar el mapa; Inicio: ir a tu posicion; "/": escribir en el buscador
+      const arrows = { ArrowLeft: [1, 0], ArrowRight: [-1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[e.key];
+      if (arrows) { e.preventDefault(); this._nudge(arrows[0] * 70, arrows[1] * 70); }
+      if (e.key === "Home") { e.preventDefault(); this.go("me"); }
+      if (e.key === "/") { e.preventDefault(); $("atlasSearch").focus(); $("atlasSearch").select(); }
     });
   }
 
   _evt(e) { const r = this.cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+
+  // desplaza la vista (dx, dy) pixeles, como si se arrastrara el mapa
+  _nudge(dx, dy) {
+    this._fly = (this._fly || 0) + 1;
+    if (this.on3d) this.g3.pan(dx, dy);
+    else { this.view.lon -= dx / this.view.s; this.view.lat += dy / this.view.s; this._clampView(); }
+    this.dirty = true;
+  }
+
+  // nombre de lo que hay bajo un simbolo del mapa
+  _hitName(it) {
+    if (it.kind === "feature") return t(it.f.name);
+    if (it.kind === "phenomenon") return `${t(it.ph.name)} · ${t(it.zone.label)}`;
+    if (it.kind === "drill") return `${it.d.name} · sol ${it.d.sol}`;
+    if (it.kind === "objective") return t(it.o.name);
+    if (it.kind === "pin") return it.pin.name;
+    if (it.kind === "player") return t(L("Tu posición", "Your position"));
+    return "";
+  }
+
+  // Cursor sobre el mapa: resalta el simbolo que hay debajo y muestra una etiqueta flotante con el nombre,
+  // las coordenadas y la elevacion del punto
+  _hoverAt(p, dragging) {
+    this.cursor = p;
+    let best = null, bd = Infinity;
+    if (!dragging) for (const h of this.hits) { const d = Math.hypot(h.x - p.x, h.y - p.y); if (d < h.r + 3 && d < bd) { bd = d; best = h; } }
+    this.hoverHit = best;
+    this.cv.style.cursor = dragging ? "grabbing" : best ? "pointer" : this.measuring ? "crosshair" : "grab";
+    const tip = $("atlasTip"), ll = this.hover;
+    if (dragging || !ll) { tip.hidden = true; return; }
+    const e = this.elevAt(ll.lat, ll.lon), lang = getLang();
+    tip.innerHTML = `${best ? `<b>${this._hitName(best.item)}</b>` : ""}${fmtLat(ll.lat, 4)} · ${fmtLon(ll.lon, 4)}${e ? ` <i>· ${num(e.elev, 0, lang)} m</i>` : ""}`;
+    tip.hidden = false;
+    // junto al cursor, sin salirse del mapa
+    const w = tip.offsetWidth, hgt = tip.offsetHeight;
+    tip.style.left = Math.max(6, Math.min(this.W - w - 6, p.x + 16)) + "px";
+    tip.style.top = Math.max(6, p.y + 18 + hgt > this.H ? p.y - hgt - 12 : p.y + 18) + "px";
+  }
+
+  // ---- buscador -----------------------------------------------------------------------------
+  _searchIndex() {
+    const out = [];
+    for (const f of this.feat.features) out.push({ name: t(f.name), lat: f.lat, lon: f.lon, sel: { f }, km: f.d_km || 60 });
+    for (const d of this.drills) out.push({ name: `${d.name} (sol ${d.sol})`, lat: d.lat, lon: d.lon, sel: { kind: "drill", d }, km: 0.4 });
+    for (const o of this.data.objectives.objectives) out.push({ name: t(o.name), lat: o.latlon[0], lon: o.latlon[1], sel: { kind: "objective", o }, km: 0.6 });
+    for (const pin of this.pins) out.push({ name: pin.name, lat: pin.lat, lon: pin.lon, sel: { kind: "pin", pin }, km: 2 });
+    return out;
+  }
+  _buildSearch() {
+    const inp = $("atlasSearch");
+    inp.placeholder = t(L("Buscar: «Olympus Mons» o «-4.59, 137.44»   ( / )", "Search: \"Olympus Mons\" or \"-4.59, 137.44\"   ( / )"));
+    $("atlasSearchGo").textContent = t(L("Ir", "Go"));
+    if (this.feat) $("atlasSearchList").innerHTML = this._searchIndex().map((x) => `<option value="${x.name.replace(/"/g, "&quot;")}"></option>`).join("");
+  }
+  // Va a unas coordenadas o al lugar cuyo nombre coincide. Devuelve true si encontro algo.
+  search(text) {
+    const q = String(text).trim(), msg = $("atlasSearchMsg");
+    msg.hidden = true;
+    if (!q || !this.feat) return false;
+    const fit = (km) => Math.min(this.W, this.H) / (km * 2.2 * 1000 / M_PER_DEG);
+    const ll = parseCoords(q);
+    if (ll) {
+      this.selected = { kind: "point", ll };
+      this.flyTo(ll.lat, ll.lon, Math.max(this.view.s, fit(40)));
+      this._info(); this.dirty = true;
+      return true;
+    }
+    const n = norm(q), idx = this._searchIndex();
+    const hit = idx.find((x) => norm(x.name) === n) || idx.find((x) => norm(x.name).startsWith(n)) || idx.find((x) => norm(x.name).includes(n));
+    if (!hit) {
+      msg.textContent = t(L("Sin resultados. Escribe un nombre del mapa o coordenadas como «-4.59, 137.44» (latitud, longitud Este).", "No results. Type a place on the map or coordinates such as \"-4.59, 137.44\" (latitude, East longitude)."));
+      msg.hidden = false;
+      return false;
+    }
+    this.selected = hit.sel;
+    if (hit.sel.f) this.show[hit.sel.f.cat] = true;
+    this.flyTo(hit.lat, hit.lon, Math.max(fit(hit.km), hit.km < 5 ? 3000 : 0));
+    this._info(); this.dirty = true;
+    return true;
+  }
+
+  // ---- marcadores del usuario ---------------------------------------------------------------
+  _savePins() { try { localStorage.setItem(PINS_KEY, JSON.stringify(this.pins)); } catch (e) { /* sin almacenamiento */ } this._buildSearch(); }
+  addPin(lat, lon, name) {
+    const pin = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: name || `${t(L("Marcador", "Pin"))} ${this.pins.length + 1}`, lat, lon: wrapLon(lon) };
+    this.pins.push(pin);
+    this._savePins();
+    this.selected = { kind: "pin", pin };
+    this._info(); this.dirty = true;
+    return pin;
+  }
+  removePin(id) {
+    this.pins = this.pins.filter((p) => p.id !== id);
+    if (this.selected && this.selected.kind === "pin" && this.selected.pin.id === id) this.selected = null;
+    this._savePins();
+    this._info(); this.dirty = true;
+  }
+  _pins() {
+    const ctx = this.ctx;
+    for (const pin of this.pins) {
+      const p = this.project(pin.lat, pin.lon);
+      if (Number.isNaN(p.x) || p.x < -40 || p.x > this.W + 40 || p.y < -40 || p.y > this.H + 40) continue;
+      const sel = this.selected && this.selected.kind === "pin" && this.selected.pin.id === pin.id;
+      // chincheta: gota con la punta en el lugar exacto
+      ctx.fillStyle = sel ? "#ffffff" : "#FF8A3D"; ctx.strokeStyle = "#000"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.bezierCurveTo(p.x - 11, p.y - 14, p.x - 8, p.y - 26, p.x, p.y - 26); ctx.bezierCurveTo(p.x + 8, p.y - 26, p.x + 11, p.y - 14, p.x, p.y); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#1a0f0a"; ctx.beginPath(); ctx.arc(p.x, p.y - 17, 3.2, 0, 7); ctx.fill();
+      this.hits.push({ x: p.x, y: p.y - 14, r: 14, item: { kind: "pin", pin } });
+      this._label(pin.name, p.x + 11, p.y - 16, "#FFB27A", false, 13);
+    }
+  }
+  // lineas de mira en el mapa plano, con la latitud y la longitud en los bordes, y aro en el simbolo bajo el cursor
+  _cursorMarks() {
+    const ctx = this.ctx, c = this.cursor, h = this.hoverHit;
+    if (h) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.beginPath(); ctx.arc(h.x, h.y, h.r + 4, 0, 7); ctx.stroke(); }
+    if (!c || !this.hover || this.on3d) return;
+    ctx.strokeStyle = "rgba(255,255,255,.28)"; ctx.lineWidth = 1; ctx.setLineDash([4, 5]);
+    ctx.beginPath(); ctx.moveTo(c.x, 0); ctx.lineTo(c.x, this.H); ctx.moveTo(0, c.y); ctx.lineTo(this.W, c.y); ctx.stroke(); ctx.setLineDash([]);
+    ctx.font = "600 12px Rajdhani, sans-serif";
+    const lat = fmtLat(this.hover.lat, 3), lon = fmtLon(this.hover.lon, 3);
+    const tag = (txt, x, y) => { const w = ctx.measureText(txt).width + 10; ctx.fillStyle = "rgba(12,10,14,.85)"; ctx.fillRect(x, y - 13, w, 17); ctx.fillStyle = "#7FD1FF"; ctx.fillText(txt, x + 5, y); };
+    tag(lat, this.W - ctx.measureText(lat).width - 16, Math.max(16, Math.min(this.H - 60, c.y - 4)));
+    tag(lon, Math.max(4, Math.min(this.W - 90, c.x + 6)), this.H - 46);
+  }
   _resize() {
     const r = this.cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
     this.W = r.width; this.H = r.height; this.dpr = dpr;
@@ -430,8 +608,10 @@ export class Atlas {
     if (this.show.drills && v.s > 2500) this._drills();
     if (this.show.objectives && v.s > 1500) this._objectives();
     if (this.show.track) this._track();
+    this._pins();
     this._player();
     this._measure();
+    this._cursorMarks();
     this._scaleBar();
   }
 
@@ -713,7 +893,7 @@ export class Atlas {
       ? t(!m || m.b ? L("Regla: haz clic en el punto de inicio", "Ruler: click the start point") : L("Regla: haz clic en el punto final", "Ruler: click the end point"))
       : this.is3d
         ? t(L("Arrastra para girar el globo · rueda para acercar · botón derecho o Ctrl+arrastrar para inclinar y rotar · clic en un símbolo para ver datos · Mayús+clic para medir", "Drag to spin the globe · wheel to zoom · right button or Ctrl+drag to tilt and rotate · click a symbol for data · Shift+click to measure"))
-        : t(L("Arrastra para mover · rueda para acercar · clic en un símbolo para ver datos · Mayús+clic para medir", "Drag to pan · wheel to zoom · click a symbol for data · Shift+click to measure"));
+        : t(L("Arrastra para mover · rueda o doble clic para acercar · clic en un punto para ver datos y fijar marcadores · Mayús+clic para medir", "Drag to pan · wheel or double-click to zoom · click a point for data and pins · Shift+click to measure"));
   }
 
   _pointBlock(lat, lon) {
@@ -746,7 +926,29 @@ export class Atlas {
     if (!sel) {
       box.innerHTML = `<div class="eyebrow">${t(L("Atlas de Marte", "Mars atlas"))}</div>
         <p class="small muted">${t(L("Elevación real de MOLA (Mars Global Surveyor, NASA PDS) en todo el planeta, MOLA de 64 px/° en Gale y el DTM HiRISE+CTX del juego en la zona EVA. Coordenadas planetocéntricas, longitud Este (IAU/USGS).", "Real MOLA elevation (Mars Global Surveyor, NASA PDS) for the whole planet, 64 px/° MOLA over Gale and the game's HiRISE+CTX DTM in the EVA zone. Planetocentric coordinates, East longitude (IAU/USGS)."))}</p>
-        <h3>${t(L("Tu posición", "Your position"))}</h3>${this._pointBlock(this.playerLL().lat, this.playerLL().lon)}`;
+        <h3>${t(L("Tu posición", "Your position"))}</h3>${this._pointBlock(this.playerLL().lat, this.playerLL().lon)}
+        ${this._pinList()}
+        <h3>${t(L("Cómo explorar", "How to explore"))}</h3>
+        <ul class="small muted">
+          <li>${t(L("Clic en cualquier punto: sus coordenadas y datos. Desde ahí puedes fijar un marcador o copiar las coordenadas.", "Click anywhere: its coordinates and data. From there you can drop a pin or copy the coordinates."))}</li>
+          <li>${t(L("Doble clic: acercar. Flechas: mover. Inicio: tu posición. / : buscar.", "Double-click: zoom in. Arrows: pan. Home: your position. / : search."))}</li>
+        </ul>`;
+      this._bindPinList();
+      return;
+    }
+    if (sel.kind === "pin") {
+      const pin = sel.pin;
+      box.innerHTML = `<div class="eyebrow" style="color:#FF8A3D">${t(L("Tu marcador", "Your pin"))}</div>
+        <input class="pin-name" id="atlasPinName" maxlength="40" value="${pin.name.replace(/"/g, "&quot;")}" aria-label="${t(L("Nombre del marcador", "Pin name"))}">
+        ${this._pointBlock(pin.lat, pin.lon)}
+        <div class="pt-actions"><button class="btn sm" id="atlasPtGo">${t(L("Centrar", "Center"))}</button><button class="btn sm" id="atlasPtCopy">${t(L("Copiar coordenadas", "Copy coordinates"))}</button><button class="btn sm" id="atlasPinDel">${t(L("Borrar", "Delete"))}</button></div>
+        ${this._pinList()}`;
+      const nm = $("atlasPinName");
+      nm.onkeydown = (e) => { e.stopPropagation(); if (e.key === "Enter") nm.blur(); };
+      nm.onchange = () => { pin.name = nm.value.trim() || pin.name; this._savePins(); this.dirty = true; this._info(); };
+      $("atlasPinDel").onclick = () => this.removePin(pin.id);
+      this._bindPoint(pin.lat, pin.lon);
+      this._bindPinList();
       return;
     }
     if (sel.f) {
@@ -787,7 +989,37 @@ export class Atlas {
       return;
     }
     if (sel.kind === "player") { this.selected = null; this._info(); return; }
-    if (sel.kind === "point") box.innerHTML = `<div class="eyebrow">${t(L("Punto", "Point"))}</div>${this._pointBlock(sel.ll.lat, sel.ll.lon)}`;
+    if (sel.kind === "point") {
+      box.innerHTML = `<div class="eyebrow">${t(L("Punto", "Point"))}</div>${this._pointBlock(sel.ll.lat, sel.ll.lon)}
+        <div class="pt-actions"><button class="btn sm primary" id="atlasPtPin">${t(L("Fijar marcador", "Drop a pin"))}</button><button class="btn sm" id="atlasPtCopy">${t(L("Copiar coordenadas", "Copy coordinates"))}</button><button class="btn sm" id="atlasPtGo">${t(L("Centrar", "Center"))}</button><button class="btn sm" id="atlasPtRule">${t(L("Medir desde aquí", "Measure from here"))}</button></div>
+        ${this._pinList()}`;
+      $("atlasPtPin").onclick = () => this.addPin(sel.ll.lat, sel.ll.lon);
+      $("atlasPtRule").onclick = () => { this.measuring = true; this.measure = { a: sel.ll, b: null }; $("atlasMeasure").setAttribute("aria-pressed", "true"); this._hint(); this.dirty = true; };
+      this._bindPoint(sel.ll.lat, sel.ll.lon);
+      this._bindPinList();
+    }
+  }
+
+  // botones comunes de un punto: centrar la vista y copiar "lat, lon" al portapapeles
+  _bindPoint(lat, lon) {
+    $("atlasPtGo").onclick = () => this.flyTo(lat, lon, this.view.s);
+    const b = $("atlasPtCopy");
+    b.onclick = async () => {
+      const txt = `${lat.toFixed(5)}, ${wrapLon(lon).toFixed(5)}`;
+      let ok = false;
+      try { await navigator.clipboard.writeText(txt); ok = true; } catch (e) { /* sin permiso de portapapeles */ }
+      b.textContent = ok ? t(L("Copiado ✓", "Copied ✓")) : txt;
+      setTimeout(() => { if (b.isConnected) b.textContent = t(L("Copiar coordenadas", "Copy coordinates")); }, 1800);
+    };
+  }
+  _pinList() {
+    if (!this.pins.length) return "";
+    return `<h3>${t(L("Mis marcadores", "My pins"))}</h3><ul class="pins">${this.pins.map((p) => `<li><button class="go" data-pin="${p.id}" title="${fmtLat(p.lat, 4)}, ${fmtLon(p.lon, 4)}">📍 ${p.name.replace(/</g, "&lt;")}</button><button class="del" data-del="${p.id}" aria-label="${t(L("Borrar", "Delete"))}">×</button></li>`).join("")}</ul>`;
+  }
+  _bindPinList() {
+    const box = $("atlasInfo");
+    box.querySelectorAll("[data-pin]").forEach((b) => { b.onclick = () => { const pin = this.pins.find((p) => p.id === b.dataset.pin); if (!pin) return; this.selected = { kind: "pin", pin }; this.flyTo(pin.lat, pin.lon, this.view.s); this._info(); this.dirty = true; }; });
+    box.querySelectorAll("[data-del]").forEach((b) => { b.onclick = () => this.removePin(b.dataset.del); });
   }
 
   _readout() {
@@ -847,7 +1079,7 @@ export class Atlas {
     $("atlas3d").title = t(L("Globo 3D / mapa plano", "3D globe / flat map"));
     $("atlasMode").innerHTML = Object.entries(MODES).map(([k, v]) => `<option value="${k}" ${k === this.mode ? "selected" : ""}>${t(v)}</option>`).join("");
   }
-  applyLang() { if (this.feat) { this._buildSide(); this._legend(); this._info(); this._hint(); this._profile(); this.dirty = true; } }
+  applyLang() { this._buildSearch(); if (this.feat) { this._buildSide(); this._legend(); this._info(); this._hint(); this._profile(); this.dirty = true; } }
 
   // ---- perfil de elevacion --------------------------------------------------------------
   _profileData() {

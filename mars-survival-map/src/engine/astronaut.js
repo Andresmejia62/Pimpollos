@@ -41,6 +41,15 @@ export function sanitizeLook(l = {}) {
   return { suit: pick("suit"), accent: pick("accent"), visor: pick("visor"), skin: pick("skin"), lamps: flag("lamps"), antenna: flag("antenna"), crest: flag("crest") };
 }
 
+// Gestos cotidianos (emotes). dur = segundos; loop = se mantiene hasta que el jugador se mueve.
+export const EMOTES = {
+  wave: { key: "z", dur: 2.8, name: L("Saludar", "Wave") },
+  thumbs: { key: "x", dur: 2.2, name: L("Pulgar arriba", "Thumbs up") },
+  sit: { key: "c", loop: true, name: L("Sentarse", "Sit down") },
+  dance: { key: "v", dur: 7, name: L("Bailar", "Dance") },
+  stretch: { key: "b", dur: 3.4, name: L("Estirarse", "Stretch") },
+};
+
 // Astronauta. Usa public/models/astronaut.glb de M1 si existe; si no, un traje EVA articulado hecho con primitivas.
 // El modelo mira hacia -Z (igual que el rumbo del juego) y mide ~1,9 m con los pies en y = 0.
 export class Astronaut {
@@ -279,6 +288,59 @@ export class Astronaut {
     if (this.body) this.body.scale.set(w, 1, Math.sqrt(w));
   }
 
+  // Empieza un gesto (o lo quita si es el mismo que ya esta en bucle). Devuelve true si empezo.
+  playEmote(name) {
+    if (!EMOTES[name] || !this.parts) return false;
+    if (this.emote && this.emote.name === name && EMOTES[name].loop) { this.emote.ending = true; return false; }
+    this.emote = { name, t: 0, w: this.emote ? this.emote.w : 0, ending: false };
+    return true;
+  }
+  stopEmote() { if (this.emote) this.emote.ending = true; }
+
+  // Mezcla la pose del gesto sobre la pose base (w = 0..1). Los brazos cuelgan hacia -y: rotation.x > 0 los
+  // lleva hacia delante y rotation.z los abre hacia fuera (positivo en el derecho, negativo en el izquierdo).
+  _applyEmote(dt, busy) {
+    const e = this.emote, p = this.parts;
+    if (!e) return;
+    const def = EMOTES[e.name];
+    e.t += dt;
+    if (busy || (!def.loop && e.t > def.dur - 0.35)) e.ending = true;
+    e.w = Math.max(0, Math.min(1, e.w + (e.ending ? -dt * (busy ? 9 : 3.5) : dt * 4)));
+    if (e.ending && e.w <= 0) { this.emote = null; return; }
+    const w = e.w * e.w * (3 - 2 * e.w), t = e.t;
+    const set = (o, ax, v) => { o.rotation[ax] = lerp(o.rotation[ax], v, w); };
+    const R = p.armR, Lf = p.armL;
+    if (e.name === "wave") {
+      set(R.shoulder, "z", 2.5); set(R.shoulder, "x", 0.1);
+      set(R.elbow, "x", 0.5); set(R.elbow, "z", Math.sin(t * 8.5) * 0.55);
+      set(p.torso, "z", -0.06); set(p.head, "y", 0); set(p.head, "z", 0.08);
+    } else if (e.name === "thumbs") {
+      set(R.shoulder, "x", 1.25); set(R.shoulder, "z", 0.25); set(R.elbow, "x", 1.05);
+      set(p.head, "y", 0); set(p.head, "x", Math.max(0, Math.sin(t * 6)) * 0.18 * (t < 1.6 ? 1 : 0));
+    } else if (e.name === "sit") {
+      for (const leg of [p.legL, p.legR]) { set(leg.hip, "x", 1.9); set(leg.knee, "x", -2.0); }
+      set(p.torso, "x", 0.22); set(p.torso, "y", 0);
+      for (const a of [Lf, R]) { set(a.shoulder, "x", 0.95); set(a.elbow, "x", 0.55); }
+      this.body.position.y = lerp(this.body.position.y, -0.56, w);
+      set(p.head, "x", -0.12);
+    } else if (e.name === "dance") {
+      const b = t * 5.2, sw = Math.sin(b), sw2 = Math.sin(b * 0.5);
+      set(p.torso, "y", sw2 * 0.45); set(p.torso, "z", sw * 0.08);
+      set(R.shoulder, "z", 1.5 + sw * 0.6); set(R.elbow, "x", 1.0 + sw * 0.3);
+      set(Lf.shoulder, "z", -1.5 + sw * 0.6); set(Lf.elbow, "x", 1.0 - sw * 0.3);
+      set(p.legL.hip, "x", Math.max(0, sw) * 0.5); set(p.legL.knee, "x", -Math.max(0, sw) * 0.9);
+      set(p.legR.hip, "x", Math.max(0, -sw) * 0.5); set(p.legR.knee, "x", -Math.max(0, -sw) * 0.9);
+      set(p.head, "y", -sw2 * 0.3);
+      // con el 38 % de gravedad cada saltito dura mas
+      this.body.position.y = lerp(this.body.position.y, Math.abs(Math.sin(b * 0.5)) * 0.22, w);
+    } else if (e.name === "stretch") {
+      const u = Math.min(1, t / 1.1);
+      for (const [a, sgn] of [[R, 1], [Lf, -1]]) { set(a.shoulder, "x", 2.9 * u); set(a.shoulder, "z", sgn * 0.35); set(a.elbow, "x", 0.15); }
+      set(p.torso, "x", 0.16 * u + Math.sin(t * 2.2) * 0.03); set(p.head, "x", -0.2 * u); set(p.head, "y", 0);
+      this.body.position.y = lerp(this.body.position.y, 0.05 * u, w);   // de puntillas
+    }
+  }
+
   // speed en m/s del mundo; el paso es un "salto" de baja gravedad (38 % de la terrestre)
   // air: metros sobre el suelo (0 = apoyado)
   update(dt, speed, x, y, z, heading, air = 0) {
@@ -331,7 +393,11 @@ export class Astronaut {
     }
     p.armL.shoulder.rotation.z = -0.1 - 0.75 * f;
     p.armR.shoulder.rotation.z = 0.1 + 0.75 * f;
+    p.armL.elbow.rotation.z = p.armR.elbow.rotation.z = 0;
+    p.head.rotation.z = 0;
     // el rebote del paso solo es visual; en el aire manda la fisica
     this.body.position.y = Math.abs(s) * 0.24 * k * (1 - f);
+    // gestos: se cancelan al caminar o saltar
+    this._applyEmote(dt, moving || flying);
   }
 }

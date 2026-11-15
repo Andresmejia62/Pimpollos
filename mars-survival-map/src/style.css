@@ -107,8 +107,20 @@ button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .countdown .n { font-size: calc(var(--u) * 6); font-weight: 700; color: var(--danger); line-height: 1; text-shadow: 0 0 calc(var(--u) * 1.5) rgba(0,0,0,.7); font-variant-numeric: tabular-nums; }
 .countdown.safe .n { color: var(--safe); }
 .countdown .l { font-size: calc(var(--u) * 1.5); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; text-shadow: 0 0 calc(var(--u) * .5) #000; }
-.storm-tint { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 0%, rgba(255,77,77,.28), transparent 60%); animation: pulse 2s ease-in-out infinite; }
+/* Tormenta solar. Aviso: marco ambar que late despacio. Activa: marco rojo que late rapido, con un leve parpadeo,
+   y encima los impactos de particulas (canvas #stormFx). A cubierto en un refugio el marco se vuelve verde. */
+.storm-tint { position: absolute; inset: 0; pointer-events: none; transition: opacity .6s;
+  background: radial-gradient(ellipse at 50% 50%, transparent 52%, rgba(255,170,60,.22) 100%), radial-gradient(ellipse at 50% 0%, rgba(255,170,60,.2), transparent 55%);
+  animation: pulse 2.4s ease-in-out infinite; }
+.storm-tint.active { background: radial-gradient(ellipse at 50% 50%, transparent 46%, rgba(255,60,60,.34) 100%), radial-gradient(ellipse at 50% 0%, rgba(255,77,77,.3), transparent 60%);
+  animation: pulse 1.1s ease-in-out infinite, stormFlicker 3.7s steps(1) infinite; }
+.storm-tint.safe { background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(61,220,151,.2) 100%); animation: pulse 3s ease-in-out infinite; }
+.storm-fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; mix-blend-mode: screen; image-rendering: pixelated; }
+.storm-fx[hidden] { display: none; }
 @keyframes pulse { 50% { opacity: .45; } }
+@keyframes stormFlicker { 0%, 100% { filter: none; } 31% { filter: brightness(1.5); } 33% { filter: none; } 72% { filter: brightness(1.3); } 73% { filter: none; } }
+.countdown .n { animation: countBeat 1s ease-in-out infinite; }
+@keyframes countBeat { 50% { transform: scale(1.06); } }
 
 .hint { position: absolute; left: 50%; bottom: calc(var(--u) * 1.2); transform: translateX(-50%); font-family: var(--font-text); font-size: calc(var(--u) * 1.05); color: var(--hud-text-dim); text-shadow: 0 1px 2px #000; white-space: nowrap; }
 .prompt { position: absolute; left: 50%; bottom: calc(var(--u) * 8); transform: translateX(-50%); display: flex; align-items: center; gap: calc(var(--u) * .6); padding: calc(var(--u) * .5) calc(var(--u) * 1.1); background: var(--hud-bg); border: 1px solid var(--hud-border); border-radius: calc(var(--u) * .7); backdrop-filter: blur(6px); font-size: calc(var(--u) * 1.4); font-weight: 600; white-space: nowrap; }
@@ -117,7 +129,7 @@ button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .clock { position: absolute; left: 50%; top: calc(var(--u) * 6.1); transform: translateX(-50%); font-size: calc(var(--u) * 1.1); color: var(--hud-text-dim); text-shadow: 0 1px 2px #000; font-variant-numeric: tabular-nums; }
 .fps { position: absolute; left: calc(var(--u) * 2); top: calc(var(--u) * 13); font: 600 12px ui-monospace, monospace; color: #fff; background: rgba(0,0,0,.5); padding: 2px 6px; border-radius: 4px; }
 
-@media (prefers-reduced-motion: reduce) { .alert.danger, .storm-tint { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .alert.danger, .storm-tint, .storm-tint.active, .countdown .n { animation: none; } .storm-fx { display: none; } }
 
 /* Pantallas */
 .screen { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); z-index: 10; }
@@ -349,6 +361,24 @@ button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .atlas-side, .atlas-info { overflow: auto; padding: 12px 14px; background: var(--hud-bg-solid); }
 .atlas-side { grid-area: side; border-right: 1px solid var(--hud-border); }
 .atlas-info { grid-area: info; border-left: 1px solid var(--hud-border); }
+/* Atlas interactivo: buscador, etiqueta flotante del cursor y marcadores del usuario */
+.atlas-search { position: absolute; left: 12px; top: 12px; z-index: 3; display: flex; gap: 6px; flex-wrap: wrap; max-width: min(380px, calc(100% - 24px)); }
+.atlas-search input { flex: 1 1 200px; min-width: 0; font: 500 14px var(--font-text); color: var(--hud-text); background: rgba(12,10,14,.82); border: 1px solid var(--hud-border); border-radius: 8px; padding: 7px 10px; backdrop-filter: blur(6px); }
+.atlas-search input:focus { outline: 2px solid var(--info); outline-offset: 1px; }
+.atlas-search input::placeholder { color: var(--hud-text-dim); }
+.atlas-search-msg { flex-basis: 100%; font-size: 12.5px; padding: 5px 9px; border-radius: 6px; background: rgba(12,10,14,.86); border: 1px solid var(--danger); color: var(--hud-text); }
+.atlas-search-msg[hidden] { display: none; }
+.atlas-tip { position: absolute; z-index: 4; pointer-events: none; padding: 5px 9px; border-radius: 7px; background: rgba(12,10,14,.88); border: 1px solid var(--hud-border); font: 500 12.5px/1.4 var(--font-text); white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,.45); }
+.atlas-tip[hidden] { display: none; }
+.atlas-tip b { display: block; font: 700 14px var(--font-hud); letter-spacing: .03em; color: var(--info); }
+.atlas-tip i { font-style: normal; color: var(--hud-text-dim); }
+.atlas-info .pt-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+.atlas-info .pins { list-style: none; padding: 0; margin: 6px 0; }
+.atlas-info .pins li { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 13.5px; }
+.atlas-info .pins .go { flex: 1; min-width: 0; text-align: left; background: none; border: 0; padding: 2px 0; cursor: pointer; color: var(--info); font: 500 13.5px var(--font-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atlas-info .pins .del { background: none; border: 1px solid var(--hud-border); border-radius: 5px; color: var(--hud-text-dim); cursor: pointer; padding: 0 6px; font-size: 13px; line-height: 20px; }
+.atlas-info .pins .del:hover { color: var(--danger); border-color: var(--danger); }
+.atlas-info .pin-name { width: 100%; font: 600 15px var(--font-text); color: var(--hud-text); background: rgba(255,255,255,.06); border: 1px solid var(--hud-border); border-radius: 6px; padding: 6px 8px; margin: 6px 0; }
 .atlas-info h2 { font: 700 26px var(--font-hud); margin: 4px 0 8px; }
 .atlas-info h3 { font: 700 15px var(--font-hud); letter-spacing: .06em; text-transform: uppercase; margin: 14px 0 4px; }
 .atlas-info .fact { font-size: 14px; }
@@ -452,6 +482,16 @@ button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .intro-warn { animation: none; } }
 
 /* ---- modo libre: panel de simulacion (ui/sim.js) ---- */
+/* Portada: dos botones grandes con descripcion, una fila secundaria y los controles plegados */
+.menu-main { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; max-width: 560px; }
+.menu-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; padding: 14px 18px; }
+.menu-btn small { font: 400 13px/1.35 var(--font-text); letter-spacing: 0; text-transform: none; opacity: .85; }
+.menu-sub { margin-top: 12px; }
+.menu-controls { margin-top: 18px; max-width: 70ch; }
+.menu-controls summary { cursor: pointer; font: 700 13px var(--font-hud); letter-spacing: .14em; text-transform: uppercase; color: var(--hud-text-dim); width: fit-content; }
+.menu-controls summary:hover { color: var(--hud-text); }
+.menu-controls .controls-line { margin-top: 8px; }
+@media (max-width: 560px) { .menu-main { grid-template-columns: 1fr; } }
 .modes-line { font-size: 14px; color: var(--hud-text); margin-top: 14px; max-width: 70ch; line-height: 1.45; opacity: .9; }
 .sim { left: calc(var(--u) * 2); top: calc(var(--u) * 13.4); width: calc(var(--u) * 22); max-height: calc(100vh - var(--u) * 26); overflow-y: auto; padding: calc(var(--u) * .7) calc(var(--u) * .9); display: grid; gap: calc(var(--u) * .45); font-family: var(--font-text); font-size: calc(var(--u) * .95); }
 .telem:not([hidden]) ~ .sim { left: calc(var(--u) * 25); }

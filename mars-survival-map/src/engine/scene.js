@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { assetUrl } from "../data.js";
 import { Colliders, Dynamics } from "./physics.js";
 import { loadMolaGale } from "./mola.js";
+import { moonsAt, sunAngularRadius } from "./moons.js";
 
 // Ajustes de aspecto (un solo sitio para retocar la luz y la profundidad de toda la escena)
 export const LOOK = {
@@ -311,7 +312,9 @@ const SKY_VS = /* glsl */ `
 `;
 const SKY_FS = /* glsl */ `
   uniform vec3 uSunDir, uHorizon, uZenith;
-  uniform float uStorm, uTime, uDay, uLow;
+  uniform float uStorm, uTime, uDay, uLow, uSunRad, uAurora;
+  uniform vec4 uPhobos, uDeimos;   // xyz = direccion, w = radio angular (rad)
+  uniform vec2 uMoonLit;           // fraccion iluminada de cada luna (0 en eclipse)
   varying vec3 vDir;
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
@@ -352,12 +355,28 @@ const SKY_FS = /* glsl */ `
 
     // lunas a su tamano real en el cielo de Marte: Fobos mide ~0,2 grados (un tercio de nuestra Luna)
     // y Deimos ~2 minutos de arco, apenas un punto brillante
+    // (posicion, tamano aparente, fase y eclipses: engine/moons.js)
     float moonLit = 0.5 + 0.5 * uDay;
-    float phobos = smoothstep(0.0021, 0.0015, angTo(d, normalize(vec3(-0.55, 0.62, -0.5))));
+    float pr = max(uPhobos.w, 0.0009);                      // nunca menos de ~1 pixel
+    float phobos = smoothstep(pr * 1.2, pr * 0.8, angTo(d, uPhobos.xyz)) * smoothstep(-0.02, 0.01, uPhobos.y);
     float crater = noise(d.xz * 2600.0);
-    col = mix(col, vec3(0.9, 0.84, 0.77) * moonLit * (0.82 + 0.3 * crater) + col * 0.22, phobos * 0.7);
-    float deimos = smoothstep(0.0009, 0.0003, angTo(d, normalize(vec3(0.62, 0.45, 0.55))));
-    col = mix(col, vec3(0.98, 0.95, 0.9) * (0.6 + 0.6 * moonLit) + col * 0.2, deimos * 0.8);
+    float pLit = 0.05 + 0.95 * uMoonLit.x;                  // en eclipse queda apenas la luz que refleja Marte
+    col = mix(col, vec3(0.9, 0.84, 0.77) * moonLit * pLit * (0.82 + 0.3 * crater) + col * 0.22, phobos * 0.7);
+    float deimos = smoothstep(0.0009, 0.0003, angTo(d, uDeimos.xyz)) * smoothstep(-0.02, 0.01, uDeimos.y);
+    col = mix(col, vec3(0.98, 0.95, 0.9) * (0.6 + 0.6 * moonLit) * (0.05 + 0.95 * uMoonLit.y) + col * 0.2, deimos * 0.8);
+
+    // Aurora de la tormenta solar: Marte no tiene campo magnetico global, asi que no forma un ovalo polar sino un
+    // resplandor verde difuso en todo el cielo (557,7 nm, oxigeno). MAVEN la vio en todo el planeta en mayo de 2024
+    // y Perseverance la fotografio en luz visible. De dia el cielo la tapa casi por completo.
+    if (uAurora > 0.001) {
+      vec2 qa = d.xz / (0.3 + h);
+      float band = fbm(vec2(qa.x * 1.4 + uTime * 0.05, qa.y * 0.5 - uTime * 0.02));
+      float rays = noise(vec2(atan(d.x, d.z) * 14.0 + uTime * 0.3, uTime * 0.11));
+      float glowA = (0.18 + 0.82 * smoothstep(0.38, 0.8, band)) * (0.7 + 0.3 * rays);
+      glowA *= smoothstep(-0.02, 0.2, d.y) * (0.14 + 0.86 * (1.0 - uDay)) * (0.75 + 0.25 * sin(uTime * 1.7 + band * 9.0));
+      col += vec3(0.22, 1.0, 0.42) * glowA * uAurora * 0.34;
+      col += vec3(0.9, 0.25, 0.35) * glowA * uAurora * 0.12 * smoothstep(0.45, 0.9, d.y);   // tono rojizo en lo alto
+    }
 
     // velos de polvo altos y cirros de hielo de agua (como los que fotografia Curiosity)
     vec2 q = d.xz / (0.22 + h);
@@ -374,7 +393,7 @@ const SKY_FS = /* glsl */ `
     // sol a su tamano real: desde Marte mide 0,35 grados (en la Tierra 0,53), con aureola azulada al atardecer
     vec3 glow = vec3(0.5, 0.62, 0.85) * (exp(-ang * 14.0) * 0.5 + exp(-ang * 60.0) * 0.9);
     col += glow * (0.6 + 0.9 * uLow) * calm;
-    col += mix(vec3(1.0, 0.97, 0.92), vec3(0.85, 0.92, 1.0), uLow) * smoothstep(0.0035, 0.0027, ang) * 12.0;
+    col += mix(vec3(1.0, 0.97, 0.92), vec3(0.85, 0.92, 1.0), uLow) * smoothstep(uSunRad * 1.14, uSunRad * 0.88, ang) * 12.0;
     // (el borde del crater Gale y el monte Sharp ya no se pintan aqui: son relieve 3D real, ver _buildFarTerrain)
 
     col *= 1.0 - 0.35 * uStorm;
@@ -486,8 +505,11 @@ export class MarsScene {
   _buildSky() {
     this.skyMat = new THREE.ShaderMaterial({
       vertexShader: SKY_VS, fragmentShader: SKY_FS, side: THREE.BackSide, depthWrite: false,
-      uniforms: { uSunDir: { value: this.sunDir }, uHorizon: { value: HORIZON_DAY.clone() }, uZenith: { value: ZENITH_DAY.clone() }, uStorm: { value: 0 }, uTime: { value: 0 }, uDay: { value: 1 }, uLow: { value: 0 } },
+      uniforms: { uSunDir: { value: this.sunDir }, uHorizon: { value: HORIZON_DAY.clone() }, uZenith: { value: ZENITH_DAY.clone() }, uStorm: { value: 0 }, uTime: { value: 0 }, uDay: { value: 1 }, uLow: { value: 0 },
+        uSunRad: { value: sunAngularRadius().radius }, uAurora: { value: 0 },
+        uPhobos: { value: new THREE.Vector4(0, -1, 0, 0.0017) }, uDeimos: { value: new THREE.Vector4(0, -1, 0, 0.0003) }, uMoonLit: { value: new THREE.Vector2(1, 1) } },
     });
+    this.moons = [];                    // estado de Fobos y Deimos (para las etiquetas del cielo)
     const sky = new THREE.Mesh(new THREE.SphereGeometry(this.skyRadius * 1.1, 32, 16), this.skyMat);
     sky.frustumCulled = false;
     sky.renderOrder = -1;
@@ -574,10 +596,18 @@ export class MarsScene {
     this.fogColor.copy(hz);
     this.skyMat.uniforms.uDay.value = day;
     this.skyMat.uniforms.uLow.value = low;
+    // lunas: orbita real segun la hora del juego
+    const U = this.skyMat.uniforms, mo = moonsAt(hour, this.data.region.center.lat, this.moons);
+    U.uPhobos.value.set(mo[0].dir[0], mo[0].dir[1], mo[0].dir[2], mo[0].radius);
+    U.uDeimos.value.set(mo[1].dir[0], mo[1].dir[1], mo[1].dir[2], mo[1].radius);
+    U.uMoonLit.value.set(mo[0].lit, mo[1].lit);
     this.sun.intensity = 2.6 * day * (1 - 0.5 * st);
     this.sun.color.setRGB(1, 0.95 - 0.15 * low, 0.86 - 0.3 * low);
     this.hemi.intensity = 0.55 + 0.6 * day;
   }
+
+  // Tormenta de particulas solares (0..1): aurora en el cielo. No es polvo: no cambia la bruma.
+  setAurora(v) { this.skyMat.uniforms.uAurora.value = v; }
 
   setStorm(v) {
     this.storm = v;
