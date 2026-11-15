@@ -6,6 +6,7 @@ import { Astronaut, EMOTES } from "./engine/astronaut.js";
 import { buildHabitat, buildRover, buildShelter } from "./engine/props.js";
 import { buildMarsRover } from "./engine/marsrover.js";
 import { buildStructures } from "./engine/structures.js";
+import { MINERALS, drawSpectrum } from "./ui/spectrum.js";
 import { Controls } from "./engine/controls.js";
 import { Game } from "./gameplay/game.js";
 import { AlertSystem } from "./gameplay/alerts.js";
@@ -117,7 +118,22 @@ async function boot() {
       const done = o.type === "science" && game.missions.findIndex((m) => m.objective_id === id) < game.s.missionIndex;
       scene.setBeacon(b, { visible: !!(isT || o.shelter || (!done && o.type === "science")), target: !!isT, shelter: !!o.shelter });
     }
+    // vetas de la mision 4: solo se ven con la capa espectral (tecla 4) o a menos de 45 m
+    const subs = game.s.subs || [];
+    if (veinBeacons.key !== subs) {
+      for (const vb of veinBeacons.list) { scene.scene.remove(vb.group); scene.beacons = scene.beacons.filter((x) => x !== vb); }
+      veinBeacons.list = subs.map((q) => scene.addBeacon(q.x, q.z, 6, 90));
+      veinBeacons.key = subs;
+    }
+    subs.forEach((q, i) => {
+      const vb = veinBeacons.list[i];
+      if (!vb) return;
+      const near = Math.hypot(q.x - game.s.x, q.z - game.s.z) < 45;
+      scene.setBeacon(vb, { visible: !q.found && (game.s.layer === "spectral" || near), target: true, shelter: false });
+      vb.color.set("#C792EA"); vb.ringMat.color.copy(vb.color); vb.gemMat.color.copy(vb.color);
+    });
   };
+  const veinBeacons = { list: [], key: null };
 
   // ---- idioma y pantallas ----------------------------------------------------------
   const toggleLang = () => { setLang(getLang() === "es" ? "en" : "es"); hud.applyLang(); atlas.applyLang(); skyCaption(); if (game.s.phase === "briefing") showBriefing(); if (game.s.free) sim.render(); };
@@ -162,6 +178,12 @@ async function boot() {
       <span class="chip"><svg><use href="#i-target"/></svg>${(d / 1000).toFixed(1).replace(".", ",")} km · ${climb >= 0 ? "+" : ""}${climb} m</span>
       <span class="chip safe"><svg><use href="#i-shelter"/></svg>${ui("shelterNear")}: ${t(sh.name)}</span>
       <span class="chip" style="color:${LEVEL_COLOR[sw.level]};border-color:${LEVEL_COLOR[sw.level]}"><svg><use href="#i-radiation"/></svg>${t({ es: "Clima espacial (NASA DONKI)", en: "Space weather (NASA DONKI)" })}: ${t(LEVEL_TEXT[sw.level])}</span>`;
+    if (m.cold_warning) {
+      // temperatura del suelo prevista al llegar (modelo termico THEMIS + REMS del juego)
+      const travelH = (d / game.rules.movement.walk_speed_mps) * game.rules.time.time_scale / 3600;
+      const tArr = world.temperature(o.world.x, o.world.z, game.hour + travelH);
+      $("briefChips").innerHTML += `<span class="chip cold"><svg><use href="#i-thermo"/></svg>${t({ es: "Frío nocturno", en: "Night cold" })}: ${Math.round(tArr)} °C ${t({ es: "al llegar · la batería cae rápido", en: "on arrival · battery drains fast" })}</span>`;
+    }
     const stormMission = (m.events || []).some((e) => e.event === "solar_particle_event");
     $("briefPlanNote").textContent += stormMission ? " " + t({ es: "Pronóstico: probable tormenta de partículas solares durante esta misión. Ten un refugio cerca.", en: "Forecast: a solar particle event is likely during this mission. Keep a shelter nearby." }) : "";
     show("scrBriefing");
@@ -169,6 +191,14 @@ async function boot() {
     controls.unlock();
   }
 
+  game.on("subFound", ({ sub, left, points }) => {
+    sfx.success();
+    const cls = data.layers.layers.spectral.classes[sub.cls] || {};
+    hud.showAlert({ id: "a_vein_" + left, severity: "info", text: {
+      es: `Veta registrada (${(cls.es || "").toLowerCase()} según CRISM). +${points} ciencia. ${left ? `Quedan ${left}.` : "¡Las tres! Ahora escanea las formaciones boxwork."}`,
+      en: `Vein logged (${(cls.en || "").toLowerCase()} per CRISM). +${points} science. ${left ? `${left} to go.` : "All three! Now scan the boxwork formations."}` } });
+    updateBeacons();
+  });
   game.on("mission", () => { hud.clearAlerts(); updateBeacons(); showBriefing(); buddy.snapTo(game.s); });
 
   // ---- EVA-2 -------------------------------------------------------------------------
@@ -189,13 +219,17 @@ async function boot() {
   });
   buddy.on("rescued", ({ bonus }) => {
     sfx.success();
-    hud.clearAlert({ id: "a_buddy_stuck" });
+    hud.clearAlert({ id: "a_buddy_stuck" }); hud.clearAlert({ id: "a_buddy_reserve" });
     hud.showAlert({ id: "a_buddy_ok", severity: "info", text: { es: `Rescate completado: sellaste la fuga y le pasaste O₂ por la manguera de emergencia (−8 % para ti). +${bonus} ciencia.`, en: `Rescue complete: you sealed the leak and shared O₂ through the emergency hose (−8 % for you). +${bonus} science.` } });
-    say({ es: "Gracias. Nunca salgas solo: por eso vamos de dos en dos.", en: "Thanks. Never go out alone: that's why we go in pairs." }, 5);
+    say({ es: "Gracias. Nunca salgas solo: por eso vamos de dos en dos. Cojeo, pero te sigo hasta el próximo refugio.", en: "Thanks. Never go out alone: that's why we go in pairs. I'm limping, but I'll follow you to the next shelter." }, 6);
   });
-  buddy.on("aborted", () => {
+  buddy.on("reserve", () => {
     hud.clearAlert({ id: "a_buddy_stuck" });
-    hud.showAlert({ id: "a_buddy_abort", severity: "caution", text: { es: "EVA-2 se quedó sin margen de O₂ y aborta hacia el rover. Sigues tú.", en: "EVA-2 ran out of O₂ margin and is aborting to the rover. You carry on." } });
+    hud.showAlert({ id: "a_buddy_reserve", severity: "caution", text: { es: "EVA-2 abrió su reserva de emergencia de O₂: ya no pierde aire, pero sigue herido y no puede andar. Ve hasta él y mantén F.", en: "EVA-2 opened the emergency O₂ reserve: no more leak, but still injured and unable to walk. Go to them and hold F." } });
+    say({ es: "Abrí la reserva. Aguanto, pero no puedo levantarme solo. Te espero aquí.", en: "Reserve open. I'm holding on, but I can't get up alone. I'll wait here." }, 6);
+  });
+  buddy.on("recovered", ({ where }) => {
+    say({ es: `En ${where.name.es} reparé la junta de la rodilla. Ya puedo andar bien.`, en: `At ${where.name.en} I fixed the knee joint. I can walk properly again.` }, 5);
   });
   buddy.on("rejoined", () => say({ es: "Recargué en el rover. Vuelvo contigo.", en: "Recharged at the rover. Back with you." }, 4));
   // ---- modo libre (simulacion) ---------------------------------------------------------
@@ -293,6 +327,28 @@ async function boot() {
     $("cardFactTitle").textContent = `${ui("fact")} · ${t(fact.title)}`;
     $("cardFact").textContent = t(fact.text);
     $("cardSource").textContent = `${ui("source")}: ${fact.source}`;
+    // tarea: identificar el mineral por su espectro (missions.json -> quiz)
+    const quiz = $("cardQuiz");
+    quiz.hidden = mission.quiz !== "spectrum";
+    if (!quiz.hidden) {
+      const ans = { obj_arcillas: "clay", obj_sulfatos: "sulfate" }[objective.id] || "basalt";
+      $("quizQ").textContent = t({ es: "Tu escáner devolvió este espectro infrarrojo. ¿Qué mineral es?", en: "Your scanner returned this infrared spectrum. Which mineral is it?" });
+      $("quizFb").hidden = true;
+      $("btnCardContinue").disabled = true;
+      requestAnimationFrame(() => drawSpectrum($("quizSpec"), ans));
+      $("quizOpts").innerHTML = ["basalt", "clay", "sulfate"].map((k) => `<button class="btn sm" data-min="${k}">${t(MINERALS[k].name)}</button>`).join("");
+      $("quizOpts").querySelectorAll("[data-min]").forEach((b) => {
+        b.onclick = () => {
+          const ok = b.dataset.min === ans;
+          $("quizOpts").querySelectorAll("button").forEach((x) => { x.disabled = true; x.classList.toggle("right", x.dataset.min === ans); x.classList.toggle("wrong", x === b && !ok); });
+          if (ok) { game.s.science += 30; $("cardPts").textContent = "+" + (mission.points + 30); sfx.success(); }
+          $("quizFb").hidden = false;
+          $("quizFb").innerHTML = `<b>${t(ok ? { es: "¡Correcto! +30 ciencia.", en: "Correct! +30 science." } : { es: "No es ese.", en: "Not that one." })}</b> ${t(MINERALS[ans].why)}`;
+          drawSpectrum($("quizSpec"), ans, true);
+          $("btnCardContinue").disabled = false;
+        };
+      });
+    } else $("btnCardContinue").disabled = false;
     $("cardSol").textContent = objective.msl_sol ? `${ui("curiosityHere")} ${objective.msl_sol}` + (getLang() === "es" && objective.analog ? ` · ${objective.analog}` : "") : "";
     show("scrCard");
   });
@@ -544,14 +600,19 @@ async function boot() {
       if (s.phase === "playing" && !paused && $("scrGuide").hidden && !atlas.isOpen && $("scrPlan").hidden && $("scrProfile").hidden && buddyOn) buddy.update(dt, controls.keys.has("f"));
       const bs = buddy.st;
       buddyAstro.root.visible = buddyOn && !bs.riding;
-      buddyAstro.update(dt, bs.mode === "stuck" ? 0 : bs.speed, bs.x, buddyGround(bs.x, bs.z), bs.z, bs.heading, 0);
+      // herido: sentado con la baliza en rojo hasta que lo ayudes; despues cojea
+      const hurt = bs.mode === "stuck" || bs.mode === "reserve";
+      if (hurt && !(buddyAstro.emote && buddyAstro.emote.name === "hurt")) buddyAstro.playEmote("hurt");
+      if (!hurt && buddyAstro.emote && buddyAstro.emote.name === "hurt") buddyAstro.stopEmote();
+      buddyAstro.distress = hurt; buddyAstro.limp = !!bs.limp;
+      buddyAstro.update(dt, hurt ? 0 : bs.speed, bs.x, buddyGround(bs.x, bs.z), bs.z, bs.heading, 0);
       const dB = Math.hypot(bs.x - s.x, bs.z - s.z);
-      $("buddyPrompt").hidden = !(buddyOn && bs.mode === "stuck" && dB < 4.5 && s.phase === "playing");
+      $("buddyPrompt").hidden = !(buddyOn && hurt && dB < 4.5 && s.phase === "playing");
       if (!$("buddyPrompt").hidden) { $("buddyPromptText").textContent = t({ es: "Mantén F para ayudar a EVA-2", en: "Hold F to help EVA-2" }); $("buddyAssist").style.width = (100 * bs.assist / 3) + "%"; }
       const bl = $("buddyLine");
       bl.hidden = !buddyOn;
-      bl.classList.toggle("alert", bs.mode === "stuck");
-      bl.innerHTML = `<span>EVA-2</span><div class="bar"><i style="width:${Math.max(0, bs.o2)}%"></i></div><em>${Math.round(bs.o2)} % · ${t(buddy.statusText())}${bs.mode === "stuck" ? " · " + Math.round(dB) + " m" : ""}</em>`;
+      bl.classList.toggle("alert", hurt);
+      bl.innerHTML = `<span>EVA-2</span><div class="bar"><i style="width:${Math.max(0, bs.o2)}%"></i></div><em>${Math.round(bs.o2)} % · ${t(buddy.statusText())}${hurt ? " · " + Math.round(dB) + " m" : ""}</em>`;
       controls.updateCamera(scene.camera, { x: s.x, y: y + (s.driving ? 0.6 : 0), z: s.z }, (x, z) => scene.heightAt(x, z), camOccluders);
       hud.camYaw = controls.yaw;
       scene.setTimeOfDay(game.hour);
@@ -594,7 +655,7 @@ async function boot() {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  window.__msm = { game, scene, world, path, controls, atlas, geo, car, astro, sky, buddy, planner, intro, sim }; // para depurar desde la consola
+  window.__msm = { game, scene, world, path, controls, atlas, geo, car, astro, buddyAstro, sky, buddy, planner, intro, sim }; // para depurar desde la consola
 }
 
 boot().catch((e) => {

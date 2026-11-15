@@ -71,7 +71,8 @@ export class Hud {
     const d = tg ? this.game.distTo(tg) : 0;
     $("missionLbl").textContent = m.free ? ui("freeHint") : `${ui("mission")} ${m.order}/${this.game.missions.length}`;
     $("missionTitle").textContent = t(m.title);
-    $("missionObj").textContent = tg ? `${t(tg.name)} · ${fmtDist(d)}${m.free && s.scanned && tg.id === "custom" ? " ✓" : ""}` : ui("freeNoTarget");
+    const subs = s.subs, subTxt = subs && this.game.subsLeft > 0 ? `${t({ es: "Vetas", en: "Veins" })} ${subs.length - this.game.subsLeft}/${subs.length} · ` : "";
+    $("missionObj").textContent = tg ? `${subTxt}${t(tg.name)} · ${fmtDist(d)}${m.free && s.scanned && tg.id === "custom" ? " ✓" : ""}` : ui("freeNoTarget");
 
     // vista del destino (foto real de Curiosity) al acercarse
     this._povHud(tg, d);
@@ -79,7 +80,7 @@ export class Hud {
     this._structCard();
 
     // tutorial
-    const tut = this.game.tutorialText();
+    const tut = this.game.tutorialText() || (s.scanBlocked ? { es: `Antes de escanear encuentra las ${this.game.subsLeft} vetas que faltan: activa la capa espectral (4) para verlas.`, en: `Before scanning, find the ${this.game.subsLeft} remaining veins: turn on the spectral layer (4) to see them.` } : null);
     $("tutorial").hidden = !tut;
     if (tut) $("tutorial").textContent = t(tut);
 

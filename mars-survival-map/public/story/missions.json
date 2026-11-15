@@ -87,7 +87,8 @@
           "done_when": "mission_complete('m1')"
         }
       ],
-      "next": "m2"
+      "next": "m2",
+      "quiz": "spectrum"
     },
     {
       "id": "m2",
@@ -120,7 +121,8 @@
         "d_m3_done"
       ],
       "fact_id": "f_radiation",
-      "next": "m3"
+      "next": "m3",
+      "quiz": "spectrum"
     },
     {
       "id": "m3",
@@ -156,8 +158,8 @@
         "en": "The network beneath the stone"
       },
       "brief": {
-        "es": "Llega a las formaciones boxwork, el punto más lejano de la caminata. Usa la capa ESPECTRAL para encontrar las vetas minerales. Vigila tu oxígeno: el Refugio Sur está cerca, pero el rover quedó muy atrás.",
-        "en": "Reach the boxwork formations, the farthest point of the walk. Use the SPECTRAL layer to find the mineral veins. Watch your oxygen: the South Shelter is close, but the rover is far behind."
+        "es": "Llega a las formaciones boxwork, el punto más lejano de la caminata. Antes de escanearlas, encuentra 3 afloramientos de vetas con la capa ESPECTRAL (tecla 4): solo se ven con ella o de cerca. Se hace de noche: el suelo baja de −70 °C y la calefacción del traje gasta la batería muy rápido. Si baja del 30 %, recarga en el Refugio Sur antes de seguir.",
+        "en": "Reach the boxwork formations, the farthest point of the walk. Before scanning them, find 3 vein outcrops with the SPECTRAL layer (key 4): they only show with it or up close. Night is falling: the ground drops below −70 °C and the suit heater drains the battery fast. If it falls below 30 %, recharge at the South Shelter before going on."
       },
       "objective_id": "obj_boxwork",
       "action": "scan",
@@ -172,7 +174,19 @@
         "d_m4_done"
       ],
       "fact_id": "f_boxwork",
-      "next": "m5"
+      "next": "m5",
+      "subtargets": {
+        "_doc": "Puntos reales de la clase 'vetas boxwork' del mapa CRISM (layers.json -> spectral.classes) alrededor del objetivo. Hay que visitarlos antes del escaneo final.",
+        "kind": "veins",
+        "count": 3,
+        "class": 3,
+        "fallback_class": 2,
+        "radius_m": 420,
+        "min_dist_m": 110,
+        "min_sep_m": 90,
+        "points": 20
+      },
+      "cold_warning": true
     },
     {
       "id": "m5",

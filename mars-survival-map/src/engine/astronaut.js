@@ -48,6 +48,8 @@ export const EMOTES = {
   sit: { key: "c", loop: true, name: L("Sentarse", "Sit down") },
   dance: { key: "v", dur: 7, name: L("Bailar", "Dance") },
   stretch: { key: "b", dur: 3.4, name: L("Estirarse", "Stretch") },
+  // solo para EVA-2 herido (sin tecla): sentado con la pierna danada estirada y las manos en la rodilla
+  hurt: { loop: true, name: L("Herido", "Injured") },
 };
 
 // Astronauta. Usa public/models/astronaut.glb de M1 si existe; si no, un traje EVA articulado hecho con primitivas.
@@ -333,6 +335,14 @@ export class Astronaut {
       set(p.head, "y", -sw2 * 0.3);
       // con el 38 % de gravedad cada saltito dura mas
       this.body.position.y = lerp(this.body.position.y, Math.abs(Math.sin(b * 0.5)) * 0.22, w);
+    } else if (e.name === "hurt") {
+      set(p.legL.hip, "x", 1.9); set(p.legL.knee, "x", -2.0);                 // pierna sana doblada
+      set(p.legR.hip, "x", 1.5); set(p.legR.knee, "x", -0.15);                // pierna herida estirada
+      set(p.torso, "x", 0.35 + Math.sin(t * 1.7) * 0.04); set(p.torso, "z", 0.06);
+      for (const a of [Lf, R]) { set(a.shoulder, "x", 1.05); set(a.elbow, "x", 0.9); }
+      set(R.shoulder, "z", 0.05); set(Lf.shoulder, "z", -0.25);
+      this.body.position.y = lerp(this.body.position.y, -0.56, w);
+      set(p.head, "x", 0.35); set(p.head, "y", Math.sin(t * 0.6) * 0.15);
     } else if (e.name === "stretch") {
       const u = Math.min(1, t / 1.1);
       for (const [a, sgn] of [[R, 1], [Lf, -1]]) { set(a.shoulder, "x", 2.9 * u); set(a.shoulder, "z", sgn * 0.35); set(a.elbow, "x", 0.15); }
@@ -397,7 +407,16 @@ export class Astronaut {
     p.head.rotation.z = 0;
     // el rebote del paso solo es visual; en el aire manda la fisica
     this.body.position.y = Math.abs(s) * 0.24 * k * (1 - f);
-    // gestos: se cancelan al caminar o saltar
-    this._applyEmote(dt, moving || flying);
+    // cojera (EVA-2 tras el rescate): la pierna derecha apenas se dobla y el cuerpo se balancea hacia ella
+    if (this.limp && k > 0.05) {
+      p.legR.hip.rotation.x *= 0.35;
+      p.legR.knee.rotation.x *= 0.25;
+      p.torso.rotation.z += Math.max(0, -s) * 0.12 * k;
+      this.body.position.y *= 0.55;
+    }
+    // baliza de emergencia: parpadeo rapido mientras esta herido
+    if (this.distress) p.mastTip.material.emissiveIntensity = Math.sin(this.clock * 14) > 0 ? 4 : 0.2;
+    // gestos: se cancelan al caminar o saltar ("hurt" no: lo controla el juego)
+    this._applyEmote(dt, (moving || flying) && !(this.emote && this.emote.name === "hurt"));
   }
 }

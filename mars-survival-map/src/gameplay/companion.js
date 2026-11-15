@@ -4,6 +4,8 @@
 //  - hace una segunda tarea en cada objetivo: mide con sus instrumentos el punto (datos reales de las capas);
 //  - en la mision del canal de Gediz Vallis resbala y queda atrapado: tienes que llegar y mantener F para
 //    ayudarlo (le pasas parte de tu O2 por la manguera de emergencia, como el "buddy breathing" de los trajes EMU).
+//    Si tardas, no se va: abre su reserva de emergencia (como el SOP de los trajes EMU) y te espera sentado.
+//    Despues del rescate cojea hasta el siguiente refugio, donde se recupera.
 // Su O2 se gasta con el modelo metabolico del astronauta de referencia y se recarga en los refugios.
 import { REF } from "../engine/physiology.js";
 
@@ -13,7 +15,7 @@ const L = (es, en) => ({ es, en });
 export const BUDDY = {
   followDist: 5, catchupDist: 40, warpDist: 160,
   rescueMission: "obj_azufre", triggerDist: 520, assistS: 3, shareO2: 8,
-  leakPerS: 0.35, abortBelow: 12, bonusTask: 15, bonusRescue: 60,
+  leakPerS: 0.35, abortBelow: 12, bonusTask: 15, bonusRescue: 60, bonusLate: 30, limpK: 0.6,
 };
 
 export class Companion {
@@ -30,13 +32,13 @@ export class Companion {
     this.st = {
       x: s.x - 3, z: s.z + 3, heading: s.heading, speed: 0, o2: 100,
       mode: "follow", route: null, routeAt: 0, stuckT: 0, assist: 0,
-      tasksDone: {}, taskT: 0, rescueDone: false, bonus: 0,
+      tasksDone: {}, taskT: 0, rescueDone: false, bonus: 0, limp: false,
     };
   }
   // al reintentar una mision el compañero vuelve con el jugador
   snapTo(s) {
     const b = this.st;
-    if (b.mode === "stuck") { b.mode = "follow"; b.assist = 0; b.o2 = Math.max(b.o2, 60); }
+    if (b.mode === "stuck" || b.mode === "reserve") { b.mode = "follow"; b.assist = 0; b.o2 = Math.max(b.o2, 60); b.limp = true; }
     if (!b.taskObj) { b.x = s.x - 3; b.z = s.z + 3; }
     b.route = null;
   }
@@ -54,22 +56,29 @@ export class Companion {
         this.emit("stuck", { x: b.x, z: b.z });
       }
     }
-    if (b.mode === "stuck") {
-      b.o2 -= BUDDY.leakPerS * dt;                         // fuga en la junta de la rodilla
+    if (b.mode === "stuck" || b.mode === "reserve") {
+      b.speed = 0;
+      if (b.mode === "stuck") b.o2 -= BUDDY.leakPerS * dt;  // fuga en la junta de la rodilla
       if (dP < 4.5 && assistHeld) {
         b.assist += dt;
         if (b.assist >= BUDDY.assistS) {
-          b.mode = "follow"; b.rescueDone = true; b.assist = 0;
+          const late = b.mode === "reserve", bonus = late ? BUDDY.bonusLate : BUDDY.bonusRescue;
+          b.mode = "follow"; b.rescueDone = true; b.assist = 0; b.limp = true;
           s.oxygen -= BUDDY.shareO2; b.o2 = Math.min(100, b.o2 + BUDDY.shareO2 * 1.5);
-          b.bonus += BUDDY.bonusRescue; s.science += BUDDY.bonusRescue;
-          this.emit("rescued", { bonus: BUDDY.bonusRescue });
+          b.bonus += bonus; s.science += bonus;
+          this.emit("rescued", { bonus, late });
         }
       } else b.assist = Math.max(0, b.assist - dt * 2);
-      if (b.o2 <= BUDDY.abortBelow) {
-        b.mode = "abort"; b.rescueDone = true;
-        this.emit("aborted", {});
+      // sin margen: abre la reserva de emergencia y espera sentado (ya no pierde O2, pero sigue herido)
+      if (b.mode === "stuck" && b.o2 <= BUDDY.abortBelow) {
+        b.mode = "reserve"; b.o2 = BUDDY.abortBelow;
+        this.emit("reserve", {});
       }
       return;
+    }
+    // cojea hasta llegar a un refugio, donde se recupera
+    if (b.limp) for (const o of Object.values(g.objectives)) {
+      if (o.shelter && Math.hypot(o.world.x - b.x, o.world.z - b.z) < g.radiusOf(o) + 8) { b.limp = false; this.emit("recovered", { where: o }); break; }
     }
 
     // ---- O2 de EVA-2 (metabolismo del astronauta de referencia) ----
@@ -78,14 +87,6 @@ export class Companion {
     b.o2 -= (100 * ((REF.o2gPerH(M) * dt * ts) / 3600)) / g.o2CapacityG;
     if (s.inShelter && dP < 30) b.o2 = Math.min(100, b.o2 + R.resources.shelter_refill.oxygen_per_s * dt);
     b.o2 = clamp(b.o2, 0, 100);
-
-    // ---- abortado: vuelve solo al rover de apoyo y desaparece de la EVA ----
-    if (b.mode === "abort") {
-      const rv = g.objectives.rover.world;
-      this._walkTo(dt, rv.x, rv.z, 1.0);
-      if (Math.hypot(rv.x - b.x, rv.z - b.z) < 10) { b.mode = "follow"; b.x = s.x - 3; b.z = s.z + 3; b.o2 = 100; this.emit("rejoined", {}); }
-      return;
-    }
 
     // ---- segunda tarea: medir junto al objetivo mientras tu escaneas (sigue aunque la mision avance) ----
     const storm = s.spe && s.spe.phase !== "ended";
@@ -122,7 +123,7 @@ export class Companion {
   // Camina hacia (tx, tz); si el camino recto esta bloqueado usa A*
   _walkTo(dt, tx, tz, k) {
     const b = this.st, W = this.world, g = this.game;
-    const v = g.rules.movement.walk_speed_mps * k;
+    const v = g.rules.movement.walk_speed_mps * k * (b.limp ? BUDDY.limpK : 1);
     let gx = tx, gz = tz;
     const now = performance.now();
     const blockedLine = () => { for (let f = 0.1; f <= 1; f += 0.1) if (W.blockedAt(b.x + (tx - b.x) * f, b.z + (tz - b.z) * f)) return true; return false; };
@@ -156,8 +157,9 @@ export class Companion {
   statusText() {
     const b = this.st;
     return {
-      follow: b.taskObj ? L("Midiendo junto al objetivo", "Measuring at the target") : L("Te sigue", "Following"), stuck: L("¡Atrapado! Ve y mantén F", "Stuck! Go and hold F"),
-      abort: L("Volviendo al rover", "Returning to the rover"),
+      follow: b.taskObj ? L("Midiendo junto al objetivo", "Measuring at the target") : b.limp ? L("Herido: cojea hasta un refugio", "Injured: limping to a shelter") : L("Te sigue", "Following"),
+      stuck: L("¡Atrapado! Ve y mantén F", "Stuck! Go and hold F"),
+      reserve: L("Reserva de emergencia: ve y mantén F", "Emergency reserve: go and hold F"),
     }[b.mode] || L("Te sigue", "Following");
   }
 }

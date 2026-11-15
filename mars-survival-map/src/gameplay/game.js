@@ -219,10 +219,41 @@ export class Game {
     s.spe = null;
     s.tutorialStep = 0;
     s.tutorialTimer = 0;
+    s.subs = this._makeSubs(this.mission);
     s.phase = "briefing";
     this.checkpoint = JSON.parse(JSON.stringify(s));
     this.emit("mission", this.mission);
   }
+
+  // Subobjetivos de una mision (missions.json -> subtargets): puntos reales de una clase mineral de CRISM
+  // alrededor del objetivo. Se eligen transitables, separados entre si y siempre los mismos (sin azar).
+  _makeSubs(m) {
+    const st = m && m.subtargets, obj = m && this.objectives[m.objective_id];
+    if (!st || !obj) return null;
+    const W = this.world, o = obj.world, R = st.radius_m || 350, minSep = st.min_sep_m || 60;
+    const want = (cls) => {
+      const cand = [];
+      for (let dz = -R; dz <= R; dz += 6) for (let dx = -R; dx <= R; dx += 6) {
+        const d = Math.hypot(dx, dz);
+        if (d > R || d < (st.min_dist_m || 40)) continue;
+        const x = o.x + dx, z = o.z + dz;
+        if (W.spectral(x, z) !== cls || W.blockedAt(x, z) || W.slope(x, z) > 18) continue;
+        cand.push([x, z, d]);
+      }
+      return cand;
+    };
+    let cand = want(st.class);
+    if (cand.length < st.count) cand = cand.concat(want(st.fallback_class ?? 2));
+    // del mas cercano al objetivo hacia fuera, respetando la separacion minima
+    cand.sort((a, b) => a[2] - b[2]);
+    const out = [];
+    for (const c of cand) {
+      if (out.every((q) => Math.hypot(q.x - c[0], q.z - c[1]) >= minSep)) out.push({ x: c[0], z: c[1], found: false, cls: W.spectral(c[0], c[1]) });
+      if (out.length >= st.count) break;
+    }
+    return out.length ? out : null;
+  }
+  get subsLeft() { return this.s.subs ? this.s.subs.filter((q) => !q.found).length : 0; }
 
   beginMission() {
     this.s.phase = "playing";
@@ -423,11 +454,22 @@ export class Game {
     if (s.oxygen <= 0) { s.oxygen = 0; this._fail("fail_oxygen"); return; }
     if (s.integrity <= 0) { s.integrity = 0; this._fail("fail_integrity"); return; }
 
+    // Subobjetivos (vetas de la mision 4): basta con llegar a menos de 6 m de cada uno
+    if (s.subs) for (const q of s.subs) {
+      if (!q.found && Math.hypot(q.x - s.x, q.z - s.z) < 6) {
+        q.found = true;
+        const pts = (this.mission.subtargets && this.mission.subtargets.points) || 20;
+        s.science += pts;
+        this.emit("subFound", { sub: q, left: this.subsLeft, points: pts });
+      }
+    }
+
     // Objetivo de la mision
     const m = this.mission;
     const obj = m.objective_id ? this.objectives[m.objective_id] : null;
     const d = obj ? this.distTo(obj) : Infinity;
-    if (obj && !s.scanned && !(s.spe && s.spe.phase !== "ended")) {
+    s.scanBlocked = !!(obj && !s.scanned && this.subsLeft > 0 && d < this.radiusOf(obj));
+    if (obj && !s.scanned && !s.scanBlocked && !(s.spe && s.spe.phase !== "ended")) {
       if (m.action === "reach") {
         if (d < this.radiusOf(obj)) { s.scanned = true; this._completeMission(); return; }
       } else if (d < this.radiusOf(obj)) {

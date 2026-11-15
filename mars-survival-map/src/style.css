@@ -67,7 +67,9 @@ button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .mission .obj { font-size: calc(var(--u) * 1.3); display: flex; align-items: center; gap: calc(var(--u) * .5); }
 .mission .obj svg { width: calc(var(--u) * 1.4); height: calc(var(--u) * 1.4); color: var(--safe); flex: none; }
 
-.tutorial { left: 50%; transform: translateX(-50%); top: calc(var(--u) * 7); padding: calc(var(--u) * .7) calc(var(--u) * 1.2); font-family: var(--font-text); font-size: calc(var(--u) * 1.3); border-color: var(--info); max-width: calc(var(--u) * 46); text-align: center; }
+.tutorial { left: 50%; transform: translateX(-50%); top: calc(var(--u) * 7); padding: calc(var(--u) * .7) calc(var(--u) * 1.2); font-family: var(--font-text); font-size: calc(var(--u) * 1.3); border-color: var(--info); text-align: center;
+  /* centrado, pero sin invadir la foto del destino ni el minimapa (derecha: 21,6u + 11u + margen) */
+  max-width: min(calc(var(--u) * 46), calc(100cqw - var(--u) * 68)); box-sizing: border-box; }
 
 .layers { right: calc(var(--u) * 2); bottom: calc(var(--u) * 2); padding: calc(var(--u) * .5); display: flex; gap: calc(var(--u) * .4); }
 .layers button { font: 600 calc(var(--u) * 1.15) var(--font-hud); background: rgba(255,255,255,.06); border: 1px solid var(--hud-border); border-radius: calc(var(--u) * .4); padding: calc(var(--u) * .45) calc(var(--u) * .7); cursor: pointer; display: flex; align-items: center; gap: calc(var(--u) * .4); }
@@ -549,3 +551,16 @@ button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .sum-h { font: 700 13px var(--font-hud); letter-spacing: .12em; text-transform: uppercase; color: var(--mars-dust); margin: 16px 0 4px; }
 .score.sum td:nth-child(2), .score.sum td:nth-child(3) { text-align: right; }
 .score.sum .hd td { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--hud-text-dim); }
+
+.chip.cold { color: #7fd1ff; border-color: #7fd1ff; }
+
+/* tarea de la tarjeta: identificar el mineral por su espectro */
+.quiz { margin: 10px 0 12px; padding: 10px 12px; border: 1px solid var(--hud-border); border-radius: 8px; background: rgba(255,255,255,.03); }
+.quiz h3 { margin: 0 0 6px; font: 700 14px var(--font-hud); letter-spacing: .04em; }
+.quiz canvas { width: 100%; height: 130px; display: block; }
+.quiz-opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.quiz-opts .right { border-color: var(--safe); color: var(--safe); }
+.quiz-opts .wrong { border-color: var(--danger); color: var(--danger); }
+.quiz-fb { margin: 8px 0 0; font-size: 13px; line-height: 1.4; color: var(--hud-text-dim); }
+.quiz-fb b { color: var(--hud-text); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
