@@ -50,14 +50,19 @@ export class Companion {
     const m = g.mission, obj = g.objectives[m.objective_id];
 
     // ---- rescate guionizado en el canal de Gediz Vallis ----
-    if (b.mode === "follow" && !b.rescueDone && m.objective_id === BUDDY.rescueMission && !(s.spe && s.spe.phase !== "ended")) {
+    // (no mientras va en el rover contigo: primero bajais los dos)
+    if (b.mode === "follow" && !b.rescueDone && !s.driving && m.objective_id === BUDDY.rescueMission && !(s.spe && s.spe.phase !== "ended")) {
       if (g.distTo(obj) < BUDDY.triggerDist && dP < 30) {
+        // si acaba de bajar del rover esta encima de ti: cae unos metros detras, en suelo transitable
+        if (b.riding || dP < 2.5) this._placeNear(s, 6);
+        b.riding = false;
         b.mode = "stuck"; b.speed = 0;
         this.emit("stuck", { x: b.x, z: b.z });
       }
     }
     if (b.mode === "stuck" || b.mode === "reserve") {
       b.speed = 0;
+      if (b.riding) { b.riding = false; if (dP < 2.5) this._placeNear(s, 6); }   // nunca herido "dentro" del rover
       if (b.mode === "stuck") b.o2 -= BUDDY.leakPerS * dt;  // fuga en la junta de la rodilla
       if (dP < 4.5 && assistHeld) {
         b.assist += dt;
@@ -118,6 +123,17 @@ export class Companion {
     if (dP < BUDDY.followDist) { b.speed = Math.max(0, b.speed - 8 * dt); return; }
     const k = dP > BUDDY.catchupDist ? 1.25 : clamp((dP - BUDDY.followDist) / 6, 0.3, 1.1);
     this._walkTo(dt, s.x, s.z, k);
+  }
+
+  // Coloca a EVA-2 a `r` metros detras del jugador (o a un lado si alli no se puede estar)
+  _placeNear(s, r) {
+    const b = this.st, W = this.world;
+    const back = s.heading + Math.PI;
+    for (const da of [0, 0.8, -0.8, 1.6, -1.6, Math.PI]) {
+      const a = back + da, x = s.x - Math.sin(a) * r, z = s.z - Math.cos(a) * r;
+      if (!W.blockedAt(x, z)) { b.x = x; b.z = z; return; }
+    }
+    b.x = s.x - 3; b.z = s.z + 3;
   }
 
   // Camina hacia (tx, tz); si el camino recto esta bloqueado usa A*
