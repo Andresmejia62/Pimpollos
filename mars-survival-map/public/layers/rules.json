@@ -4,7 +4,7 @@
   "time": {
     "time_scale": 14,
     "_time_scale": "1 s real = 14 s en Marte. El traje de 8 h dura ~34 min reales; la campana completa toma ~20-25 min.",
-    "start_local_time_h": 9.0,
+    "start_local_time_h": 17.0,
     "_clock": "Hora solar local (LMST). thermal.png corresponde a ~10:00. Si se implementa el ciclo dia/noche, interpolar entre thermal.png y thermal_night.png con day_curve."
   },
   "day_curve": {
