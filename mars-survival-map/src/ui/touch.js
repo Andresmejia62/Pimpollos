@@ -212,5 +212,24 @@ export class TouchUI {
     this.el.querySelector("#tbEmote").hidden = !!st.driving;
     if (st.driving && !this.emotes.hidden) this._emotes(false);
     this.el.querySelector("#tcRotate").hidden = window.innerWidth >= window.innerHeight;
+    this._layout();
+  }
+
+  // Coloca los controles segun el HUD real (no con distancias fijas): los botones de arriba justo debajo del panel
+  // de recursos y la fila de acciones justo encima del panel de mision. Asi no se pisan en ningun tamano de pantalla
+  // aunque los paneles crezcan (textos con tamano minimo, idioma, zona segura).
+  _layout() {
+    const box = this.el.getBoundingClientRect();
+    const res = document.querySelector("#hud .res"), mis = document.querySelector("#hud .mission");
+    const top = this.el.querySelector(".tc-top"), act = this.el.querySelector(".tc-actions");
+    const rr = res && res.getBoundingClientRect(), mr = mis && mis.getBoundingClientRect();
+    if (rr && rr.height) top.style.top = `${Math.round(rr.bottom - box.top + 8)}px`;
+    if (mr && mr.height) act.style.bottom = `${Math.round(box.bottom - mr.top + 10)}px`;
+    // el dialogo, justo debajo del tutorial cuando este esta a la vista (si no, su sitio normal)
+    const hud = document.getElementById("hud"), tut = document.getElementById("tutorial"), dlg = document.getElementById("dialog");
+    if (hud && tut && dlg) {
+      const tr = tut.hidden ? null : tut.getBoundingClientRect();
+      dlg.style.top = tr && tr.height ? `${Math.round(tr.bottom - hud.getBoundingClientRect().top + 10)}px` : "";
+    }
   }
 }

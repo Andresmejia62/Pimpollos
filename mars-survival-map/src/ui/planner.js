@@ -1,4 +1,7 @@
 // Vista de planificacion antes de salir: comparar rutas, ver su perfil de elevacion y estimar el consumo.
+import { TOUCH } from "../device.js";
+// en pantallas tactiles las instrucciones dicen "toca" en lugar de "clic"
+const tc = (o) => t(TOUCH ? { es: o.es.replace(/Haz clic en el mapa|Clic en el mapa/g, "Toca el mapa"), en: o.en.replace(/Click the map/g, "Tap the map") } : o);
 import { t, ui, getLang } from "../i18n.js";
 import { assetUrl } from "../data.js";
 import { estimateRoute } from "../gameplay/planner.js";
@@ -235,10 +238,10 @@ export class Planner {
 
   render() {
     const lang = getLang();
-    $("planHint").textContent = t(L("Clic en el mapa = punto de paso para «Tu ruta» · las estimaciones usan tu perfil físico y tu carga", "Click the map = waypoint for “Your route” · estimates use your physical profile and load"));
+    $("planHint").textContent = tc(L("Clic en el mapa = punto de paso para «Tu ruta» · las estimaciones usan tu perfil físico y tu carga", "Click the map = waypoint for “Your route” · estimates use your physical profile and load"));
     if (this.free) {
       document.querySelectorAll("#planPick [data-pick]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.pick === this.pick)));
-      $("planHint").textContent = t({
+      $("planHint").textContent = tc({
         goal: L("Clic en el mapa = tu destino (cualquier punto transitable del recorte de 6,1 km)", "Click the map = your destination (any walkable point of the 6.1 km crop)"),
         start: L("Clic en el mapa = punto de salida: el astronauta se coloca ahí al aplicar", "Click the map = start point: the astronaut is placed there when you apply"),
         way: L("Clic en el mapa = punto de paso para «Tu ruta» · las estimaciones usan tu perfil físico y tu carga", "Click the map = waypoint for “Your route” · estimates use your physical profile and load"),
@@ -247,7 +250,7 @@ export class Planner {
     if (!this.goal || !this.routes[this.sel]) {
       // modo libre sin destino (o sin ninguna ruta posible): solo el mapa y las instrucciones
       $("planRoutes").innerHTML = `<div class="pr-card empty"><span class="sw" style="background:#3DDC97"></span><div><b>${t(this.goal ? L("No hay ruta hasta ese punto", "No route to that point") : L("Sin destino todavía", "No destination yet"))}</b>
-        <p>${t(this.goal ? L("Elige otro destino u otra salida.", "Pick another destination or start point.") : L("Haz clic en el mapa para definirlo. Después verás la ruta segura (A*), la línea recta, la escala en un refugio y tu propia ruta, con su consumo estimado.", "Click the map to set it. You will then see the safe route (A*), the straight line, the shelter stop and your own route, with their estimated cost."))}</p></div></div>`;
+        <p>${tc(this.goal ? L("Elige otro destino u otra salida.", "Pick another destination or start point.") : L("Haz clic en el mapa para definirlo. Después verás la ruta segura (A*), la línea recta, la escala en un refugio y tu propia ruta, con su consumo estimado.", "Click the map to set it. You will then see the safe route (A*), the straight line, the shelter stop and your own route, with their estimated cost."))}</p></div></div>`;
       $("planDetail").innerHTML = "";
       $("planUse").disabled = !(this.free && (this.goal || this.startMoved));
       this.draw();
@@ -256,7 +259,7 @@ export class Planner {
     }
     $("planRoutes").innerHTML = Object.keys(KINDS).map((k) => {
       const r = this.routes[k], K = KINDS[k];
-      if (!r) return k === "custom" ? `<div class="pr-card empty"><span class="sw" style="background:${K.color}"></span><div><b>${t(K.name)}</b><p>${t(K.desc)}</p></div></div>` : "";
+      if (!r) return k === "custom" ? `<div class="pr-card empty"><span class="sw" style="background:${K.color}"></span><div><b>${t(K.name)}</b><p>${tc(K.desc)}</p></div></div>` : "";
       const e = r.est, [vt, vc] = VERDICT[e.verdict];
       const sw = this._storm(e);
       return `<button class="pr-card" data-k="${k}" aria-pressed="${k === this.sel}"><span class="sw" style="background:${K.color}"></span>

@@ -664,5 +664,132 @@ body.touch #hud .panel.sim, body.touch #hud .panel.sim * , body.touch #hud butto
 .tc-rotate { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); max-width: 80%; padding: 12px 16px; border-radius: 12px; background: rgba(14,10,12,.82); color: #fff; font-size: 16px; text-align: center; }
 .tc-rotate[hidden] { display: none; }
 /* el dialogo sube arriba para dejar la esquina izquierda al joystick; los avisos, a media altura */
-body.touch .dialog { left: 50%; transform: translateX(-50%); bottom: auto; top: calc(var(--u) * 12); width: min(calc(var(--u) * 52), 52%); }
+body.touch .dialog { left: 50%; transform: translateX(-50%); bottom: auto; top: calc(var(--u) * 12); width: min(calc(var(--u) * 52), 48%); }
 body.touch .alerts { bottom: auto; top: calc(var(--u) * 34); }
+
+/* =================================================================================================================
+   Pantallas pequenas (moviles y ventanas bajas). Todo sigue escalando con el tamano de la pantalla, pero con
+   minimos legibles para el texto y una disposicion compacta: lo esencial a la vista y el resto a un toque.
+   ================================================================================================================= */
+.atlas-drawer-btn { display: none; }
+
+/* ---- atlas: mapa a pantalla completa, herramientas en una fila y paneles deslizantes -------------------------- */
+@media (max-width: 900px), (max-height: 560px) {
+  .screen.atlas { overflow: hidden; }
+  .atlas-wrap { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "top" "map"; height: 100vh; height: 100dvh; min-height: 0; }
+  .atlas-top { flex-wrap: nowrap; padding: 6px max(8px, env(safe-area-inset-right)) 6px max(8px, env(safe-area-inset-left)); gap: 6px; }
+  .atlas-title { display: none; }
+  .atlas-tools { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; width: 100%; padding: 2px 0; }
+  .atlas-tools::-webkit-scrollbar { display: none; }
+  .atlas-tools > * { flex: none; }
+  .atlas-tools .btn.sm, .atlas-tools select { min-height: 38px; }
+  .atlas-drawer-btn { display: inline-flex; align-items: center; }
+  .atlas-tools #atlasClose { order: -1; }              /* cerrar siempre a la vista, al principio de la fila */
+  .atlas-drawer-btn[aria-pressed="true"] { background: var(--hud-text); color: #120e10; }
+  /* los paneles se superponen al mapa (misma celda de la cuadricula), uno a la vez */
+  .atlas-side, .atlas-info, .atlas-bottom { display: none; grid-area: map; z-index: 5; box-shadow: 0 0 30px rgba(0,0,0,.6); }
+  .atlas-wrap.show-side .atlas-side { display: block; justify-self: start; width: min(300px, 82vw); border-right: 1px solid var(--hud-border); border-top: 0; padding-left: max(14px, env(safe-area-inset-left)); }
+  .atlas-wrap.show-info .atlas-info { display: block; justify-self: end; width: min(380px, 88vw); border-left: 1px solid var(--hud-border); border-top: 0; max-height: none; padding-right: max(14px, env(safe-area-inset-right)); }
+  .atlas-wrap.show-prof .atlas-bottom { display: grid; align-self: end; max-height: 70%; overflow: auto; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+  .atlas-map { min-height: 0; }
+  .atlas-search { left: max(8px, env(safe-area-inset-left)); top: 8px; max-width: min(320px, calc(100% - 90px)); }
+  .atlas-search input { font-size: 16px; padding: 8px 10px; }       /* 16 px: iOS no hace zoom al escribir */
+  .atlas-zoom { right: max(8px, env(safe-area-inset-right)); top: 8px; }
+  .atlas-zoom button { width: 44px; height: 44px; }
+  .atlas-legend { transform: scale(.8); transform-origin: left bottom; left: max(8px, env(safe-area-inset-left)); bottom: max(8px, env(safe-area-inset-bottom)); }
+}
+
+/* ---- HUD del juego: textos con minimo legible y la tarjeta de la Navcam fuera en pantallas bajas ------------- */
+@media (max-height: 560px), (max-width: 760px) {
+  .mission { width: max(calc(var(--u) * 26), 210px); }
+  .mission .lbl { font-size: max(calc(var(--u) * 1.05), 10px); }
+  .mission .t { font-size: max(calc(var(--u) * 1.75), 15px); }
+  .mission .obj { font-size: max(calc(var(--u) * 1.3), 12px); }
+  .dialog .who { font-size: max(calc(var(--u) * 1.15), 11px); }
+  .dialog .tx { font-size: max(calc(var(--u) * 1.3), 12.5px); }
+  .tutorial { font-size: max(calc(var(--u) * 1.3), 12.5px); max-width: 70%; }
+  .alert .tt { font-size: max(calc(var(--u) * 1.1), 10.5px); }
+  .alert .tx { font-size: max(calc(var(--u) * 1.2), 12px); }
+  .layers button { font-size: max(calc(var(--u) * 1.15), 11px); padding: max(calc(var(--u) * .45), 5px) max(calc(var(--u) * .7), 7px); }
+  .layers button kbd { font-size: max(calc(var(--u) * 1), 10px); }
+  .minimap .cap { font-size: max(calc(var(--u) * 1.05), 10px); }
+  .compass .strip span { font-size: max(calc(var(--u) * 1.25), 11px); }
+  .compass .tgt { font-size: max(calc(var(--u) * 1), 10px); }
+  .res .pct { font-size: max(calc(var(--u) * 1.45), 12px); }
+  .structcard .lbl, .structcard dl { font-size: max(calc(var(--u) * .95), 10px); }
+  .structcard .t { font-size: max(calc(var(--u) * 1.45), 13px); }
+  .structcard .tx { font-size: max(calc(var(--u) * .98), 11px); }
+  .structcard .src { font-size: max(calc(var(--u) * .8), 9.5px); }
+  .telem { font-size: max(calc(var(--u) * .86), 9.5px); }
+  .telem .th { font-size: max(calc(var(--u) * .95), 10px); }
+  .povhud { display: none; }          /* foto de la Navcam: con letra de 6 px no aporta en un movil */
+}
+
+/* ---- pantallas y tarjetas en alturas bajas (movil en horizontal) ------------------------------------------- */
+@media (max-height: 560px) {
+  .screen { padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left)); }
+  .card { padding: 16px 20px; }
+  .card h2 { font-size: clamp(20px, 5.5vh, 30px); margin: 4px 0 8px; }
+  .card.briefing, .card.factcard, .card.endcard, .card.guide, .card.profile { max-height: calc(100dvh - 16px); }
+  /* portada */
+  .title-screen { overflow: auto; place-items: center start; }
+  .title { margin: 4px 0 6px; }
+  .title .brand { font-size: clamp(30px, 10vh, 96px); }
+  .title .brand-sub { font-size: clamp(15px, 4.6vh, 40px); }
+  .brand-slogan { font-size: 12px; margin: 0 0 8px; }
+  .subtitle { font-size: 14px; margin: 0 0 10px; }
+  .menu-main { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .menu-btn { padding: 10px 14px; }
+  .menu-btn small { font-size: 12px; }
+  .menu-sub { margin-top: 8px; }
+  .menu-controls { display: none; }
+  .sky-caption { display: none; }
+  .credits { left: auto; right: max(12px, env(safe-area-inset-right)); bottom: 6px; max-width: 40vw; text-align: right; font-size: 10px; line-height: 1.3; }
+  /* carga */
+  .load-screen { overflow: auto; place-items: center; }
+  .load-grid { grid-template-columns: auto minmax(0, 1fr); gap: 16px; }
+  .globe-wrap { width: min(150px, 24vw); }
+  .load-title { font-size: clamp(28px, 9vh, 76px); }
+  .load-pct b { font-size: 28px; }
+  .load-steps { font-size: 12.5px; gap: 3px; }
+  .load-now dl { font-size: 12px; }
+  .load-tip { font-size: 12.5px; min-height: 0; }
+  /* perfil: botones siempre a la vista y dos columnas si hay anchura */
+  .card.profile { overflow-y: auto; padding-bottom: 0; }
+  .card.profile > .btnrow:last-child { position: sticky; bottom: 0; z-index: 1; margin-top: 8px; padding: 10px 0 12px; background: linear-gradient(rgba(22,18,26,0), var(--hud-bg-solid) 12px); }
+  /* pausa */
+  .card.pause { max-height: calc(100dvh - 16px); }
+  .pause-nav { gap: 6px; padding: 12px 14px; }
+  .pause-nav > .btn { padding: 8px 12px; font-size: 14px; }
+  .pause-clock { font-size: 11.5px; margin-bottom: 4px; }
+  .pause-tabs { margin: 6px 0; padding-top: 6px; }
+  .pause-tabs button { padding: 6px 10px; font-size: 14px; }
+  .pause-body { padding: 14px 18px; }
+}
+@media (max-height: 560px) and (min-width: 640px) {
+  .pf-grid { grid-template-columns: 1fr 1fr; }
+  /* planificador: mapa y detalles lado a lado, a la altura de la pantalla */
+  #scrPlan { place-items: center; overflow: hidden; }
+  .card.plan { max-height: calc(100dvh - 16px); height: calc(100dvh - 16px); padding: 10px 14px; gap: 8px; }
+  .plan-head h2 { font-size: 18px; }
+  .plan-grid { grid-template-columns: minmax(0, 1.1fr) minmax(260px, 1fr); }
+  .plan-map { min-height: 0; height: auto; }
+}
+/* movil: el pie del minimapa en una linea (el dialogo se coloca bajo el tutorial desde ui/touch.js) */
+body.touch .minimap .cap > span:last-child { display: none; }
+@media (max-height: 560px) { .plan-hint { font-size: 11px; padding: 3px 7px; left: 6px; right: 6px; bottom: 6px; } }
+/* pausa en alturas bajas: botones en dos columnas, pestanas en dos columnas y la columna se puede desplazar */
+@media (max-height: 560px) {
+  .card.pause { grid-template-columns: 300px minmax(0, 1fr); }
+  .pause-nav { overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; align-content: start; }
+  .pause-nav > :not(.btn) { grid-column: 1 / -1; }
+  .pause-nav > .btn { font-size: 12.5px; padding: 8px 8px; text-align: center; line-height: 1.15; }
+  .pause-tabs { grid-template-columns: 1fr 1fr; }
+  .pause-foot { margin-top: 4px; }
+}
+/* alturas muy bajas: minimapa limitado por la altura para dejar sitio a la fila de acciones */
+@media (max-height: 560px) {
+  .minimap { width: min(calc(var(--u) * 19), 34vh); }
+}
+/* movil estrecho: las acciones de contexto solo con icono (la fila ocupa menos y no alcanza al dialogo) */
+@media (max-width: 760px) { .tc-ctx .tbtn em { display: none; } }

@@ -284,14 +284,27 @@ export class Atlas {
       this.hover = this.unproject(p.x, p.y);
       this._hoverAt(p, !!drag);
       if (touches.has(e.pointerId)) touches.set(e.pointerId, [e.clientX, e.clientY]);
-      // pellizco con dos dedos: zoom alrededor del punto medio
+      // dos dedos: pellizco = zoom alrededor del punto medio; en el globo 3D, ademas, girar los dedos = rumbo y
+      // deslizarlos juntos en vertical = inclinacion (lo que en el ordenador es boton derecho o Ctrl + arrastrar)
       if (touches.size === 2) {
         const [a, b] = [...touches.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+        const ang = Math.atan2(b[1] - a[1], b[0] - a[0]), my = (a[1] + b[1]) / 2;
         const r = this.cv.getBoundingClientRect();
-        if (pinch) this.zoomAt((a[0] + b[0]) / 2 - r.left, (a[1] + b[1]) / 2 - r.top, d / pinch);
+        if (pinch) {
+          this.zoomAt((a[0] + b[0]) / 2 - r.left, (a[1] + b[1]) / 2 - r.top, d / pinch);
+          if (this.on3d && this._two) {
+            let da = ang - this._two.ang;
+            da = Math.atan2(Math.sin(da), Math.cos(da));
+            this.g3.cam.heading = (this.g3.cam.heading - (da * 180) / Math.PI + 360) % 360;
+            this.g3.cam.tilt = Math.max(0, Math.min(80, this.g3.cam.tilt - (my - this._two.my) * 0.35));
+          }
+        }
+        this._two = { ang, my };
         pinch = d; moved = 99; drag = null;
+        this.dirty = true;
         return;
       }
+      this._two = null;
       if (drag) {
         const dx = e.clientX - drag[0], dy = e.clientY - drag[1];
         moved += Math.abs(dx) + Math.abs(dy);
@@ -304,10 +317,13 @@ export class Atlas {
     });
     cv.addEventListener("pointerup", (e) => {
       touches.delete(e.pointerId);
+      if (touches.size < 2) this._two = null;
       if (drag && moved < 5 && !orbit) this._click(this._evt(e), e.shiftKey);
       drag = null;
     });
     $("atlas3d").onclick = () => this.set3d(!this.is3d);
+    // paneles deslizantes en pantallas pequenas (capas, informacion, perfil): uno abierto a la vez
+    document.querySelectorAll("#scrAtlas [data-drawer]").forEach((b) => { b.onclick = () => this.drawer(b.dataset.drawer); });
     $("atlasExag").onchange = (e) => { if (this.g3) this.g3.exagMode = e.target.value; this.dirty = true; };
     $("atlasZoomIn").onclick = () => this.zoomAt(this.W / 2, this.H / 2, 1.8);
     $("atlasZoomOut").onclick = () => this.zoomAt(this.W / 2, this.H / 2, 1 / 1.8);
@@ -642,7 +658,7 @@ export class Atlas {
     const loop = () => { if (!this.isOpen) return; if (this.dirty) this.render(); requestAnimationFrame(loop); };
     requestAnimationFrame(loop);
   }
-  close() { this.isOpen = false; this._tourId = 0; if (this.fx) this.fx.stop(); $("scrAtlas").hidden = true; this.onClose && this.onClose(); }
+  close() { this.isOpen = false; this._tourId = 0; if (this.fx) this.fx.stop(); this.drawer(null, true); $("scrAtlas").hidden = true; this.onClose && this.onClose(); }
   toggle(where) { this.isOpen ? this.close() : this.open(where); }
 
   playerLL() { const s = this.game.s; return this.geo.toLatLon(s.x, s.z); }
@@ -1086,7 +1102,22 @@ export class Atlas {
       this.selected = it.kind === "feature" ? { f: it.f } : it.kind === "phenomenon" ? { ph: it.ph, zone: it.zone } : it;
     } else this.selected = ll ? { kind: "point", ll } : null;
     this._info();
+    // pantalla pequena: tocar un simbolo abre su ficha; tocar el mapa vacio cierra los paneles
+    if (this.compact) this.drawer(best ? "info" : null, true);
     this.dirty = true;
+  }
+
+  // Diseno compacto (movil, ventanas pequenas): el mapa ocupa todo y los paneles se abren encima
+  get compact() { return window.matchMedia("(max-width: 900px), (max-height: 560px)").matches; }
+  // which: "side" | "info" | "prof" | null; force = abrir (o cerrar con null) sin alternar
+  drawer(which, force = false) {
+    const wrap = document.querySelector("#scrAtlas .atlas-wrap");
+    const cur = ["side", "info", "prof"].find((k) => wrap.classList.contains("show-" + k)) || null;
+    const next = force ? which : cur === which ? null : which;
+    for (const k of ["side", "info", "prof"]) wrap.classList.toggle("show-" + k, k === next);
+    document.querySelectorAll("#scrAtlas [data-drawer]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.drawer === next)));
+    if (next === "prof") this._profile();               // el lienzo del perfil tenia tamano 0 mientras estaba oculto
+    if (next === "info") this._info();
   }
 
   _hint() {
