@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { UP, std, glow, at, box, cyl, ball, castAll, MAT, dish, makeWheel } from "./props.js";
+import { addWalkIn } from "./interiors.js";
 
 // Estructuras que pueblan el mapa. Sus posiciones vienen de public/layers/structures.json, que
 // data/scripts/build_structures.mjs calcula con la traza de Curiosity y las capas de NASA.
@@ -192,7 +193,8 @@ function buildIsru(ms, e, rnd) {
 }
 
 function buildGreenhouse(ms, e, rnd) {
-  const { g, col } = site(ms, e, rnd() * 6.28);
+  const yaw = rnd() * 6.28;
+  const { g, col, y0 } = site(ms, e, yaw);
   g.add(cyl(5.0, 5.3, 2.4, MAT.base, 0, -0.8, 0, 32), cyl(4.9, 4.9, 0.25, MAT.hull, 0, 0.5, 0, 32));
   for (let i = 0; i < 3; i++) {
     const lz = (i - 1) * 2.3;
@@ -208,12 +210,21 @@ function buildGreenhouse(ms, e, rnd) {
   // la cupula transparente no proyecta sombra y se dibuja al final
   const dome = at(new THREE.Mesh(new THREE.SphereGeometry(4.8, 32, 14, 0, Math.PI * 2, 0, Math.PI / 2), M.dome), 0, 0.6, 0);
   dome.renderOrder = 3;
+  // esclusa abierta: se entra caminando (paredes, techo y suelo con rampa hasta el terreno)
   const lock = new THREE.Group();
-  lock.add(box(2, 2.4, 2.6, MAT.hull, 0, 1.3, 5.6), box(1.2, 2.0, 0.1, MAT.dark, 0, 1.2, 6.92), box(1.3, 0.1, 0.08, M.blinkGreen, 0, 2.35, 6.93));
+  for (const sx of [-1, 1]) lock.add(box(0.2, 2.4, 2.8, MAT.hull, sx * 1.0, 1.85, 5.95));
+  lock.add(box(2.2, 0.2, 2.8, MAT.hull, 0, 3.15, 5.95), box(2.2, 0.35, 0.2, MAT.hull, 0, 2.9, 7.35), box(1.3, 0.1, 0.08, M.blinkGreen, 0, 2.7, 7.46));
   castAll(lock);
+  dome.raycast = () => {};                                   // la camara puede entrar
   g.add(lock, dome);
-  col.circle(0, 0, 5.1);
-  col.box(0, 5.8, 1.05, 1.4);
+  const it = addWalkIn(ms, { id: e.id, name: e.name, x: e.x, z: e.z, yaw, r: 4.75, floorY: y0 + 0.63, wallTop: y0 + 8, doors: [{ a: 0, len: 2.9, w: 1.6 }] });
+  const d = it.doors[0], inY = y0 + 0.63, len = 2.9;
+  const ramp = box(1.7, 0.1, Math.hypot(len, inY - d.outerY), MAT.hull2, 0, 0, 0);
+  ramp.position.set(e.x + d.ux * (4.75 + len / 2), (inY + d.outerY) / 2, e.z + d.uz * (4.75 + len / 2));
+  ramp.rotation.order = "YXZ"; ramp.rotation.y = Math.atan2(d.ux, d.uz); ramp.rotation.x = Math.atan2(inY - d.outerY, len);
+  ms.scene.add(ramp);
+  // bancales (no se pisan): dejan dos pasillos de 1 m entre las hileras
+  for (let i = 0; i < 3; i++) col.box(0, (i - 1) * 2.3, i === 1 ? 3.7 : 2.8, 0.66, y0 + 1.45);
   ms.scene.add(g);
   ms.structures.push({ group: g, x: e.x, z: e.z });
   return g;
@@ -416,6 +427,7 @@ function buildCommDish(ms, e, rnd) {
   g.add(cyl(0.9, 1.2, 2.4, M.white, 0, 1.6, 0, 18));
   const cy = sv.gy(3.6, 0) - g.position.y;
   const az = new THREE.Group();                        // azimut (gira despacio siguiendo a la Tierra)
+  az.userData.dynamic = true;                          // se anima: no se fusiona (engine/merge.js)
   az.position.y = 2.8;
   az.add(box(2.2, 0.4, 1.0, M.white, 0, 0.2, 0));
   for (const sx of [-1, 1]) az.add(box(0.25, 2.2, 0.6, M.white, sx * 0.95, 1.3, 0));
@@ -532,6 +544,7 @@ function buildHeliPad(ms, e, rnd) {
   for (let i = 0; i < 4; i++) { const lx = Math.cos(i * 1.571) * 2.75, lz = Math.sin(i * 1.571) * 2.75; g.add(ball(0.09, M.blinkGreen, lx, gy(lx, lz) + 0.12, lz, 6)); }
   // dron (escalado x2 para que se vea: el real mide 49 cm de alto y 1,2 m de rotor)
   const drone = new THREE.Group();
+  drone.userData.dynamic = true;
   const k = 2;
   drone.add(box(0.2 * k, 0.14 * k, 0.2 * k, M.foil, 0, 0.3 * k, 0));
   for (let i = 0; i < 4; i++) {

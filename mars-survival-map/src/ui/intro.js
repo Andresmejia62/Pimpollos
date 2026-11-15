@@ -164,7 +164,8 @@ export class IntroCinematic {
     $("introWarn").hidden = true;
     $("introHud").hidden = false;
     this.light = marsNow().lightMin;
-    this._setupSpace();
+    // sin un segundo contexto WebGL (limite del navegador o GPU ocupada) se salta la cinematica
+    try { this._setupSpace(); } catch (e) { console.warn("Cinemática omitida", e); this.sp = null; this._finish(); return; }
     cine.start();
     this.last = performance.now();
     const loop = (now) => {
@@ -185,7 +186,8 @@ export class IntroCinematic {
     if (this.sp) return;
     const cv = $("introCanvas");
     const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
-    renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+    // 1,5x basta en pantallas retina (a 2x serian ~10 Mpx por fotograma solo para el espacio)
+    renderer.setPixelRatio(Math.min(1.5, devicePixelRatio || 1));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x020103);
@@ -440,7 +442,7 @@ export class IntroCinematic {
     const lang = getLang(), tt = this.t;
     const phase = tt < 3.4 ? L("Aproximación a Marte", "Approaching Mars") : tt < T_SPACE ? L("Entrada atmosférica · escudo térmico a ~1 500 °C", "Atmospheric entry · heat shield at ~1,500 °C")
       : tt < T_IMPACT ? L("Descenso sin paracaídas", "Descent without parachute") : L("Impacto", "Impact");
-    $("introHud").innerHTML = `
+    const html = `
       <div class="ih-t">${t(L("Expedición Aeolis-1 · módulo de descenso", "Aeolis-1 expedition · descent module"))}</div>
       <div class="ih-p">${t(phase)}</div>
       <dl>
@@ -449,6 +451,8 @@ export class IntroCinematic {
         <dt>VEL</dt><dd>${this.speed != null ? num(this.speed, 2, lang) + " km/s" : "—"}</dd>
         <dt>${t(L("SEÑAL", "SIGNAL"))}</dt><dd>${t(L("llega a la Tierra en", "reaches Earth in"))} ${num(this.light || 0, 1, lang)} min</dd>
       </dl>`;
+    // solo se reescribe si cambia (antes se reconstruia el HTML en cada fotograma)
+    if (html !== this._hudHtml) { this._hudHtml = html; $("introHud").innerHTML = html; }
   }
 
   skip() {

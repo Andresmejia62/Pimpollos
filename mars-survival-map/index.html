@@ -13,6 +13,7 @@
   <canvas id="view" tabindex="0" aria-label="Vista 3D del Monte Sharp"></canvas>
 
   <div id="hud" hidden>
+    <div class="visor-dust" id="visorDust"></div>
     <div class="visor"></div>
     <div class="storm-tint" id="stormTint" hidden></div>
     <canvas class="storm-fx" id="stormFx" width="480" height="270" hidden aria-hidden="true"></canvas>
@@ -86,6 +87,8 @@
     <div class="prompt buddy-prompt" id="buddyPrompt" hidden><kbd>F</kbd><span id="buddyPromptText"></span><i id="buddyAssist"></i></div>
     <div class="hint" id="lockHint"></div>
     <div class="clock" id="clock"></div>
+    <div class="wx-chip" id="wxChip" hidden></div>
+    <div class="prompt visor-prompt" id="visorPrompt" hidden><kbd>V</kbd><span data-ui="wipeVisor"></span></div>
     <div class="fps" id="fps" hidden></div>
   </div>
 
@@ -245,6 +248,7 @@
     </div>
   </div>
 
+  <div class="ach-toast" id="achToast" role="status" aria-live="polite" hidden></div>
   <div class="screen dim" id="scrEnd" hidden>
     <div class="card endcard" id="endCard"></div>
   </div>
@@ -263,6 +267,8 @@
           <button role="tab" data-tab="body" aria-selected="false" data-ui="tabBody"></button>
           <button role="tab" data-tab="controls" aria-selected="false" data-ui="tabControls"></button>
           <button role="tab" data-tab="mars" aria-selected="false" data-ui="tabMars"></button>
+          <button role="tab" data-tab="sound" aria-selected="false" data-ui="tabSound"></button>
+          <button role="tab" data-tab="ach" aria-selected="false" data-ui="tabAch"></button>
         </div>
         <div class="pause-foot">
           <button class="btn sm" id="btnPauseLang">ES · EN</button>

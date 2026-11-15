@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { markAnimated, mergeChildren } from "./merge.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { assetUrl } from "../data.js";
 
@@ -253,14 +254,45 @@ export class Astronaut {
     const legL = mkLeg(-1), legR = mkLeg(1);
 
     g.add(torso);
-    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    // solo las piezas grandes dan sombra (tornillos, franjas y luces no se ven en el mapa de sombras)
+    g.traverse((o) => {
+      if (!o.isMesh) return;
+      if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+      o.castShadow = o.geometry.boundingSphere.radius >= 0.07;
+    });
     this.parts = { torso, head, pack, armL, armR, legL, legR, mastTip, mast, face, shell, shellOpen, rim, crest, lamps: [lampL, lampR, beamL, beamR] };
+    // piezas que se muestran u ocultan segun la apariencia: no se fusionan (engine/merge.js)
+    for (const o of [mastTip, mast, face, shell, shellOpen, rim, crest, lampL, lampR, beamL, beamR]) if (o) o.userData.dynamic = true;
     this.M = M;
     this.body = g;
     this.root.add(g);
   }
 
   // Aplica la apariencia elegida en el perfil (colores del traje, visera, cara y accesorios)
+  // Fusiona las piezas que se mueven juntas (menos llamadas de dibujo y de sombra). Recorre la marcha, el salto
+  // y todos los gestos para detectar que nodos se animan, y deja al astronauta en reposo.
+  optimize() {
+    if (!this.parts || this._optimized) return null;
+    this._optimized = true;
+    const r = this.root;
+    markAnimated(r, (i) => {
+      const sp = [0, 1.2, 3, 6, 0.5, 2][i % 6];
+      this.update(0.08, sp, 0, i % 3 ? 0 : 0.6, 0, i * 0.3, i % 3 === 0 ? 0.8 : 0, { grade: (i % 4) * 0.1, fatigue: (i % 5) / 5, load: 10 + i, chest: (i % 2) * 0.8, night: i % 2 });
+      if (i === 5) this.land(4);
+    }, 12);
+    // gestos
+    for (const name of Object.keys(EMOTES)) {
+      const before = []; r.traverse((o) => before.push([o, o.position.clone(), o.quaternion.clone(), o.scale.clone()]));
+      this.playEmote(name);
+      for (let k = 0; k < 14; k++) this.update(0.12, 0, 0, 0, 0, 0, 0, {});
+      for (const [o, p, q, sc] of before) if (o !== r && (p.distanceToSquared(o.position) > 1e-10 || Math.abs(q.dot(o.quaternion)) < 1 - 1e-7 || sc.distanceToSquared(o.scale) > 1e-10)) o.userData.animated = true;
+      this.stopEmote();
+      for (let k = 0; k < 30; k++) this.update(0.1, 0, 0, 0, 0, 0, 0, {});
+      this.emote = null;
+    }
+    return mergeChildren(r, { minShadow: 0.1 });
+  }
+
   setLook(look) {
     const l = sanitizeLook(look), O = LOOK_OPTIONS, M = this.M, p = this.parts;
     this.look = l;
@@ -353,9 +385,19 @@ export class Astronaut {
 
   // speed en m/s del mundo; el paso es un "salto" de baja gravedad (38 % de la terrestre)
   // air: metros sobre el suelo (0 = apoyado)
-  update(dt, speed, x, y, z, heading, air = 0) {
+  // Golpe al aterrizar: las rodillas absorben el impacto (impact en m/s)
+  land(impact) { this.squashV = (this.squashV || 0) + Math.min(3, impact * 0.4); }
+
+  // opts: { grade (subida/avance), fatigue 0..1, load (kg ademas del traje), chest 0..1.4 (respiracion),
+  //         night 0..1 (enciende las luces del casco) }
+  update(dt, speed, x, y, z, heading, air = 0, opts = {}) {
     this.root.position.set(x, y, z);
-    this.root.rotation.y = heading;
+    // giro suave hacia el rumbo (el juego cambia el rumbo de golpe) e inclinacion hacia la curva
+    const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+    if (this.yaw == null) this.yaw = heading;
+    const dYaw = wrap(heading - this.yaw);
+    this.yaw += dYaw * Math.min(1, dt * 11);
+    this.root.rotation.y = this.yaw;
     if (this.mixer) {
       this.mixer.update(dt);
       return;
@@ -363,34 +405,50 @@ export class Astronaut {
     const p = this.parts;
     if (!p) return;
     this.clock += dt;
+    const grade = Math.max(-0.6, Math.min(0.6, opts.grade || 0)), fat = Math.min(1, Math.max(0, opts.fatigue || 0));
+    const load = opts.load || 0;
     const flying = air > 0.25;
     const moving = speed > 0.2 && !flying;
-    this.gait = lerp(this.gait, moving ? Math.min(1, speed / 5) : 0, Math.min(1, dt * 7));
+    this.gait = lerp(this.gait, moving ? Math.min(1, speed / 4.5) : 0, Math.min(1, dt * 6));
     this.fly = lerp(this.fly || 0, flying ? 1 : 0, Math.min(1, dt * 9));
     const k = this.gait, f = this.fly;
-    this.phase += dt * (2.2 + speed * 0.35) * (moving ? 1 : k);
+    // cadencia ligada a la velocidad sobre el suelo (los pies no patinan): en baja gravedad la zancada se alarga
+    // y aparece una fase aerea ("lope" de las EVA lunares). phase avanza 1 por paso.
+    const sc = this.root.scale.x || 1;
+    const stepLen = (0.85 + 0.13 * speed) * sc * (1 - 0.25 * Math.max(0, grade)) * (1 - 0.15 * fat);
+    const prev = this.phase;
+    this.phase += dt * (moving ? speed / stepLen : 0.8 * k);
+    if (moving && Math.floor(this.phase - 0.5) !== Math.floor(prev - 0.5) && this.onFootfall) this.onFootfall(Math.floor(this.phase) % 2 ? 1 : -1, speed);
     const a = this.phase * Math.PI;
     const s = Math.sin(a), c = Math.cos(a);
-    const breathe = Math.sin(this.clock * 1.6);
+    const chest = opts.chest != null ? opts.chest : 0.3 + 0.3 * Math.sin(this.clock * 1.6);
+    const swing = 0.62 * (1 - 0.3 * Math.max(0, grade)) * (1 - 0.2 * fat);
 
     // piernas: el muslo oscila y la rodilla se flexiona mientras la pierna avanza
-    p.legL.hip.rotation.x = s * 0.62 * k;
-    p.legR.hip.rotation.x = -s * 0.62 * k;
+    p.legL.hip.rotation.x = s * swing * k;
+    p.legR.hip.rotation.x = -s * swing * k;
     p.legL.knee.rotation.x = -(0.08 + 0.85 * Math.max(0, c)) * k;
     p.legR.knee.rotation.x = -(0.08 + 0.85 * Math.max(0, -c)) * k;
-    // brazos en contrafase, codos algo recogidos (el traje presurizado no deja estirarlos)
-    p.armL.shoulder.rotation.x = -s * 0.5 * k + 0.04 * breathe * (1 - k);
-    p.armR.shoulder.rotation.x = s * 0.5 * k - 0.04 * breathe * (1 - k);
+    // brazos en contrafase, codos algo recogidos (el traje presurizado no deja estirarlos); con fatiga, menos braceo
+    const arm = 0.5 * (1 - 0.45 * fat);
+    p.armL.shoulder.rotation.x = -s * arm * k + 0.03 * chest * (1 - k);
+    p.armR.shoulder.rotation.x = s * arm * k + 0.03 * chest * (1 - k);
     p.armL.elbow.rotation.x = 0.28 + 0.4 * k + 0.2 * Math.max(0, -s) * k;
     p.armR.elbow.rotation.x = 0.28 + 0.4 * k + 0.2 * Math.max(0, s) * k;
-    // torso: se inclina al avanzar, gira un poco con el paso y respira en reposo
-    p.torso.rotation.x = -0.12 * k;
+    // torso: se inclina hacia delante cuesta arriba y con carga, hacia atras cuesta abajo (frena), y respira
+    const lean = (0.07 + 0.012 * speed) * k + grade * 0.75 * k + Math.min(0.12, load * 0.004) + 0.1 * fat;
+    p.torso.rotation.x = -lean;
     p.torso.rotation.y = s * 0.09 * k;
-    p.torso.rotation.z = c * 0.03 * k;
-    p.torso.position.y = 0.98 + 0.006 * breathe * (1 - k);
+    p.torso.rotation.z = c * 0.03 * k - Math.max(-0.12, Math.min(0.12, dYaw * 0.5)) * k;
+    p.torso.position.y = 0.98 + 0.012 * chest * (1 - 0.6 * k);
     p.head.rotation.y = -s * 0.07 * k + Math.sin(this.clock * 0.45) * 0.22 * (1 - k);
-    p.head.rotation.x = 0.06 * k;
+    p.head.rotation.x = 0.06 * k + 0.16 * fat - grade * 0.25 * k;
     p.mastTip.material.emissiveIntensity = Math.sin(this.clock * 4) > 0.7 ? 3 : 0.3;   // baliza de la antena
+    // luces del casco: se encienden al anochecer
+    if (opts.night != null && this.M) {
+      this.M.lamp.emissiveIntensity = 0.5 + 2.2 * opts.night;
+      p.lamps[2].visible = p.lamps[3].visible = this.look ? this.look.lamps && opts.night > 0.15 : opts.night > 0.15;
+    }
     // en el aire (salto o caida lenta de baja gravedad): piernas recogidas y brazos abiertos para equilibrarse
     if (f > 0.01) {
       p.legL.hip.rotation.x = lerp(p.legL.hip.rotation.x, 0.5, f);
@@ -405,8 +463,18 @@ export class Astronaut {
     p.armR.shoulder.rotation.z = 0.1 + 0.75 * f;
     p.armL.elbow.rotation.z = p.armR.elbow.rotation.z = 0;
     p.head.rotation.z = 0;
-    // el rebote del paso solo es visual; en el aire manda la fisica
-    this.body.position.y = Math.abs(s) * 0.24 * k * (1 - f);
+    // rebote del paso: en baja gravedad cada paso tiene una fase aerea (mas alta cuanto mas rapido)
+    const bob = Math.min(0.26, 0.05 + 0.028 * speed) * k;
+    // amortiguacion del aterrizaje: muelle sub-amortiguado sobre las rodillas
+    this.squashV = (this.squashV || 0) + (-(this.squash || 0) * 140 - (this.squashV || 0) * 14) * dt;
+    this.squash = Math.max(-0.05, Math.min(0.3, (this.squash || 0) + this.squashV * dt));
+    const sq = Math.max(0, this.squash);
+    this.body.position.y = Math.pow(Math.abs(s), 0.8) * bob * (1 - f) - sq;
+    if (sq > 0.005) {
+      p.legL.hip.rotation.x += sq * 2.2; p.legR.hip.rotation.x += sq * 2.2;
+      p.legL.knee.rotation.x -= sq * 4; p.legR.knee.rotation.x -= sq * 4;
+      p.torso.rotation.x -= sq * 1.2;
+    }
     // cojera (EVA-2 tras el rescate): la pierna derecha apenas se dobla y el cuerpo se balancea hacia ella
     if (this.limp && k > 0.05) {
       p.legR.hip.rotation.x *= 0.35;

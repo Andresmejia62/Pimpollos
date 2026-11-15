@@ -84,6 +84,7 @@ export class Controls {
     const near = occluders ? occluders(target.x, target.z) : null;
     if (near && near.length) {
       const ray = (this._ray ||= new Raycaster());
+      ray.layers.enable(31);                       // mallas originales de las estructuras fusionadas (engine/merge.js)
       const o = (this._o ||= new Vector3()), d = (this._d ||= new Vector3());
       o.set(head.x, head.y + 0.3, head.z);
       d.set(dx * this.dist, dy * this.dist + 0.3, dz * this.dist);

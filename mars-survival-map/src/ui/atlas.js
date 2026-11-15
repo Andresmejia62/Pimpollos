@@ -137,7 +137,7 @@ export class Atlas {
     this.overlays = {};
     ["slope", "radiation", "thermal", "spectral"].forEach((k) => { const im = new Image(); im.src = assetUrl(`layers/${k}_overlay.png`); this.overlays[k] = im; });
     this.optical.onload = () => this.dirty = true;
-    this._shade(this.rGlobal, 18);
+    this._shade(this.rGlobal, 11);     // (con 18 los flancos de los volcanes quedaban negros)
     this._shade(this.rGale, 4);
     if (this.rRegion) this._shade(this.rRegion, 2);
     this._paint();
@@ -179,7 +179,7 @@ export class Atlas {
         const v = P ? pressureAt(elev[i]) : elev[i];
         const tv = lut.log ? Math.log(Math.max(1, v)) : v;
         const k = Math.max(0, Math.min(lut.n - 1, Math.round(((tv - lut.a) / (lut.b - lut.a)) * (lut.n - 1)))) * 3;
-        const s = P ? 0.55 + 0.45 * shade[i] : this.mode === "mars" ? 0.2 + 0.85 * shade[i] : 0.35 + 0.7 * shade[i];
+        const s = P ? 0.55 + 0.45 * shade[i] : this.mode === "mars" ? 0.36 + 0.7 * shade[i] : 0.4 + 0.65 * shade[i];   // suelo alto: las laderas a contraluz no quedan negras
         px[i * 4] = Math.min(255, lut.lut[k] * s); px[i * 4 + 1] = Math.min(255, lut.lut[k + 1] * s); px[i * 4 + 2] = Math.min(255, lut.lut[k + 2] * s); px[i * 4 + 3] = 255;
       }
       if (P) {
@@ -465,7 +465,7 @@ export class Atlas {
       ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.bezierCurveTo(p.x - 11, p.y - 14, p.x - 8, p.y - 26, p.x, p.y - 26); ctx.bezierCurveTo(p.x + 8, p.y - 26, p.x + 11, p.y - 14, p.x, p.y); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.fillStyle = "#1a0f0a"; ctx.beginPath(); ctx.arc(p.x, p.y - 17, 3.2, 0, 7); ctx.fill();
       this.hits.push({ x: p.x, y: p.y - 14, r: 14, item: { kind: "pin", pin } });
-      this._label(pin.name, p.x + 11, p.y - 16, "#FFB27A", false, 13);
+      this._label(pin.name, p.x + 11, p.y - 16, "#FFB27A", false, 13, sel ? 96 : 80);
     }
   }
   // lineas de mira en el mapa plano, con la latitud y la longitud en los bordes, y aro en el simbolo bajo el cursor
@@ -692,6 +692,7 @@ export class Atlas {
     if (is3) ctx.clearRect(0, 0, W, H); else { ctx.fillStyle = "#0b0809"; ctx.fillRect(0, 0, W, H); }
     if (!this.rGlobal) { ctx.fillStyle = "#bfafa3"; ctx.font = "16px Inter, sans-serif"; ctx.fillText(t(L("Cargando MOLA…", "Loading MOLA…")), 20, 30); return; }
     this.hits = [];
+    this._lq = [];
     const G = this.rGlobal, R = this.rGale;
     const b = this.geo.bounds;
     if (is3) {
@@ -702,6 +703,7 @@ export class Atlas {
       const steps = [30, 15, 10, 5, 2, 1, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001];
       const step = steps.find((q) => q * v.s < 170) || 0.001;
       g3.setOverlay(this.show.overlay && this.game.s.layer ? this.overlays[this.game.s.layer] : null);
+      g3.setIce(this.mode === "mars");
       g3.render(step, this.show.grid);
       if (this.show.grid) this._gratLabels3d(step);
     } else {
@@ -731,6 +733,7 @@ export class Atlas {
     this._pins();
     this._player();
     this._measure();
+    this._flushLabels();
     this._cursorMarks();
     this._scaleBar();
   }
@@ -779,11 +782,11 @@ export class Atlas {
       ctx.beginPath();
       pts.forEach(([la, lo]) => { const q = this.project(la, lo); ctx.lineTo(q.x, q.y); });
       ctx.stroke(); ctx.setLineDash([]);
-      if (label && !Number.isNaN(a.x)) { ctx.fillStyle = color; ctx.font = "600 12px Rajdhani, sans-serif"; ctx.shadowColor = "#000"; ctx.shadowBlur = 3; ctx.fillText(label, a.x + 2, a.y - 4); ctx.shadowBlur = 0; }
+      if (label && !Number.isNaN(a.x)) this._label(label, a.x + 2, a.y - 4, color, false, 12, 20);
       return;
     }
     ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y); ctx.setLineDash([]);
-    if (label && b.x - a.x > 4) { ctx.fillStyle = color; ctx.font = "600 12px Rajdhani, sans-serif"; ctx.shadowColor = "#000"; ctx.shadowBlur = 3; ctx.fillText(label, a.x + 2, a.y - 4); ctx.shadowBlur = 0; }
+    if (label && b.x - a.x > 4) this._label(label, a.x + 2, a.y - 4, color, false, 12, 20);
   }
 
   _kmToPx(km) { return (km * 1000 / M_PER_DEG) * this.view.s; }
@@ -857,15 +860,42 @@ export class Atlas {
       this.hits.push({ x: p.x, y: p.y, r: Math.max(9, Math.min(r, 30)), item: { kind: "feature", f } });
       // a poca escala solo se rotulan los rasgos grandes, para no saturar el mapa
       if (f.cat !== "lander") show = sel || rpx > 16 || v.s > 14;
-      if (show && (rpx < this.W * 0.9)) this._label(t(f.name), p.x + Math.min(r, 60) * 0.72 + 4, p.y - Math.min(r, 60) * 0.72, col, f.cat === "region" || f.cat === "canyon");
+      // prioridad: lo seleccionado, luego los rasgos que mas ocupan en pantalla (los grandes mandan sobre los pequenos)
+      const prio = sel ? 95 : f.cat === "lander" ? 58 : 40 + Math.min(25, rpx / 12);
+      if (show && (rpx < this.W * 0.9)) this._label(t(f.name), p.x + Math.min(r, 60) * 0.72 + 4, p.y - Math.min(r, 60) * 0.72, col, f.cat === "region" || f.cat === "canyon", rpx > 80 ? 15 : 13, prio);
     }
   }
 
-  _label(text, x, y, color = "#fff", italic = false, size = 13) {
-    const ctx = this.ctx;
-    ctx.font = `${italic ? "italic " : ""}600 ${size}px Rajdhani, sans-serif`;
-    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.8)"; ctx.strokeText(text, x, y);
-    ctx.fillStyle = color; ctx.fillText(text, x, y);
+  // Los rotulos no se pintan al momento: se encolan con una prioridad y al final del fotograma se colocan de
+  // mayor a menor prioridad sin solaparse (probando a la derecha, debajo, a la izquierda y encima del simbolo).
+  // Los que no caben se omiten; los de prioridad >= 90 (tu posicion, lo seleccionado, la regla) salen siempre.
+  _label(text, x, y, color = "#fff", italic = false, size = 13, prio = 50) {
+    if (!text || Number.isNaN(x) || Number.isNaN(y)) return;
+    this._lq.push({ text, x, y, color, italic, size, prio });
+  }
+  _flushLabels() {
+    const ctx = this.ctx, boxes = [];
+    this._lq.sort((a, b) => b.prio - a.prio);
+    const free = (bx, by, bw, bh) => {
+      for (const o of boxes) if (bx < o[0] + o[2] && bx + bw > o[0] && by < o[1] + o[3] && by + bh > o[1]) return false;
+      return true;
+    };
+    ctx.lineJoin = "round"; ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
+    for (const l of this._lq) {
+      ctx.font = `${l.italic ? "italic " : ""}600 ${l.size}px Rajdhani, sans-serif`;
+      const w = ctx.measureText(l.text).width, h = l.size + 4;
+      // posiciones candidatas respecto al ancla original (que ya esta a la derecha del simbolo)
+      const cand = [[l.x, l.y], [l.x, l.y + h + 4], [l.x - w - 22, l.y], [l.x, l.y - h - 2], [l.x - w - 22, l.y + h + 4]];
+      let pos = null;
+      for (const [cx, cy] of cand) { if (free(cx - 3, cy - l.size, w + 6, h)) { pos = [cx, cy]; break; } }
+      if (!pos) { if (l.prio < 90) continue; pos = cand[0]; }
+      if (pos[0] > this.W || pos[0] + w < 0 || pos[1] < 0 || pos[1] - l.size > this.H) continue;
+      boxes.push([pos[0] - 3, pos[1] - l.size, w + 6, h]);
+      ctx.lineWidth = 3.5; ctx.strokeStyle = "rgba(10,6,6,.85)"; ctx.strokeText(l.text, pos[0], pos[1]);
+      ctx.fillStyle = l.color; ctx.fillText(l.text, pos[0], pos[1]);
+    }
+    ctx.lineJoin = "miter";
+    this._lq.length = 0;
   }
 
   _phenomena() {
@@ -875,9 +905,9 @@ export class Atlas {
       ph.zones.forEach((z) => {
         const p = this.project(z.lat, z.lon), r = Math.max(10, this._kmToPx(z.r_km));
         if (Number.isNaN(p.x) || p.x + r < 0 || p.x - r > this.W || p.y + r < 0 || p.y - r > this.H) return;
-        ctx.globalAlpha = sel ? 0.28 : 0.13; ctx.fillStyle = ph.color;
+        ctx.globalAlpha = sel ? 0.24 : 0.06; ctx.fillStyle = ph.color;
         this._ring(p, r, z.lat, z.lon, z.r_km); ctx.fill();
-        ctx.globalAlpha = sel ? 1 : 0.7; ctx.strokeStyle = ph.color; ctx.lineWidth = sel ? 2.5 : 1.2; ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
+        ctx.globalAlpha = sel ? 1 : 0.5; ctx.strokeStyle = ph.color; ctx.lineWidth = sel ? 2.5 : 1.1; ctx.setLineDash([5, 5]); ctx.stroke(); ctx.setLineDash([]);
         ctx.globalAlpha = 1;
         // insignia numerada en el borde de la zona
         const bx = p.x + r * 0.7, by = p.y - r * 0.7;
@@ -885,7 +915,7 @@ export class Atlas {
         ctx.beginPath(); ctx.arc(bx, by, 10, 0, 7); ctx.fill(); ctx.stroke();
         ctx.fillStyle = "#111"; ctx.font = "700 12px Rajdhani, sans-serif"; ctx.textAlign = "center"; ctx.fillText(String(idx + 1), bx, by + 4); ctx.textAlign = "left";
         this.hits.push({ x: bx, y: by, r: 12, item: { kind: "phenomenon", ph, zone: z } });
-        if (sel || this.view.s > 6) this._label(t(z.label), bx + 13, by + 4, ph.color, false, 12);
+        if (sel || this.view.s > 6) this._label(t(z.label), bx + 13, by + 4, ph.color, false, 12, sel ? 94 : 30);
       });
     });
   }
@@ -897,7 +927,7 @@ export class Atlas {
     ctx.stroke();
     if (this.view.s < 3000) {
       const last = this.trav[this.trav.length - 1], p = this.project(last[0], last[1]);
-      this._label(`Curiosity · sol ${last[3]}`, p.x + 6, p.y + 14, "#ffd250", false, 12);
+      this._label(`Curiosity · sol ${last[3]}`, p.x + 6, p.y + 14, "#ffd250", false, 12, 45);
     }
   }
 
@@ -909,7 +939,7 @@ export class Atlas {
       ctx.fillStyle = "#fff"; ctx.strokeStyle = "#000"; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, 7); ctx.fill(); ctx.stroke();
       this.hits.push({ x: p.x, y: p.y, r: 8, item: { kind: "drill", d } });
-      if (this.view.s > 9000) this._label(`${d.name} · sol ${d.sol}`, p.x + 6, p.y - 5, "#fff", false, 12);
+      if (this.view.s > 9000) this._label(`${d.name} · sol ${d.sol}`, p.x + 6, p.y - 5, "#fff", false, 12, 35);
     }
   }
 
@@ -929,7 +959,7 @@ export class Atlas {
       ctx.fillText(typeIcon(e), p.x, p.y + 0.5);
       ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
       this.hits.push({ x: p.x, y: p.y, r: 10, item: { kind: "struct", e, ll } });
-      if (v.s > 9000) this._label(t(e.name), p.x + 11, p.y + 4, "#ffcf7a", false, 12);
+      if (v.s > 9000) this._label(t(e.name), p.x + 11, p.y + 4, "#ffcf7a", false, 12, sel ? 95 : 42);
     }
   }
 
@@ -945,7 +975,7 @@ export class Atlas {
       else ctx.strokeRect(p.x - 7, p.y - 7, 14, 14);
       if (isT) { ctx.beginPath(); ctx.arc(p.x, p.y, 14, 0, 7); ctx.stroke(); }
       this.hits.push({ x: p.x, y: p.y, r: 11, item: { kind: "objective", o } });
-      if (this.view.s > 2500) this._label(t(o.name), p.x + 12, p.y + 4, isT ? "#3DDC97" : "#fff");
+      if (this.view.s > 2500) this._label(t(o.name), p.x + 12, p.y + 4, isT ? "#3DDC97" : "#fff", false, 13, isT ? 92 : 70);
     }
   }
 
@@ -966,7 +996,7 @@ export class Atlas {
     ctx.fillStyle = "#7FD1FF"; ctx.strokeStyle = "#000"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(0, -11); ctx.lineTo(7, 8); ctx.lineTo(-7, 8); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.restore();
-    this._label(t(L("Tú", "You")) + ` · ${this.game.bio.p.name}`, p.x + 14, p.y + 18, "#7FD1FF");
+    this._label(t(L("Tú", "You")) + ` · ${this.game.bio.p.name}`, p.x + 14, p.y + 18, "#7FD1FF", false, 13, 100);
     this.hits.push({ x: p.x, y: p.y, r: 12, item: { kind: "player" } });
   }
 
@@ -991,7 +1021,7 @@ export class Atlas {
     }
     if (b) {
       const p = this.project(b.lat, b.lon), lang = getLang();
-      this._label(`${fmtDist(gcDistance(m.a.lat, m.a.lon, b.lat, b.lon), lang)} · ${num(gcBearing(m.a.lat, m.a.lon, b.lat, b.lon), 1, lang)}°`, p.x + 10, p.y - 10, "#FFC23D", false, 14);
+      this._label(`${fmtDist(gcDistance(m.a.lat, m.a.lon, b.lat, b.lon), lang)} · ${num(gcBearing(m.a.lat, m.a.lon, b.lat, b.lon), 1, lang)}°`, p.x + 10, p.y - 10, "#FFC23D", false, 14, 98);
     }
   }
 
@@ -1046,7 +1076,7 @@ export class Atlas {
       const W = this.world, x = e.local.x, z = e.local.z;
       extra = `<tr><td>${t(L("Pendiente", "Slope"))}</td><td>${num(W.slope(x, z), 1, lang)}°</td></tr>
         <tr><td>${t(L("Dosis GCR", "GCR dose"))}</td><td>${num(W.radiation(x, z), 2, lang)} µGy/h</td></tr>
-        <tr><td>${t(L("T. suelo (ahora)", "Ground T (now)"))}</td><td>${num(W.temperature(x, z, this.game.hour), 0, lang)} °C</td></tr>
+        <tr><td>${t(L("T. suelo (ahora)", "Ground T (now)"))}</td><td>${num(this.game.tempAt(x, z, this.game.hour), 0, lang)} °C</td></tr>
         <tr><td>${t(L("Mineral (CRISM)", "Mineral (CRISM)"))}</td><td>${t(this.data.layers.layers.spectral.classes[W.spectral(x, z)])}</td></tr>`;
     }
     return `<table class="kv">

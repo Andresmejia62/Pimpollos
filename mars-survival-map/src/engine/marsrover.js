@@ -339,12 +339,46 @@ export function buildMarsRover(ms) {
     for (let i = 0; i < N; i++) {
       if (dAge[i] >= 1) continue;
       dAge[i] = Math.min(1, dAge[i] + dt / 2.2);
-      dVel[i * 3 + 1] -= MARS.g * 0.12 * dt;
+      // polvo fino: como DustFX, tiende a la velocidad del viento y cae despacio
+      const kk = Math.min(1, dt * 2.5);
+      dVel[i * 3] += (2.2 - dVel[i * 3]) * kk; dVel[i * 3 + 2] += (0.9 - dVel[i * 3 + 2]) * kk; dVel[i * 3 + 1] += (-0.3 - dVel[i * 3 + 1]) * kk;
       dPos[i * 3] += dVel[i * 3] * dt; dPos[i * 3 + 1] += dVel[i * 3 + 1] * dt; dPos[i * 3 + 2] += dVel[i * 3 + 2] * dt;
     }
     dGeo.attributes.position.needsUpdate = true;
     dGeo.attributes.aAge.needsUpdate = true;
   }
 
-  return { group: root, update };
+  // ---- faros de navegacion nocturna (LED) ----------------------------------------------------
+  // dos focos bajo la visera y una luz de trabajo; con luz de dia estan apagados. El numero de luces es fijo
+  // (solo cambia la intensidad) para no recompilar los shaders al anochecer.
+  const lampMat = new THREE.MeshStandardMaterial({ color: "#d9e6ff", emissive: "#cfe0ff", emissiveIntensity: 0, roughness: 0.3 });
+  for (const sx of [-0.62, 0.62]) {
+    body.add(box(0.26, 0.1, 0.06, M.frame, sx, 1.33, -1.34));
+    const l = new THREE.Mesh(new THREE.CircleGeometry(0.045, 12), lampMat);
+    for (const dx of [-0.07, 0, 0.07]) { const c = l.clone(); c.position.set(sx + dx, 1.33, -1.375); c.rotation.y = Math.PI; body.add(c); }
+  }
+  const spot = new THREE.SpotLight("#e6eeff", 0, 70, 0.55, 0.55, 1.4);
+  spot.position.set(0, 1.4, -1.4);
+  spot.target.position.set(0, -1.2, -16);
+  body.add(spot, spot.target);
+  const workLight = new THREE.PointLight("#ffd9b0", 0, 9, 2);       // luz de trabajo alrededor del rover
+  workLight.position.set(0, 2.4, 0.2);
+  body.add(workLight);
+  let lightsOn = 0;
+  // night: 0 (dia) .. 1 (noche cerrada); dust: opacidad de la tormenta (tambien los enciende)
+  function setLights(dt, night, dust = 0) {
+    const want = Math.max(night > 0.35 ? 1 : 0, dust > 0.35 ? 0.8 : 0);
+    lightsOn += (want - lightsOn) * Math.min(1, dt * 3);
+    spot.intensity = 26 * lightsOn;
+    workLight.intensity = 3 * lightsOn;
+    lampMat.emissiveIntensity = 0.2 + 3.5 * lightsOn;
+    spot.getWorldPosition(lampOut.pos);
+    spot.target.getWorldPosition(lampOut.dir);
+    lampOut.dir.sub(lampOut.pos).normalize();
+    lampOut.k = lightsOn;
+    return lampOut;
+  }
+  const lampOut = { pos: new THREE.Vector3(), dir: new THREE.Vector3(), k: 0 };
+
+  return { group: root, update, setLights };
 }

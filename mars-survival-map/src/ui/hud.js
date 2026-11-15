@@ -126,7 +126,8 @@ export class Hud {
 
     this._compass(tg);
     if (now - this._telemT > 0.2 && !$("telem").hidden) { this._telemT = now; this._telemetry(tg); }
-    this.minimap.draw(tg);
+    // el minimapa se redibuja a ~15 fps: basta para un mapa y ahorra un dibujo de imagen grande por fotograma
+    if (!(now - this._mmT < 0.066)) { this._mmT = now; this.minimap.draw(tg); }
     this._dialogs(now);
     $("lockHint").textContent = this._lockHint || "";
   }
@@ -369,6 +370,7 @@ export class Hud {
     $("dialogText").textContent = t(d.text);
     box.hidden = false;
     this.dialogUntil = now + Math.max(3, d.duration_s || 5) + 0.6;
+    if (this.onDialog) this.onDialog(d);
   }
   clearDialogs() { this.dialogQueue = []; this.dialogUntil = 0; $("dialog").hidden = true; }
 }
@@ -404,6 +406,31 @@ class Minimap {
       ctx.strokeStyle = "rgba(255,210,80,.6)"; ctx.lineWidth = 2; ctx.beginPath();
       this.trav.forEach((p, i) => { const [px, pz] = this.toPx(p[1], p[2]); i ? ctx.lineTo(px, pz) : ctx.moveTo(px, pz); });
       ctx.stroke();
+    }
+    // tormenta: el frente de polvo se dibuja mientras se acerca; dentro, la imagen orbital queda velada y el
+    // enlace de datos con el orbitador mete estatica. La ruta, los refugios y tu posicion siguen visibles
+    const wx = this.weather;
+    if (wx) {
+      const L = wx.storm.level, sc = S / this.world.size;
+      if (wx.frontR) {
+        const [cx, cz] = this.toPx(s.x, s.z), r = wx.frontR * sc;
+        const a0 = Math.atan2(-wx.windDir.z, -wx.windDir.x);
+        ctx.save();
+        ctx.strokeStyle = "rgba(214,140,80,.85)"; ctx.lineWidth = 10; ctx.setLineDash([4, 6]);
+        ctx.beginPath(); ctx.arc(cx, cz, Math.max(6, r), a0 - 1.2, a0 + 1.2); ctx.stroke();
+        ctx.fillStyle = "rgba(170,100,55,.28)";
+        ctx.beginPath(); ctx.arc(cx, cz, Math.max(6, r), a0 - 1.2, a0 + 1.2); ctx.arc(cx, cz, Math.max(6, r) + 60, a0 + 1.2, a0 - 1.2, true); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+      if (L > 0.02) {
+        ctx.fillStyle = `rgba(150,95,58,${(0.62 * L).toFixed(3)})`; ctx.fillRect(0, 0, S, S);
+        const n = Math.round(40 * L);
+        for (let i = 0; i < n; i++) {
+          const y = Math.random() * S, h = 1 + Math.random() * 3;
+          ctx.fillStyle = `rgba(255,230,200,${(Math.random() * 0.25 * L).toFixed(3)})`;
+          ctx.fillRect(0, y, S, h);
+        }
+      }
     }
     // ruta sugerida
     if (s.routeOn && this.route && this.route.length > 1) {
@@ -453,6 +480,8 @@ class Minimap {
     ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(9, 10); ctx.lineTo(-9, 10); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.restore();
     ctx.fillStyle = "#fff"; ctx.font = "bold 22px Rajdhani, sans-serif"; ctx.shadowColor = "#000"; ctx.shadowBlur = 4;
-    ctx.fillText("N ▲", 10, 26); ctx.shadowBlur = 0;
+    ctx.fillText("N ▲", 10, 26);
+    if (wx && wx.storm.level > 0.3) { ctx.fillStyle = "#ffb070"; ctx.font = "bold 18px Rajdhani, sans-serif"; ctx.fillText(wx.storm.level > 0.7 ? "τ ALTA · SEÑAL DÉBIL" : "τ ALTA", 10, S - 12); }
+    ctx.shadowBlur = 0;
   }
 }

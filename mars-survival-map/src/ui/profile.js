@@ -6,6 +6,7 @@ import { Physiology, REF, REF_FLAT_W, SUITS, PRESETS, LIMITS, NASA_HEIGHT, loadP
 import { num } from "../geo.js";
 import * as THREE from "three";
 import { Astronaut, LOOK_OPTIONS } from "../engine/astronaut.js";
+import { DIFFS, loadDiff, saveDiff } from "../gameplay/difficulty.js";
 
 const $ = (id) => document.getElementById(id);
 const L = (es, en) => ({ es, en });
@@ -33,6 +34,8 @@ const LOOK_LABELS = {
 
 export class ProfileScreen {
   constructor(o2CapacityG) {
+    this.diff = loadDiff();
+    this.capBase = o2CapacityG / this.diff.o2K;   // capacidad del traje sin el ajuste de dificultad
     this.capG = o2CapacityG;
     this.p = loadProfile();
     this.onConfirm = null;
@@ -141,6 +144,9 @@ export class ProfileScreen {
       <input type="range" min="${LIMITS[k][0]}" max="${LIMITS[k][1]}" step="${step}" value="${p[k]}" data-k="${k}">
       <input type="number" min="${LIMITS[k][0]}" max="${LIMITS[k][1]}" step="${step}" value="${p[k]}" data-k="${k}"><i>${t(unit)}</i></label>`;
     $("pfForm").innerHTML = `
+      <div class="pf-row"><span>${t(L("Dificultad", "Difficulty"))}</span>
+        <div class="seg">${Object.values(DIFFS).map((d) => `<button type="button" data-diff="${d.id}" aria-pressed="${d.id === this.diff.id}">${t(d.name)}</button>`).join("")}</div></div>
+      <p class="small muted pf-diff" id="pfDiffDesc">${t(this.diff.desc)}</p>
       <label class="pf-row"><span>${t(L("Perfil rápido", "Quick profile"))}</span><select id="pfPreset"><option value="">—</option>${Object.keys(PRESETS).map((k) => `<option value="${k}">${t(PRESET_NAMES[k])}</option>`).join("")}</select></label>
       <label class="pf-row"><span>${t(L("Indicativo", "Call sign"))}</span><input type="text" maxlength="16" value="${p.name}" id="pfName"></label>
       ${FIELDS.map(row).join("")}
@@ -161,6 +167,17 @@ export class ProfileScreen {
     $("pfSuit").onchange = (e) => { this.p.suit = e.target.value; this._out(); };
     $("pfPreset").onchange = (e) => { if (PRESETS[e.target.value]) { this.p = { ...PRESETS[e.target.value], name: this.p.name, look: this.p.look }; this.render(); this._startPreview(); } };
     this._bindLook();
+    f.querySelectorAll("[data-diff]").forEach((b) => {
+      b.onclick = () => {
+        const d = DIFFS[b.dataset.diff];
+        this.diff = d; saveDiff(d.id);
+        this.capG = this.capBase * d.o2K;
+        f.querySelectorAll("[data-diff]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+        $("pfDiffDesc").textContent = t(d.desc);
+        this.onDiff && this.onDiff(d);
+        this._out();
+      };
+    });
     f.querySelectorAll("[data-sex]").forEach((b) => { b.onclick = () => { this.p.sex = b.dataset.sex; f.querySelectorAll("[data-sex]").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); this._out(); }; });
     this._out();
   }

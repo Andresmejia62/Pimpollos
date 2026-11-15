@@ -23,11 +23,14 @@ export function dirToLL(v) {
 
 const VS = /* glsl */ `
   attribute float aElev;
+  attribute vec2 aGrad;          // pendiente real del terreno: dE/d(este), dE/d(norte) en m/m
   uniform float uK, uLift;
-  varying vec2 vUv; varying vec2 vLL; varying vec3 vN; varying vec3 vPos;
+  varying vec2 vUv; varying vec2 vLL; varying vec3 vN; varying vec3 vPos; varying vec2 vGrad; varying float vElev;
   void main() {
     vUv = uv;
     vN = normalize(position);
+    vGrad = aGrad;
+    vElev = aElev;
     vLL = vec2(atan(-vN.z, vN.x), asin(clamp(vN.y, -1.0, 1.0))) * 57.29578;
     vec3 p = vN * (1.0 + aElev * uK + uLift);
     vPos = p;
@@ -36,43 +39,94 @@ const VS = /* glsl */ `
 const FS = /* glsl */ `
   uniform sampler2D uMap, uOverlay;
   uniform float uStep, uGrid, uOverlayOn, uSeamFix;
-  varying vec2 vUv; varying vec2 vLL; varying vec3 vN; varying vec3 vPos;
+  uniform float uExag;           // exageracion vertical actual (x)
+  uniform float uDetail;         // cuanto grano fino se anade (0 en la ortoimagen, que ya tiene detalle real)
+  uniform float uIce;            // 1 = pintar los casquetes polares (solo en "tono marciano")
+  varying vec2 vUv; varying vec2 vLL; varying vec3 vN; varying vec3 vPos; varying vec2 vGrad; varying float vElev;
   float gridLine(float v, float step) {
     float g = v / step;
     float d = abs(fract(g - 0.5) - 0.5) / max(fwidth(g), 1e-6);
     return 1.0 - clamp(d - 0.4, 0.0, 1.0);
   }
+  float h31(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.yzx + 33.33); return fract((p.x + p.y) * p.z); }
+  float vnoise(vec3 p) {
+    vec3 i = floor(p), f = fract(p); vec3 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(h31(i), h31(i + vec3(1, 0, 0)), u.x), mix(h31(i + vec3(0, 1, 0)), h31(i + vec3(1, 1, 0)), u.x), u.y),
+               mix(mix(h31(i + vec3(0, 0, 1)), h31(i + vec3(1, 0, 1)), u.x), mix(h31(i + vec3(0, 1, 1)), h31(i + vec3(1, 1, 1)), u.x), u.y), u.z);
+  }
   void main() {
     vec3 col = texture2D(uMap, vUv).rgb;
-    if (uOverlayOn > 0.5) { vec4 o = texture2D(uOverlay, vUv); col = mix(col, o.rgb, o.a * 0.85); }
-    // sombreado suave hacia el limbo: da volumen a la esfera
     vec3 V = normalize(cameraPosition - vPos);
     float ndv = clamp(dot(vN, V), 0.0, 1.0);
-    col *= mix(0.45, 1.0, pow(ndv, 0.55));
+
+    // ---- grano fino: la textura de MOLA se queda borrosa al acercarse; varias octavas de ruido sobre la esfera
+    // (cada una se apaga cuando su tamano baja de ~2 pixeles, para que no parpadee) dan la sensacion de terreno
+    float fw = length(fwidth(vN));
+    float dsum = 0.0, wsum = 0.0, fr = 90.0;
+    for (int o = 0; o < 8; o++) {
+      // solo las octavas cuyo grano mide entre ~3 y ~14 pixeles: textura, no relieve inventado
+      float w = (1.0 - smoothstep(0.12, 0.36, fw * fr)) * smoothstep(0.02, 0.07, fw * fr);
+      dsum += (vnoise(vN * fr + 17.0) - 0.5) * w; wsum += w;
+      fr *= 3.7;
+    }
+    col *= 1.0 + dsum * 0.17 * uDetail;
+
+    // ---- casquetes polares (hielo de agua y CO2 estacional), con borde irregular
+    if (uIce > 0.5) {
+      float edge = (vnoise(vN * 14.0) - 0.5) * 5.0 + (vnoise(vN * 60.0) - 0.5) * 1.6;
+      float ice = max(smoothstep(79.0, 82.5, vLL.y + edge), smoothstep(-82.5, -86.0, vLL.y + edge));
+      vec3 iceCol = vec3(0.93, 0.9, 0.87) * (0.8 + 0.2 * dot(col, vec3(0.5)) / 0.6);
+      col = mix(col, iceCol, ice * 0.88);
+    }
+
+    // ---- luz de cartografo: del noroeste, a 40 grados sobre el horizonte, con la normal real del relieve
+    vec3 east = normalize(vec3(vN.z, 0.0, -vN.x) + 1e-6), north = cross(vN, east);
+    vec3 N = normalize(vN - (east * vGrad.x + north * vGrad.y) * uExag);
+    vec3 Ldir = normalize(-east * 0.55 + north * 0.55 + vN * 0.63);
+    float ndl = max(dot(N, Ldir), 0.0) / 0.63;                       // 1 en terreno llano
+    float slope = 1.0 - clamp(dot(N, vN), 0.0, 1.0);
+    // (la textura ya trae un sombreado suave horneado: aqui se limita la sombra para que las laderas empinadas,
+    // como los flancos de los volcanes, no se queden negras)
+    col *= clamp(mix(1.0, ndl, 0.5), 0.7, 1.5) * 1.05;
+    col *= 1.0 - 0.16 * smoothstep(0.15, 0.7, slope);                 // paredes y escarpes mas oscuros (roca desnuda)
+    // brillo rasante sobre las crestas que miran a la luz
+    col += vec3(1.0, 0.86, 0.7) * pow(max(dot(N, normalize(Ldir + V)), 0.0), 24.0) * 0.05;
+
+    if (uOverlayOn > 0.5) { vec4 o = texture2D(uOverlay, vUv); col = mix(col, o.rgb, o.a * 0.85); }
+
+    // ---- volumen de la esfera y bruma de polvo hacia el limbo
+    col *= mix(0.55, 1.0, pow(ndv, 0.5));
+    col = mix(col, vec3(0.9, 0.62, 0.43), pow(1.0 - ndv, 4.0) * 0.6);
+
     if (uGrid > 0.5) {
       // la longitud usa el uv para no romperse en la costura 0/360
       float lon = uSeamFix > 0.5 ? vUv.x * 360.0 : vLL.x;
       float pole = smoothstep(89.5, 86.0, abs(vLL.y));
       float g = max(gridLine(vLL.y, uStep), gridLine(lon, uStep) * pole);
       float eq = max(gridLine(vLL.y, 90.0), gridLine(lon, 180.0) * pole);       // ecuador y meridiano 0/180
-      col = mix(col, vec3(1.0), g * 0.28);
-      col = mix(col, vec3(1.0, 0.82, 0.45), eq * 0.55);
+      col = mix(col, vec3(1.0), g * 0.22);
+      col = mix(col, vec3(1.0, 0.82, 0.45), eq * 0.5);
     }
+    // un poco mas de contraste y saturacion
+    col = mix(vec3(dot(col, vec3(0.3, 0.55, 0.15))), col, 1.12);
+    col = clamp((col - 0.5) * 1.06 + 0.5, 0.0, 1.0);
     gl_FragColor = vec4(col, 1.0);
   }`;
 
-function terrainMaterial(tex, lift, seamFix) {
+function terrainMaterial(tex, lift, seamFix, detail = 1) {
   return new THREE.ShaderMaterial({
     vertexShader: VS, fragmentShader: FS,
-    uniforms: { uMap: { value: tex }, uOverlay: { value: null }, uOverlayOn: { value: 0 }, uK: { value: 12 / R_MARS }, uLift: { value: lift }, uStep: { value: 30 }, uGrid: { value: 1 }, uSeamFix: { value: seamFix ? 1 : 0 } },
+    uniforms: { uMap: { value: tex }, uOverlay: { value: null }, uOverlayOn: { value: 0 }, uK: { value: 12 / R_MARS }, uLift: { value: lift }, uStep: { value: 30 }, uGrid: { value: 1 }, uSeamFix: { value: seamFix ? 1 : 0 },
+      uExag: { value: 12 }, uDetail: { value: detail }, uIce: { value: 1 } },
   });
 }
 
 // Malla regular en lat/lon. elevFn(i, j) -> metros, con i = columna (oeste -> este), j = fila (norte -> sur).
-function gridMesh(latN, lonW, latSpan, lonSpan, nx, ny, elevFn, skirtM = 0) {
+// rawFn(i, j): elevacion sin los hundimientos artificiales (para calcular la pendiente real); por defecto elevFn.
+function gridMesh(latN, lonW, latSpan, lonSpan, nx, ny, elevFn, skirtM = 0, rawFn = elevFn) {
   const sk = skirtM > 0 ? 1 : 0;
   const W = nx + 1 + 2 * sk, H = ny + 1 + 2 * sk;
-  const pos = new Float32Array(W * H * 3), uv = new Float32Array(W * H * 2), el = new Float32Array(W * H);
+  const pos = new Float32Array(W * H * 3), uv = new Float32Array(W * H * 2), el = new Float32Array(W * H), gr = new Float32Array(W * H * 2);
   const v = new THREE.Vector3();
   for (let J = 0; J < H; J++) for (let I = 0; I < W; I++) {
     const i = Math.min(nx, Math.max(0, I - sk)), j = Math.min(ny, Math.max(0, J - sk));
@@ -83,6 +137,12 @@ function gridMesh(latN, lonW, latSpan, lonSpan, nx, ny, elevFn, skirtM = 0) {
     pos[k * 3] = v.x; pos[k * 3 + 1] = v.y; pos[k * 3 + 2] = v.z;
     uv[k * 2] = i / nx; uv[k * 2 + 1] = 1 - j / ny;
     el[k] = elevFn(i, j) - (edge ? skirtM : 0);
+    // pendiente por diferencias centradas, en metros reales (la malla es regular en lat/lon)
+    const i0 = Math.max(0, i - 1), i1 = Math.min(nx, i + 1), j0 = Math.max(0, j - 1), j1 = Math.min(ny, j + 1);
+    const mE = Math.max(1, ((i1 - i0) / nx) * lonSpan * D2R * R_MARS * Math.max(0.02, Math.cos(lat * D2R)));
+    const mN = Math.max(1, ((j1 - j0) / ny) * latSpan * D2R * R_MARS);
+    gr[k * 2] = (rawFn(i1, j) - rawFn(i0, j)) / mE;
+    gr[k * 2 + 1] = (rawFn(i, j0) - rawFn(i, j1)) / mN;        // j crece hacia el sur
   }
   const idx = new Uint32Array((W - 1) * (H - 1) * 6);
   let q = 0;
@@ -94,6 +154,7 @@ function gridMesh(latN, lonW, latSpan, lonSpan, nx, ny, elevFn, skirtM = 0) {
   g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
   g.setAttribute("aElev", new THREE.BufferAttribute(el, 1));
+  g.setAttribute("aGrad", new THREE.BufferAttribute(gr, 2));
   g.setIndex(new THREE.BufferAttribute(idx, 1));
   g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1.2);
   return g;
@@ -124,9 +185,24 @@ export class Globe3D {
       const u = rnd() * 2 - 1, a = rnd() * 6.2832, r = Math.sqrt(1 - u * u);
       p[i * 3] = r * Math.cos(a) * 15; p[i * 3 + 1] = u * 15; p[i * 3 + 2] = r * Math.sin(a) * 15;
     }
+    // brillo y tono variados (muchas tenues, pocas brillantes; algunas azuladas o anaranjadas)
+    const col = new Float32Array(n * 3), sz = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const b = 0.25 + 0.75 * Math.pow(rnd(), 3.2), tint = rnd();
+      col[i * 3] = b * (tint > 0.8 ? 1 : 0.9); col[i * 3 + 1] = b * 0.92; col[i * 3 + 2] = b * (tint < 0.25 ? 1 : 0.85);
+      sz[i] = 1 + 2.2 * Math.pow(rnd(), 4);
+    }
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(p, 3));
-    const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0.7, depthWrite: false }));
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    g.setAttribute("aSize", new THREE.BufferAttribute(sz, 1));
+    const pts = new THREE.Points(g, new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, uniforms: { uPx: { value: 1 } },
+      vertexShader: /* glsl */ `attribute float aSize; attribute vec3 color; uniform float uPx; varying vec3 vC;
+        void main(){ vC = color; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_PointSize = aSize * uPx; }`,
+      fragmentShader: /* glsl */ `varying vec3 vC; void main(){ float d = length(gl_PointCoord - 0.5); gl_FragColor = vec4(vC, smoothstep(0.5, 0.1, d)); }`,
+    }));
+    this.starMat = pts.material;
     pts.frustumCulled = false;
     this.scene.add(pts);
   }
@@ -136,8 +212,11 @@ export class Globe3D {
       side: THREE.BackSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
       vertexShader: /* glsl */ `varying vec3 vN; varying vec3 vP; void main(){ vN = normalize(position); vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
       fragmentShader: /* glsl */ `varying vec3 vN; varying vec3 vP;
-        void main(){ vec3 V = normalize(cameraPosition - vP); float f = pow(clamp(1.0 + dot(vN, V), 0.0, 1.0), 3.0);
-          gl_FragColor = vec4(vec3(0.95, 0.55, 0.32) * f, f * 0.9); }`,
+        void main(){ vec3 V = normalize(cameraPosition - vP); float f = clamp(1.0 + dot(vN, V), 0.0, 1.0);
+          // halo fino: palido pegado al limbo y anaranjado hacia fuera (polvo en suspension)
+          float a = pow(f, 2.6);
+          vec3 c = mix(vec3(0.85, 0.42, 0.24), vec3(1.0, 0.8, 0.62), pow(f, 5.0));
+          gl_FragColor = vec4(c * a, a * 0.95); }`,
     });
     this.atmo = new THREE.Mesh(new THREE.SphereGeometry(1.035, 64, 32), mat);
     this.scene.add(this.atmo);
@@ -151,6 +230,7 @@ export class Globe3D {
     const rb = region ? { n: region.lat_north, w: region.lon_west, s: region.lat_north - region.h / region.ppd, e: region.lon_west + region.w / region.ppd } : null;
     // --- globo: 720 x 360 celdas (0,5°). Bajo el parche de Gale se hunde para que no asome ---
     const NX = 720, NY = 360, sx = rG.w / NX, sy = rG.h / NY;
+    const gRaw = (i, j) => rG.elev[Math.min(rG.h - 1, Math.round(j * sy)) * rG.w + (Math.min(rG.w - 1, Math.round(i * sx) % rG.w))];
     const gElev = (i, j) => {
       const x = Math.min(rG.w - 1, Math.round(i * sx) % rG.w), y = Math.min(rG.h - 1, Math.round(j * sy));
       let e = rG.elev[y * rG.w + x];
@@ -159,8 +239,9 @@ export class Globe3D {
       return e;
     };
     this.texG = mk(rG.canvas);
-    const globe = new THREE.Mesh(gridMesh(90, 0, 180, 360, NX, NY, gElev), terrainMaterial(this.texG, 0, true));
+    const globe = new THREE.Mesh(gridMesh(90, 0, 180, 360, NX, NY, gElev, 0, gRaw), terrainMaterial(this.texG, 0, true, 1));
     // --- Gale: MOLA 64 px/°, una celda por pixel; hundido bajo la zona EVA ---
+    const cRaw = (i, j) => rGale.elev[Math.min(rGale.h - 1, j) * rGale.w + Math.min(rGale.w - 1, i)];
     const cElev = (i, j) => {
       const x = Math.min(rGale.w - 1, i), y = Math.min(rGale.h - 1, j);
       let e = rGale.elev[y * rGale.w + x];
@@ -171,17 +252,18 @@ export class Globe3D {
       return e;
     };
     this.texGale = mk(rGale.canvas);
-    const gale = new THREE.Mesh(gridMesh(galeN, galeW, galeLat, galeLon, rGale.w, rGale.h, cElev, 7000), terrainMaterial(this.texGale, 3e-6, false));
+    const gale = new THREE.Mesh(gridMesh(galeN, galeW, galeLat, galeLon, rGale.w, rGale.h, cElev, 7000, cRaw), terrainMaterial(this.texGale, 3e-6, false, 1));
     // --- zona EVA: DTM del juego (1024 -> 256 celdas), ortoimagen CTX ---
     const NL = 256, st = local.n / NL;
     const lElev = (i, j) => local.h[Math.min(local.n - 1, Math.round(j * st)) * local.n + Math.min(local.n - 1, Math.round(i * st))] + local.yRef;
     this.texLocal = mk(local.image);
-    const loc = new THREE.Mesh(gridMesh(b.north_lat, b.west_lon_east, b.north_lat - b.south_lat, b.east_lon_east - b.west_lon_east, NL, NL, lElev, 1800), terrainMaterial(this.texLocal, 6e-6, false));
+    const loc = new THREE.Mesh(gridMesh(b.north_lat, b.west_lon_east, b.north_lat - b.south_lat, b.east_lon_east - b.west_lon_east, NL, NL, lElev, 1800), terrainMaterial(this.texLocal, 6e-6, false, 0.15));
     this.localMat = loc.material;
     const meshes = [globe, gale, loc];
     // --- zona de ~60 km: HRSC+MOLA 200 m, una celda por pixel; hundida bajo la zona EVA ---
     if (region) {
       const rStep = 1 / region.ppd;
+      const rRaw = (i, j) => region.elev[Math.min(region.h - 1, j) * region.w + Math.min(region.w - 1, i)];
       const rElev = (i, j) => {
         let e = region.elev[Math.min(region.h - 1, j) * region.w + Math.min(region.w - 1, i)];
         const lat = rb.n - (j / region.h) * (rb.n - rb.s), lon = rb.w + (i / region.w) * (rb.e - rb.w);
@@ -189,13 +271,15 @@ export class Globe3D {
         return e;
       };
       this.texRegion = mk(region.canvas);
-      const reg = new THREE.Mesh(gridMesh(rb.n, rb.w, rb.n - rb.s, rb.e - rb.w, region.w, region.h, rElev, 2500), terrainMaterial(this.texRegion, 4.5e-6, false));
+      const reg = new THREE.Mesh(gridMesh(rb.n, rb.w, rb.n - rb.s, rb.e - rb.w, region.w, region.h, rElev, 2500, rRaw), terrainMaterial(this.texRegion, 4.5e-6, false, 0.45));
       meshes.push(reg);
     }
     for (const m of meshes) { m.frustumCulled = false; this.scene.add(m); this.mats.push(m.material); }
     this.built = true;
   }
 
+  // casquetes polares: solo con el "tono marciano" (en relieve o presion taparian la escala de color)
+  setIce(on) { for (const m of this.mats) m.uniforms.uIce.value = on ? 1 : 0; }
   texturesChanged() { if (this.texG) { this.texG.needsUpdate = true; this.texGale.needsUpdate = true; if (this.texRegion) this.texRegion.needsUpdate = true; } }
   setOverlay(img) {
     if (!this.localMat) return;
@@ -208,6 +292,7 @@ export class Globe3D {
   setSize(w, h, dpr) {
     this.W = w; this.H = h;
     this.renderer.setPixelRatio(dpr);
+    if (this.starMat) this.starMat.uniforms.uPx.value = dpr;
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
@@ -221,7 +306,7 @@ export class Globe3D {
   // exageracion vertical: automatica (12x de lejos -> 2x de cerca) o fija
   _updateK() {
     this.k = this.exagMode === "auto" ? Math.max(1.5, Math.min(12, 2 + 4.35 * Math.log10(this.cam.alt / 0.005))) : +this.exagMode;
-    for (const m of this.mats) m.uniforms.uK.value = this.k / R_MARS;
+    for (const m of this.mats) { m.uniforms.uK.value = this.k / R_MARS; m.uniforms.uExag.value = this.k; }
   }
 
   // elevFn(lat, lon) -> m (la da el atlas). Coloca la camara segun foco, altura, inclinacion y rumbo.

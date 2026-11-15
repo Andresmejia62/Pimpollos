@@ -1,5 +1,7 @@
 // Estado y reglas del juego. Implementa public/layers/rules.json (M3) tal cual
 // y la campana de public/story/missions.json (M4).
+import { floorAt } from "../engine/interiors.js";
+import { loadDiff } from "./difficulty.js";
 import { MARS, PHYS, boxCollider } from "../engine/physics.js";
 import { Physiology, REF, REF_FLAT_W, TERRAIN_ETA, DEFAULT_PROFILE, BASE_KIT_KG, SAMPLE_KG } from "../engine/physiology.js";
 
@@ -16,6 +18,7 @@ export class Game {
     this.groundAt = groundAt;
     this.colliders = colliders;
     this.dynamics = dynamics;
+    this.diff = loadDiff();
     this._p = { x: 0, z: 0, nx: 0, nz: 0, hit: false };
     this._v = { vx: 0, vz: 0 };
     // el mundo esta comprimido: la traccion se escala igual que la velocidad de marcha (ver PHYS.realWalkSpeed)
@@ -39,7 +42,14 @@ export class Game {
     this.loadK = Math.sqrt(REF.total / this.bio.total);        // misma potencia de piernas, mas masa -> algo mas lento
     this.realPerWorld = REF.vDesign / this.rules.movement.walk_speed_mps;
     // capacidad de O2 del traje: 8 h para el astronauta de referencia caminando en llano (rules.json -> oxygen)
-    this.o2CapacityG = REF.o2gPerH(REF_FLAT_W) * 8 * (this.rules.resources.oxygen.metabolic_calibration || 1);
+    this._o2Base = REF.o2gPerH(REF_FLAT_W) * 8 * (this.rules.resources.oxygen.metabolic_calibration || 1);
+    this.o2CapacityG = this._o2Base * (this.diff ? this.diff.o2K : 1);
+  }
+
+  // Dificultad (gameplay/difficulty.js): margenes del traje y frecuencia de tormentas
+  setDiff(d) {
+    this.diff = d;
+    if (this._o2Base) this.o2CapacityG = this._o2Base * d.o2K;
   }
 
   // Carga a pie: kit base + muestras recogidas y no entregadas todavia
@@ -90,6 +100,8 @@ export class Game {
     if (s.free) return this.objectives.custom || null;
     return this.objectives[this.mission.objective_id];
   }
+  // Temperatura del suelo con el efecto de la tormenta de polvo (si la hay)
+  tempAt(x, z, hour = this.hour) { return this.world.temperature(x, z, hour) + (this.weather ? this.weather.thermalOffset(hour) : 0); }
   get hour() { return this.rules.time.start_local_time_h + (this.s.gameSeconds + (this.s.clockOffset || 0)) / 3600; }
 
   nearestShelter(from = { x: this.s.x, z: this.s.z }) {
@@ -360,7 +372,7 @@ export class Game {
 
     // Ambiente en la posicion actual
     const slope = W.slope(s.x, s.z);
-    const temp = W.temperature(s.x, s.z, this.hour);
+    const temp = this.tempAt(s.x, s.z, this.hour);
     const dose = W.radiation(s.x, s.z);
     this.env = { slope, temp, dose };
 
@@ -368,7 +380,9 @@ export class Game {
     const prevShelter = s.inShelter;
     s.inShelter = null;
     for (const o of Object.values(this.objectives)) {
-      if (o.shelter && this.distTo(o) < this.radiusOf(o) + 6) { s.inShelter = o.id; break; }
+      // los interiores caminables (cupula, invernadero) solo cuentan si estas dentro de verdad
+      const inside = o.interior ? this.distTo(o) < o.radius_m : this.distTo(o) < this.radiusOf(o) + 6;
+      if (o.shelter && inside) { s.inShelter = o.id; break; }
     }
     if (s.inShelter && s.inShelter !== prevShelter) {
       this.emit("shelter", this.objectives[s.inShelter]);
@@ -407,14 +421,15 @@ export class Game {
     // bateria: electronica + ventiladores/bomba (crecen con el calor metabolico) + calefaccion (crece con el frio
     // y con la superficie corporal, y baja si el cuerpo produce mas calor)
     const cold = R.energy.cold.extra_per_deg * Math.max(0, R.energy.cold.comfort_c - temp) * (bio.bsa / REF.bsa) * clamp(Math.sqrt(REF_FLAT_W / b.M), 0.7, 1.3);
-    s.energy -= R.energy.base_drain_per_s * (0.85 + 0.15 * (b.M / REF_FLAT_W)) * (1 + cold) * dt;
+    const dK = this.diff || { drainK: 1, damageK: 1 };
+    s.energy -= R.energy.base_drain_per_s * (0.85 + 0.15 * (b.M / REF_FLAT_W)) * (1 + cold) * dK.drainK * dt;
     const E = this.rules.events.solar_particle_event;
     const speMult = s.spe && s.spe.phase === "active" ? E.dose_multiplier : 1;
     const shelterK = s.inShelter ? E.shelter_factor : 1;
-    s.integrity -= R.integrity.radiation.k_per_ugy_h * dose * speMult * shelterK * dt;
+    s.integrity -= R.integrity.radiation.k_per_ugy_h * dose * speMult * shelterK * dK.damageK * dt;
     b.doseUgy += (dose * speMult * shelterK * dtg) / 3600;           // dosis absorbida real de la EVA (µGy)
     this._track();
-    if (onFoot && slope > R.integrity.slip.from_deg && slope <= R.integrity.slip.to_deg) s.integrity -= R.integrity.slip.drain_per_s * dt;
+    if (onFoot && slope > R.integrity.slip.from_deg && slope <= R.integrity.slip.to_deg) s.integrity -= R.integrity.slip.drain_per_s * dK.damageK * dt;
     if (s.inShelter) {
       const cap = s.inShelter === "rover" ? R.shelter_refill.rover_cap : 100;
       if (s.oxygen < cap) s.oxygen = Math.min(cap, s.oxygen + R.shelter_refill.oxygen_per_s * dt);
@@ -614,7 +629,7 @@ export class Game {
           s.vx -= (1 + bounce) * vn * p.nx; s.vz -= (1 + bounce) * vn * p.nz;
           // el rover tiene 1800 kg de inercia: un choque frontal rapido se nota en el traje
           if (drv && -vn > PHYS.carCrashSafe) {
-            const damage = (-vn - PHYS.carCrashSafe) * PHYS.carCrashDamage;
+            const damage = (-vn - PHYS.carCrashSafe) * PHYS.carCrashDamage * (this.diff ? this.diff.damageK : 1);
             s.integrity -= damage;
             this.emit("crash", { impact: -vn, damage });
           }
@@ -641,7 +656,8 @@ export class Game {
         s.vy = Math.max(0, vG) * 0.5 + PHYS.jumpV * this.bio.jumpK;
         s.grounded = false;
         this.emit("jump");
-      } else if (s.y - gNew > PHYS.step || vG < s.vy - MARS.g * dt - (drv ? PHYS.carCrestTol : PHYS.crestTol)) {
+      } else if (!(!drv && floorAt(nx, nz) != null && Math.abs(s.y - gNew) < PHYS.step) && (s.y - gNew > PHYS.step || vG < s.vy - MARS.g * dt - (drv ? PHYS.carCrestTol : PHYS.crestTol))) {
+        // (en suelos construidos -rampas y esclusas- se camina pegado al suelo: no hay "salto de cresta")
         s.grounded = false;
       } else {
         s.y = gNew;
@@ -657,7 +673,7 @@ export class Game {
         s.vy = vG;
         s.grounded = true;
         const safe = drv ? PHYS.carSafeImpact : PHYS.safeImpact;
-        const damage = Math.max(0, impact - safe) * (drv ? PHYS.carImpactDamage : PHYS.impactDamage);
+        const damage = Math.max(0, impact - safe) * (drv ? PHYS.carImpactDamage : PHYS.impactDamage) * (this.diff ? this.diff.damageK : 1);
         if (damage > 0) s.integrity -= damage;
         if (impact > 1.2) this.emit("land", { impact, damage, driving: drv });
       }

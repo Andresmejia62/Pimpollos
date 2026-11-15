@@ -3,6 +3,45 @@ import { assetUrl } from "../data.js";
 import { Colliders, Dynamics } from "./physics.js";
 import { loadMolaGale } from "./mola.js";
 import { moonsAt, sunAngularRadius } from "./moons.js";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { Pass } from "three/examples/jsm/postprocessing/Pass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
+
+// Limpia el bufer HDR antes del resplandor: un pixel NaN o infinito (p. ej. una superficie pegada a una luz
+// puntual supera el maximo del half-float) se extenderia con el desenfoque del bloom como bloques negros.
+const SANITIZE = {
+  uniforms: { tDiffuse: { value: null } },
+  vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+  fragmentShader: /* glsl */ `uniform sampler2D tDiffuse; varying vec2 vUv;
+    void main(){
+      vec4 c = texture2D(tDiffuse, vUv);
+      // exponente con todos los bits a 1: infinito (mantisa 0) o NaN (mantisa != 0). Se comprueba con bits porque
+      // algunos drivers eliminan isnan/isinf. Un infinito suele ser el brillo del Sol en el vidrio o en un visor
+      // (supera el maximo del half-float): se deja como destello maximo; un NaN se apaga.
+      uvec3 u = floatBitsToUint(c.rgb);
+      bvec3 special = equal(u & uvec3(0x7f800000u), uvec3(0x7f800000u));
+      bvec3 isNan = bvec3(special.x && (u.x & 0x007fffffu) != 0u, special.y && (u.y & 0x007fffffu) != 0u, special.z && (u.z & 0x007fffffu) != 0u);
+      vec3 col = vec3(special.x ? 48.0 : c.r, special.y ? 48.0 : c.g, special.z ? 48.0 : c.b);
+      col = vec3(isNan.x ? 0.0 : col.r, isNan.y ? 0.0 : col.g, isNan.z ? 0.0 : col.b);
+      gl_FragColor = vec4(clamp(col, 0.0, 48.0), 1.0);
+    }`,
+};
+import { GFX, onGfx } from "../gfx.js";
+
+// Dibuja las dos escenas (lejana y cercana) en el bufer del compositor, como render() sin post-proceso
+class DualRenderPass extends Pass {
+  constructor(ms) { super(); this.ms = ms; this.needsSwap = false; }
+  render(r, writeBuffer, readBuffer) {
+    const ms = this.ms;
+    r.setRenderTarget(readBuffer);
+    r.clear();
+    r.render(ms.skyScene, ms.farCamera);
+    r.clearDepth();
+    r.render(ms.scene, ms.camera);
+  }
+}
 
 // Ajustes de aspecto (un solo sitio para retocar la luz y la profundidad de toda la escena)
 export const LOOK = {
@@ -75,6 +114,66 @@ function detailTexture() {
   return tex;
 }
 
+// Textura "micro" para el suelo cercano (1024 px, repetible): regolito visto de cerca.
+//   R = altura: arena con grano fino (0..0,38) y piedras sueltas con forma de casquete (0,42..1)
+//   G/B = derivadas de la altura (relieve: las piedras se iluminan por un lado y se sombrean por el otro)
+//   A = cavidad: > 0,5 en lo que sobresale, < 0,5 en los huecos y al pie de las piedras (sombra de contacto)
+// El sombreador la usa a dos escalas: gravilla (2,4 m por repeticion) y guijarros y cantos (9,3 m, girada).
+function microTexture() {
+  const S = 1024;
+  const h = new Float32Array(S * S);
+  // arena: ondulacion suave + grano cada vez mas fino
+  [[12, 0.11, 5], [32, 0.08, 9], [96, 0.07, 13], [256, 0.06, 17], [512, 0.06, 29]].forEach(([c, w, seed]) => {
+    const n = tileNoise(S, c, seed);
+    for (let i = 0; i < h.length; i++) h[i] += n[i] * w;
+  });
+  // piedras: elipses con perfil de casquete, muchas pequenas y pocas grandes (reparto de tamanos de un regolito)
+  let sd = 90210;
+  const rnd = () => ((sd = (sd * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const rough = tileNoise(S, 384, 61);
+  for (let k = 0; k < 520; k++) {
+    const cx = rnd() * S, cy = rnd() * S, r = 3 + Math.pow(rnd(), 3.3) * 24;
+    const ax = 0.65 + rnd() * 0.7, ang = rnd() * Math.PI, ca = Math.cos(ang), sa = Math.sin(ang);
+    const peak = 0.35 + 0.65 * rnd(), flat = 0.18 + rnd() * 0.3;          // lados empinados y cima casi plana
+    // contorno irregular (anguloso) y cima inclinada: asi cada piedra tiene caras que miran a sitios distintos
+    const p3 = rnd() * 6.28, p5 = rnd() * 6.28, a3 = 0.1 + rnd() * 0.2, a5 = 0.05 + rnd() * 0.14;
+    const tx = (rnd() - 0.5) * 0.5, ty = (rnd() - 0.5) * 0.5;
+    const R = Math.ceil(r * 1.8);
+    for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+      const u = (dx * ca + dy * sa) / (r * ax), v = (-dx * sa + dy * ca) / (r / ax);
+      const th = Math.atan2(v, u), edge = 1 + a3 * Math.sin(3 * th + p3) + a5 * Math.sin(5 * th + p5);
+      const d2 = (u * u + v * v) / (edge * edge);
+      if (d2 >= 1) continue;
+      const i = (((Math.round(cy) + dy) % S + S) % S) * S + (((Math.round(cx) + dx) % S + S) % S);
+      const cap = Math.pow(1 - d2, flat);
+      const val = 0.42 + 0.58 * peak * cap * (1 + tx * u + ty * v) + (rough[i] - 0.5) * 0.08 * cap;
+      if (val > h[i]) h[i] = val;
+    }
+  }
+  // cavidad: altura frente a la media de alrededor (desenfoque de caja separable, radio 6)
+  const blur = new Float32Array(S * S), tmp = new Float32Array(S * S), Rb = 6, nb = 2 * Rb + 1;
+  for (let y = 0; y < S; y++) { let acc = 0; for (let x = -Rb; x <= Rb; x++) acc += h[y * S + ((x + S) % S)]; for (let x = 0; x < S; x++) { tmp[y * S + x] = acc / nb; acc += h[y * S + ((x + Rb + 1) % S)] - h[y * S + ((x - Rb + S) % S)]; } }
+  for (let x = 0; x < S; x++) { let acc = 0; for (let y = -Rb; y <= Rb; y++) acc += tmp[((y + S) % S) * S + x]; for (let y = 0; y < S; y++) { blur[y * S + x] = acc / nb; acc += tmp[((y + Rb + 1) % S) * S + x] - tmp[((y - Rb + S) % S) * S + x]; } }
+  const data = new Uint8Array(S * S * 4);
+  const at = (x, y) => h[((y + S) % S) * S + ((x + S) % S)];
+  const c8 = (v) => Math.round(255 * Math.min(1, Math.max(0, v)));
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const i = y * S + x, j = i * 4;
+    data[j] = c8(h[i]);
+    data[j + 1] = c8(0.5 + (at(x + 1, y) - at(x - 1, y)) * 5.0);
+    data[j + 2] = c8(0.5 + (at(x, y + 1) - at(x, y - 1)) * 5.0);
+    data[j + 3] = c8(0.5 + (h[i] - blur[i]) * 3.2);
+  }
+  const tex = new THREE.DataTexture(data, S, S, THREE.RGBAFormat);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.anisotropy = 16;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 // Luz "horneada" en la ortoimagen. Las fotos de HiRISE se tomaron con el sol en una posicion concreta, asi que
 // las laderas que lo miraban salen mas claras. Se ajusta por minimos cuadrados  gris = c0 + cx*nx + cz*nz
 // (nx, nz: normal del terreno hacia el Este y el Sur) sobre una copia reducida de las dos texturas; el sombreador
@@ -132,6 +231,27 @@ const TERRAIN_VS = /* glsl */ `
 const SHADE_GLSL = /* glsl */ `
   uniform vec3 uSunDir, uSunColor, uAmbient, uFogColor, uColLo, uColMid, uColHi;
   uniform float uFogDensity, uDustH, uStorm, uFill;
+  uniform vec3 uLampPos, uLampDir, uHelmPos, uHelmDir;
+  uniform float uLampK, uHelmK;
+
+  // Faros del rover y linterna del casco: cono con caida por distancia (solo de noche o con tormenta)
+  vec3 lamps(vec3 base, vec3 N, vec3 p) {
+    vec3 acc = vec3(0.0);
+    if (uLampK > 0.01) {
+      vec3 L = uLampPos - p; float d = length(L); vec3 l = L / d;
+      float cone = smoothstep(0.80, 0.95, dot(-l, uLampDir));
+      float att = 9.0 / (1.0 + 0.035 * d * d) * smoothstep(75.0, 20.0, d);
+      float glow = 0.5 * smoothstep(8.0, 0.0, d);
+      acc += vec3(0.92, 0.96, 1.08) * uLampK * (cone * att * max(dot(N, l), 0.0) + glow * max(N.y, 0.0));
+    }
+    if (uHelmK > 0.01) {
+      vec3 L = uHelmPos - p; float d = length(L); vec3 l = L / d;
+      float cone = smoothstep(0.78, 0.94, dot(-l, uHelmDir));
+      float att = 3.2 / (1.0 + 0.06 * d * d) * smoothstep(32.0, 8.0, d);
+      acc += vec3(1.0, 0.97, 0.9) * uHelmK * (cone * att * max(dot(N, l), 0.0) + 0.25 * smoothstep(4.0, 0.0, d));
+    }
+    return base * acc;
+  }
 
   vec3 ramp(float g) {
     return g < 0.5 ? mix(uColLo, uColMid, g * 2.0) : mix(uColMid, uColHi, (g - 0.5) * 2.0);
@@ -161,7 +281,8 @@ const SHADE_GLSL = /* glsl */ `
   float marsFog(float dist, float dy) {
     float k = dy / uDustH;
     float thin = abs(k) < 0.001 ? 1.0 : (1.0 - exp(-k)) / k;
-    return clamp(1.0 - exp(-dist * uFogDensity * thin * (1.0 + 5.0 * uStorm)), 0.0, 1.0);
+    // tormenta de polvo: la opacidad crece mucho mas que linealmente (tau ~0,5 normal -> 3-5 en una tormenta)
+    return clamp(1.0 - exp(-dist * uFogDensity * thin * (1.0 + 5.0 * uStorm + 85.0 * uStorm * uStorm)), 0.0, 1.0);
   }
 `;
 
@@ -171,6 +292,7 @@ const TERRAIN_FS = /* glsl */ `
   uniform sampler2D uAO;         // fraccion de cielo visible
   uniform sampler2D uOverlay;
   uniform sampler2D uDetail;
+  uniform sampler2D uMicro;      // regolito de cerca: R altura, GB derivadas, A cavidad (microTexture)
   uniform float uHasHD, uOverlayOn, uUseFlat, uSize, uDelight, uFlatten, uAoFloor, uMeanG;
   uniform float uHole;           // faldon: no se dibuja dentro del recorte detallado (|x|,|z| < uHole)
   uniform vec4 uBake;            // luz horneada en la ortoimagen: (cx, cz, media nx, media nz)
@@ -241,21 +363,47 @@ const TERRAIN_FS = /* glsl */ `
     // el polvo fino se acumula en lo llano y resguardado
     base = mix(base, base * vec3(1.08, 1.03, 0.95), (1.0 - rock) * smoothstep(0.9, 0.6, ao) * 0.5);
     // guijarros oscuros sueltos, solo de cerca
-    float pebble = smoothstep(0.80, 0.86, d1.a) * (1.0 - smoothstep(6.0, 28.0, dist)) * (1.0 - rock);
-    base *= 1.0 - 0.35 * pebble;
+    // ---- regolito de cerca (textura micro): grano de arena, gravilla y guijarros ----
+    // dos escalas giradas entre si para que no se note la repeticion; las piedras aparecen en parches
+    float k0 = 1.0 - smoothstep(5.0, 26.0, dist);            // gravilla: a pocos metros
+    float k1 = 1.0 - smoothstep(18.0, 85.0, dist);           // guijarros y cantos: hasta media distancia
+    mat2 rotM = mat2(0.8, -0.6, 0.6, 0.8);
+    vec4 m0 = texture2D(uMicro, vPosW.xz / 2.4);
+    vec4 m1 = texture2D(uMicro, rotM * vPosW.xz / 9.3 + 0.31);
+    float patch0 = smoothstep(0.30, 0.62, d2.a + (d3.r - 0.5) * 0.5);
+    float patch1 = smoothstep(0.40, 0.68, d3.a * 0.55 + d2.r * 0.45) * (1.0 - 0.5 * rock);
+    float st0 = smoothstep(0.42, 0.52, m0.r) * k0 * patch0;
+    float st1 = smoothstep(0.42, 0.52, m1.r) * k1 * patch1;
+    // arena: grano fino y huecos mas oscuros; al pie de cada piedra queda su sombra de contacto
+    base *= mix(1.0, 0.84 + 0.32 * m0.a, k0 * mix(0.4, 1.0, patch0)) * mix(1.0, 0.86 + 0.28 * m1.a, k1 * mix(0.4, 1.0, patch1));
+    // piedras: basalto mas oscuro y gris que el polvo; el polvo claro se queda en las cimas
+    vec3 grayB = vec3(dot(base, vec3(0.3, 0.5, 0.2)));
+    vec3 stone0 = mix(grayB * vec3(0.72, 0.66, 0.64), base, 0.15 + 0.3 * smoothstep(0.6, 1.0, m0.r));
+    vec3 stone1 = mix(grayB * vec3(0.66, 0.61, 0.6), base, 0.12 + 0.3 * smoothstep(0.6, 1.0, m1.r));
+    base = mix(base, stone0, st0);
+    base = mix(base, stone1, st1);
 
     // relieve fino
     vec2 bump = (d1.gb - 0.5) * 1.7 * near + (d2.gb - 0.5) * 1.0 * mid;
     bump += vec2(0.8, 0.55) * cos((vPosW.x * 0.8 + vPosW.z * 0.55) * 2.6 + d2.r * 9.0 + d3.a * 14.0) * 0.1 * close * (1.0 - rock);
     N = normalize(N + vec3(bump.x, 0.0, bump.y) * mix(0.5, 1.25, rock));
+    // relieve del regolito de cerca (normal = -gradiente de la altura; la capa girada se devuelve al mundo)
+    vec2 g0 = (m0.gb - 0.5) * k0 * mix(0.45, 1.0, patch0);
+    vec2 g1 = ((m1.gb - 0.5) * rotM) * k1 * mix(0.35, 1.0, patch1);
+    N = normalize(N - vec3(g0.x + g1.x, 0.0, g0.y + g1.y) * 2.6);
+    // la luz del cielo de Marte es muy difusa y aplana el relieve fino: se refuerza la cara que mira al Sol
+    // y se oscurece la contraria, para que las piedras se lean como bultos y no como hoyos
+    float relief = dot(-(g0 + g1), normalize(uSunDir.xz + 1e-4)) * clamp(uSunColor.g, 0.0, 1.0);
+    base *= clamp(1.0 + relief * 2.4, 0.5, 1.6);
     // los estratos forman pequenos escalones: oscurecen la cara inferior de cada capa
     float ledge = smoothstep(0.55, 0.75, strata) - smoothstep(0.75, 0.95, strata);
     base *= 1.0 - 0.22 * ledge * rock * mid;
 
-    vec3 col = marsLight(base, N, ao);
+    vec3 col = marsLight(base, N, ao) + lamps(base, N, vPosW);
 
     vec4 ov = texture2D(uOverlay, vUv);
-    col = mix(col, ov.rgb, ov.a * uOverlayOn * 0.85);
+    // la capa de datos se ve entera de cerca y se desvanece a lo lejos (en las laderas lejanas se estiraba en manchas)
+    col = mix(col, ov.rgb, ov.a * uOverlayOn * 0.85 * (1.0 - 0.85 * smoothstep(400.0, 2400.0, dist)));
 
     col = mix(col, uFogColor, marsFog(dist, vPosW.y - cameraPosition.y));
     gl_FragColor = vec4(col, 1.0);
@@ -477,6 +625,7 @@ export class MarsScene {
     }
     this.bake = this.hasHD ? fitBakedLight(this.textures.albedo.image, this.textures.normal.image) : null;
     this.textures.detail = detailTexture();
+    this.textures.micro = microTexture();
     this.textures.empty = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1);
     this.textures.empty.needsUpdate = true;
     onProgress(0.65);
@@ -493,6 +642,7 @@ export class MarsScene {
   resize() {
     const w = window.innerWidth, h = window.innerHeight;
     this.renderer.setSize(w, h, false);
+    if (this.composer) { const sz = this.renderer.getDrawingBufferSize(new THREE.Vector2()); this.composer.setSize(sz.x, sz.y); }
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.farCamera.aspect = w / h;
@@ -570,11 +720,59 @@ export class MarsScene {
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     const c = this.sun.shadow.camera;
-    c.left = -46; c.right = 46; c.top = 46; c.bottom = -46; c.near = 1; c.far = 420;
+    // la luz esta a 200 m del jugador hacia el sol: mas alla de ~60 m por detras nada proyecta sombra en la zona visible
+    c.left = -46; c.right = 46; c.top = 46; c.bottom = -46; c.near = 1; c.far = 260;
     this.sun.shadow.bias = -0.0006;
     this.sun.shadow.normalBias = 0.05;
     this.scene.add(this.hemi, this.sun, this.sun.target);
     this.focus = new THREE.Vector3();
+    this._buildEnv();
+    onGfx(() => { this._applyEnv(); if (!GFX.bloom && this.composer) { this.composer.dispose(); this.composer = null; } });
+  }
+
+  // Mapa de entorno: un cielo de Marte simplificado (cenit caramelo, horizonte claro, suelo oxido) filtrado con
+  // PMREM. Da reflejos creibles al metal, al vidrio de las cupulas y a los visores. Se calcula una vez.
+  _buildEnv() {
+    try {
+      const sc = new THREE.Scene();
+      const geo = new THREE.SphereGeometry(10, 32, 16);
+      const col = [], p = geo.attributes.position;
+      const zen = new THREE.Color("#b88a64"), hor = new THREE.Color("#e8c3a0"), gnd = new THREE.Color("#5a3424"), c = new THREE.Color();
+      for (let i = 0; i < p.count; i++) {
+        const y = p.getY(i) / 10;
+        if (y >= 0) c.copy(hor).lerp(zen, Math.pow(y, 0.6)); else c.copy(hor).lerp(gnd, Math.min(1, -y * 4));
+        col.push(c.r, c.g, c.b);
+      }
+      geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+      sc.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+      // "sol" difuso para que haya un brillo especular
+      const sun = new THREE.Mesh(new THREE.SphereGeometry(1.2, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(6, 5.6, 5) }));
+      sun.position.set(4, 7, -5); sc.add(sun);
+      const pm = new THREE.PMREMGenerator(this.renderer);
+      this.envTex = pm.fromScene(sc, 0.04).texture;
+      pm.dispose(); geo.dispose();
+    } catch (e) { console.warn("Sin mapa de entorno", e); this.envTex = null; }
+    this._applyEnv();
+  }
+  _applyEnv() { this.scene.environment = GFX.env && this.envTex ? this.envTex : null; }
+
+  // Post-proceso con resplandor (UnrealBloom). Si algo falla, se vuelve al render directo.
+  _initPost() {
+    try {
+      const r = this.renderer, size = r.getDrawingBufferSize(new THREE.Vector2());
+      // con pantallas de alta densidad 2x MSAA basta (los pixeles ya son pequenos) y ahorra memoria y ancho de banda
+      const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: r.getPixelRatio() >= 1.5 ? 2 : 4 });
+      const comp = new EffectComposer(r, rt);
+      comp.setPixelRatio(1);
+      comp.setSize(size.x, size.y);
+      comp.addPass(new DualRenderPass(this));
+      comp.addPass(new ShaderPass(SANITIZE));
+      // umbral alto: solo brillan las luces y el Sol, no el cielo ni el suelo iluminados (antes velaba la imagen)
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.2, 0.3, 1.25);
+      comp.addPass(this.bloom);
+      comp.addPass(new OutputPass());
+      this.composer = comp;
+    } catch (e) { console.warn("Sin post-proceso", e); GFX.bloom = false; this.composer = null; }
   }
 
   setTimeOfDay(hour) {
@@ -589,7 +787,7 @@ export class MarsScene {
     const low = 1 - Math.min(1, Math.max(0, y * 1.6));   // sol bajo: luz mas calida
     const st = this.storm;
     if (this.terrainMat) {
-      const k = 1 - 0.45 * st;
+      const k = 1 - 0.7 * st;
       this.terrainMat.uniforms.uSunColor.value.setRGB(1.3 * day * k, (1.2 - 0.22 * low) * day * k, (1.08 - 0.4 * low) * day * k);
       this.terrainMat.uniforms.uAmbient.value.setRGB(0.2 + 0.2 * day, 0.17 + 0.16 * day, 0.15 + 0.13 * day);
     }
@@ -603,13 +801,23 @@ export class MarsScene {
     U.uPhobos.value.set(mo[0].dir[0], mo[0].dir[1], mo[0].dir[2], mo[0].radius);
     U.uDeimos.value.set(mo[1].dir[0], mo[1].dir[1], mo[1].dir[2], mo[1].radius);
     U.uMoonLit.value.set(mo[0].lit, mo[1].lit);
-    this.sun.intensity = 2.6 * day * (1 - 0.5 * st);
+    this.sun.intensity = 2.6 * day * (1 - 0.75 * st);
     this.sun.color.setRGB(1, 0.95 - 0.15 * low, 0.86 - 0.3 * low);
-    this.hemi.intensity = 0.55 + 0.6 * day;
+    // con mapa de entorno, la luz del cielo llega en parte por el (reflejos); el hemisferio baja un poco
+    const envOn = !!this.scene.environment;
+    this.hemi.intensity = (0.55 + 0.6 * day) * (envOn ? 0.8 : 1);
+    this.scene.environmentIntensity = (0.12 + 0.5 * day) * (1 - 0.5 * st);
   }
 
   // Tormenta de particulas solares (0..1): aurora en el cielo. No es polvo: no cambia la bruma.
   setAurora(v) { this.skyMat.uniforms.uAurora.value = v; }
+
+  // Luces que iluminan el terreno (sus shaders no usan las luces de Three.js)
+  setLamps(lamp, helm) {
+    const u = this.shade || this._shadeUniforms();
+    if (lamp) { u.uLampPos.value.copy(lamp.pos); u.uLampDir.value.copy(lamp.dir); u.uLampK.value = lamp.k; }
+    if (helm) { u.uHelmPos.value.copy(helm.pos); u.uHelmDir.value.copy(helm.dir); u.uHelmK.value = helm.k; }
+  }
 
   setStorm(v) {
     this.storm = v;
@@ -618,7 +826,7 @@ export class MarsScene {
     if (this.terrainMat) this.terrainMat.uniforms.uStorm.value = v;
     if (this.apron) this.apron.material.uniforms.uStorm.value = v;
     if (this.farTerrain) this.farTerrain.material.uniforms.uStorm.value = v;
-    this.scene.fog.density = LOOK.fogDensity * (1 + 5 * v);
+    this.scene.fog.density = LOOK.fogDensity * Math.sqrt(1 + 5 * v + 85 * v * v);
   }
 
   // ---- terreno --------------------------------------------------------------------------
@@ -626,7 +834,7 @@ export class MarsScene {
     const T = this.textures, B = this.bake;
     return {
       uAlbedo: { value: T.albedo }, uNormalMap: { value: T.normal }, uAO: { value: T.ao },
-      uOverlay: { value: T.empty }, uDetail: { value: T.detail },
+      uOverlay: { value: T.empty }, uDetail: { value: T.detail }, uMicro: { value: T.micro },
       uHasHD: { value: this.hasHD }, uSize: { value: this.world.size }, uOverlayOn: { value: 0 }, uUseFlat: { value: flat ? 1 : 0 },
       // hueco del faldon. Siempre explicito: terreno y faldon comparten programa GLSL y un uniform que un
       // material no declara conserva el ultimo valor que puso el otro (el terreno se descartaria entero)
@@ -643,6 +851,8 @@ export class MarsScene {
       uSunDir: { value: this.sunDir }, uSunColor: { value: new THREE.Color(1.3, 1.2, 1.05) }, uAmbient: { value: new THREE.Color(0.4, 0.32, 0.26) },
       uFogColor: { value: this.fogColor }, uFogDensity: { value: LOOK.fogDensity }, uDustH: { value: LOOK.dustScaleH }, uFill: { value: LOOK.fill },
       uColLo: { value: new THREE.Color(COL_LO) }, uColMid: { value: new THREE.Color(COL_MID) }, uColHi: { value: new THREE.Color(COL_HI) },
+      uLampPos: { value: new THREE.Vector3() }, uLampDir: { value: new THREE.Vector3(0, 0, -1) }, uLampK: { value: 0 },
+      uHelmPos: { value: new THREE.Vector3() }, uHelmDir: { value: new THREE.Vector3(0, 0, -1) }, uHelmK: { value: 0 },
     };
     // uStorm es propio de cada material (setStorm los actualiza uno a uno)
     return { ...this.shade, uStorm: { value: this.storm } };
@@ -998,7 +1208,24 @@ export class MarsScene {
   // objetos con animacion propia: fn(time, dt)
   addAnimated(fn) { this.animated.push(fn); }
 
+  // Resolucion dinamica: si el juego baja de ~42 fps de forma sostenida, reduce la densidad de pixeles (hasta el
+  // 60 %); si va sobrado durante un rato, la recupera. Ignora pestanas ocultas y tirones aislados.
+  _adaptResolution(dt) {
+    if (document.hidden || !(dt > 0) || dt > 0.1) return;
+    this._ft = this._ft == null ? dt : this._ft * 0.94 + dt * 0.06;
+    this._adaptT = (this._adaptT || 0) + dt;
+    this._goodT = this._ft < 1 / 57 ? (this._goodT || 0) + dt : 0;
+    if (this._adaptT < 2) return;
+    const base = Math.min(window.devicePixelRatio, 1.75), lo = Math.max(0.75, base * 0.6), pr = this.renderer.getPixelRatio();
+    let next = pr;
+    if (this._ft > 1 / 42 && pr > lo + 0.01) next = Math.max(lo, pr - 0.15);
+    else if (this._goodT > 8 && pr < base - 0.01) { next = Math.min(base, pr + 0.1); this._goodT = 0; }
+    if (next !== pr) { this.renderer.setPixelRatio(next); this.resize(); this._adaptT = 0; }
+    else this._adaptT = 1.5;
+  }
+
   render(time, dt = 0.016) {
+    this._adaptResolution(dt);
     this.skyMat.uniforms.uTime.value = time;
     this.dustMat.uniforms.uTime.value = time;
     this.routeMat.uniforms.uTime.value = time;
@@ -1024,6 +1251,14 @@ export class MarsScene {
     far.position.copy(cam.position);
     far.quaternion.copy(cam.quaternion);
     this.sky.position.copy(cam.position);
+    if (GFX.bloom && !this.composer) this._initPost();
+    if (this.composer) {
+      // de noche y en tormenta las luces artificiales resaltan mas
+      const day = this.skyMat.uniforms.uDay.value;
+      this.bloom.strength = 0.1 + 0.32 * (1 - day) * (1 - day) + 0.06 * this.storm;
+      this.composer.render(dt);
+      return;
+    }
     r.clear();
     r.render(this.skyScene, far);
     r.clearDepth();

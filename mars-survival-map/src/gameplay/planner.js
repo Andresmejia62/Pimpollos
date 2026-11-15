@@ -56,10 +56,10 @@ export function estimateRoute(game, pts, { start = game.s, refills = [] } = {}) 
     const temp = W.temperature(mx, mz, hour);
     coldMin = Math.min(coldMin, temp);
     const cold = Rs.energy.cold.extra_per_deg * Math.max(0, Rs.energy.cold.comfort_c - temp) * (bio.bsa / REF.bsa) * clamp(Math.sqrt(REF_FLAT_W / M), 0.7, 1.3);
-    en = Math.max(0, en - Rs.energy.base_drain_per_s * (0.85 + 0.15 * (M / REF_FLAT_W)) * (1 + cold) * dt);
+    en = Math.max(0, en - Rs.energy.base_drain_per_s * (0.85 + 0.15 * (M / REF_FLAT_W)) * (1 + cold) * (game.diff ? game.diff.drainK : 1) * dt);
     const rad = W.radiation(mx, mz);
     radInt += rad * d;
-    integ -= Rs.integrity.radiation.k_per_ugy_h * rad * dt;
+    integ -= Rs.integrity.radiation.k_per_ugy_h * rad * (game.diff ? game.diff.damageK : 1) * dt;
     dose += (rad * dtg) / 3600;
     if (slope > Rs.integrity.slip.from_deg && slope <= Rs.integrity.slip.to_deg) { integ -= Rs.integrity.slip.drain_per_s * dt; slipM += d; }
     // escala en un refugio: recarga O2 y energia (el rover solo hasta rover_cap)

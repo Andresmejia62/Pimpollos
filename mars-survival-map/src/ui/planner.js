@@ -225,6 +225,14 @@ export class Planner {
   }
 
   // ---- panel lateral ------------------------------------------------------------------
+  // Tormenta pronosticada frente al tiempo de la ruta (segundos reales, los mismos que mide la estimacion)
+  _storm(e) {
+    const eta = this.game.weather && this.game.weather.eta();
+    if (!eta) return null;
+    const need = e.realMin * 60;
+    return { inS: eta.inS, clearS: eta.clearS, ok: eta.inS > need, margin: eta.inS - need };
+  }
+
   render() {
     const lang = getLang();
     $("planHint").textContent = t(L("Clic en el mapa = punto de paso para «Tu ruta» · las estimaciones usan tu perfil físico y tu carga", "Click the map = waypoint for “Your route” · estimates use your physical profile and load"));
@@ -250,9 +258,10 @@ export class Planner {
       const r = this.routes[k], K = KINDS[k];
       if (!r) return k === "custom" ? `<div class="pr-card empty"><span class="sw" style="background:${K.color}"></span><div><b>${t(K.name)}</b><p>${t(K.desc)}</p></div></div>` : "";
       const e = r.est, [vt, vc] = VERDICT[e.verdict];
+      const sw = this._storm(e);
       return `<button class="pr-card" data-k="${k}" aria-pressed="${k === this.sel}"><span class="sw" style="background:${K.color}"></span>
         <div><b>${t(K.name)}</b>${r.stop ? `<span class="muted small"> · ${t(r.stop.name)}</span>` : ""}
-        <p>${fmtDist(e.dist, lang)} · ${num(e.realMin, 1, lang)} min · O₂ ${t(L("al llegar", "on arrival"))} ${Math.round(e.o2End)} %</p></div>
+        <p>${fmtDist(e.dist, lang)} · ${num(e.realMin, 1, lang)} min · O₂ ${t(L("al llegar", "on arrival"))} ${Math.round(e.o2End)} %${sw ? ` · <span style="color:${sw.ok ? "#3DDC97" : "#ffb070"}">${sw.ok ? t(L("antes de la tormenta", "before the storm")) : sw.inS > 0 ? t(L("te alcanza la tormenta", "storm catches you")) : t(L("en plena tormenta", "inside the storm"))}</span>` : ""}</p></div>
         <em style="color:${vc}">${t(vt)}</em></button>`;
     }).join("");
     $("planRoutes").querySelectorAll("[data-k]").forEach((b) => { b.onclick = () => { this.sel = b.dataset.k; this.render(); }; });
@@ -261,6 +270,12 @@ export class Planner {
     if (e.blockedM >= 1) why.push(t(L(`Cruza ${num(e.blockedM, 0, lang)} m de pendientes de más de 25°: en el juego no se puede pasar.`, `Crosses ${num(e.blockedM, 0, lang)} m of slopes over 25°: impassable in the game.`)));
     if (e.minO2 < 35 && e.blockedM < 1) why.push(t(L(`El O₂ baja hasta ${Math.round(e.minO2)} %: considera una escala en un refugio.`, `O₂ drops to ${Math.round(e.minO2)} %: consider a shelter stop.`)));
     if (e.fatigueEnd > 60) why.push(t(L("Llegarías muy fatigado: la marcha se vuelve más lenta.", "You would arrive very tired: walking slows down.")));
+    const sw = this._storm(e);
+    if (sw) why.push(sw.ok
+      ? t(L(`Llegas ${num(sw.margin / 60, 1, lang)} min antes de que el frente de polvo llegue a tu posición (en ${num(sw.inS / 60, 1, lang)} min).`, `You arrive ${num(sw.margin / 60, 1, lang)} min before the dust front reaches your position (in ${num(sw.inS / 60, 1, lang)} min).`))
+      : sw.inS > 0
+        ? t(L(`El frente de polvo te alcanza a los ${num(sw.inS / 60, 1, lang)} min de ruta (${Math.round(100 * sw.inS / (e.realMin * 60))} % del camino). Busca un refugio más cercano o espera dentro.`, `The dust front catches you ${num(sw.inS / 60, 1, lang)} min into the route (${Math.round(100 * sw.inS / (e.realMin * 60))} % of the way). Pick a closer shelter or wait inside.`))
+        : t(L(`Ya estás dentro de la tormenta: visibilidad baja, polvo en el visor y más gasto. Escampa en unos ${num((sw.clearS || 0) / 60, 1, lang)} min.`, `You are already inside the storm: low visibility, visor dust and higher drain. It clears in about ${num((sw.clearS || 0) / 60, 1, lang)} min.`)));
     if (e.arrivalHour % 24 > 17.5) why.push(t(L("Llegarías cerca del anochecer: el frío dispara el gasto de batería.", "You would arrive near sunset: cold drives up battery use.")));
     const row = (k, v) => `<tr><td>${t(k)}</td><td>${v}</td></tr>`;
     $("planDetail").innerHTML = `

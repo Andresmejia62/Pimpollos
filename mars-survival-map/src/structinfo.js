@@ -10,6 +10,7 @@ export const STRUCT_TYPES = {
   solar_farm: { name: L("Campo solar", "Solar farm"), icon: "☀" },
   isru: { name: L("Planta ISRU", "ISRU plant"), icon: "O₂" },
   greenhouse: { name: L("Invernadero", "Greenhouse"), icon: "✿" },
+  colony_dome: { name: L("Colonia con cúpula", "Domed colony"), icon: "◓" },
   drill_site: { name: L("Perforación de Curiosity", "Curiosity drill site"), icon: "◎" },
   relay: { name: L("Repetidora", "Relay"), icon: "⌁" },
   depot: { name: L("Depósito de suministros", "Supply cache"), icon: "▣" },

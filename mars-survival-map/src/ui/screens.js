@@ -1,8 +1,11 @@
 // Pantalla de carga y menu de pausa.
+import { ACHIEVEMENTS } from "../gameplay/achievements.js";
+import { GFX, setGfx } from "../gfx.js";
 import { t, ui, getLang } from "../i18n.js";
 import { marsNow, seasonOf, hhmm } from "../marsclock.js";
 import { gcDistance, gcBearing, fmtLat, fmtLon, fmtDist, num } from "../geo.js";
 import { SUITS } from "../engine/physiology.js";
+import { VOLUME, setVolume, sfx } from "../audio.js";
 import { marsSkyEphemeris, NAKED_EYE, DUST_NOTE } from "../engine/planets.js";
 import { REFERENCE_EVENT, LEVEL_TEXT, LEVEL_COLOR } from "../spaceweather.js";
 
@@ -118,7 +121,12 @@ export class PauseMenu {
     document.querySelectorAll("#scrPause [data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === this.tab)));
     $("pauseClock").innerHTML = `<span>${ui("localTime")} (LMST)</span><b>${hhmm(g.hour % 24)}</b><span>${t(L("Duración de la EVA", "EVA duration"))}</span><b>${hhmm(s.gameSeconds / 3600)} h</b><span>${t(L("Tiempo real jugado", "Real time played"))}</span><b>${Math.floor(s.realSeconds / 60)}:${String(Math.floor(s.realSeconds % 60)).padStart(2, "0")}</b>`;
     const body = $("pauseBody");
-    body.innerHTML = { status: () => this._status(lang), body: () => this._body(lang), controls: () => this._controls(), mars: () => this._mars() }[this.tab]();
+    body.innerHTML = { ach: () => this._ach(), sound: () => this._sound(), status: () => this._status(lang), body: () => this._body(lang), controls: () => this._controls(), mars: () => this._mars() }[this.tab]();
+    if (this.tab === "sound") body.querySelectorAll("input[data-gfx]").forEach((inp) => { inp.onchange = () => { setGfx(inp.dataset.gfx, inp.checked); sfx.click(); }; });
+    if (this.tab === "sound") body.querySelectorAll("input[data-vol]").forEach((inp) => {
+      inp.oninput = () => { setVolume(inp.dataset.vol, inp.value / 100); inp.nextElementSibling.textContent = inp.value + " %"; };
+      inp.onchange = () => (inp.dataset.vol === "ui" ? sfx.blip() : inp.dataset.vol === "suit" ? sfx.footstep("regolith", 1) : inp.dataset.vol === "vehicle" ? sfx.hatch() : sfx.click());
+    });
   }
 
   // invert: la barra es mala cuando sube (fatiga, % VO2max), no cuando baja
@@ -187,6 +195,31 @@ export class PauseMenu {
         <p class="small muted">${t(L("Las tormentas de partículas (SEP) siguen a fulguraciones fuertes y a CME rápidas. En mayo de 2024, una X12 multiplicó por ~39 la dosis diaria en Gale (RAD).", "Particle storms (SEP) follow strong flares and fast CMEs. In May 2024 an X12 flare raised the daily dose in Gale ~39-fold (RAD)."))}</p>`;
     }
     return `<h3 class="sky-h">${t(L("Clima espacial", "Space weather"))} · <span style="color:${LEVEL_COLOR[sw.level]}">${t(LEVEL_TEXT[sw.level])}</span> <span class="small muted">(${t(src)})</span></h3>${body}`;
+  }
+
+  _sound() {
+    const rows = [
+      ["master", L("General", "Master"), L("Todo el sonido del juego.", "All game sound.")],
+      ["ambient", L("Ambiente exterior", "Outside ambience"), L("Viento, arena y remolinos. Llega muy atenuado: el aire de Marte tiene ~1 % de la densidad del de la Tierra.", "Wind, sand and dust devils. Heavily muffled: Mars air is ~1 % as dense as Earth's.")],
+      ["suit", L("Traje", "Suit"), L("Respiración, soporte vital, latidos y pasos (se oyen a través del propio traje).", "Breathing, life support, heartbeat and footsteps (heard through the suit itself).")],
+      ["vehicle", L("Vehículo", "Vehicle"), L("Motor, ruedas, escotilla y golpes del rover.", "Rover motor, wheels, hatch and impacts.")],
+      ["ui", L("Interfaz y alertas", "Interface and alerts"), L("Botones, avisos, escáner y dosímetro.", "Buttons, alerts, scanner and dosimeter.")],
+    ];
+    return `<div class="eyebrow">${ui("tabSound")}</div><h2>${t(L("Volumen", "Volume"))}</h2>
+      <div class="vol-list">${rows.map(([k, n, d]) => `<label class="vol-row"><span><b>${t(n)}</b><em>${t(d)}</em></span>
+        <input type="range" min="0" max="100" step="1" value="${Math.round(VOLUME[k] * 100)}" data-vol="${k}" aria-label="${t(n)}"><output>${Math.round(VOLUME[k] * 100)} %</output></label>`).join("")}</div>
+      <h2>${t(L("Gráficos", "Graphics"))}</h2>
+      <div class="vol-list">${[["bloom", L("Resplandor de luces", "Light bloom"), L("Faros, ventanas, pantallas y el Sol brillan con un halo. Desactívalo si el juego va lento.", "Headlights, windows, screens and the Sun glow with a halo. Turn it off if the game runs slow.")],
+        ["env", L("Reflejos del cielo", "Sky reflections"), L("El metal, el vidrio de las cúpulas y los visores reflejan el cielo de Marte.", "Metal, dome glass and visors reflect the Martian sky.")]]
+        .map(([k, n, d]) => `<label class="vol-row gfx-row"><span><b>${t(n)}</b><em>${t(d)}</em></span><input type="checkbox" data-gfx="${k}" ${GFX[k] ? "checked" : ""}></label>`).join("")}</div>
+      <p class="small muted">${t(L("Se guarda en este navegador. Dentro del casco lo que más se oye es lo que transmite el propio traje; el exterior llega bajo y sin agudos, como en las grabaciones de los micrófonos de Perseverance.", "Saved in this browser. Inside the helmet you mostly hear what the suit itself carries; the outside comes through quiet and without highs, like the recordings from Perseverance's microphones."))}</p>`;
+  }
+
+  _ach() {
+    const A = this.ach, got = A ? A.session : [], ever = A ? A.ever : new Set();
+    return `<div class="eyebrow">${ui("tabAch")}</div><h2>${t(L("Logros científicos", "Science achievements"))} · ${got.length}/${ACHIEVEMENTS.length}</h2>
+      <p class="small muted">${t(L("Momentos de la EVA basados en observaciones y procedimientos reales. En esta EVA se marcan en verde; los de partidas anteriores, con un punto.", "EVA moments based on real observations and procedures. Those from this EVA are green; those from earlier games have a dot."))}</p>
+      <div class="ach-grid">${ACHIEVEMENTS.map((a) => `<div class="ach-card${got.includes(a.id) ? " on" : ever.has(a.id) ? " ever" : ""}"><span class="ach-ic">${a.icon}</span><div><b>${t(a.name)}</b><p>${t(a.desc)}</p></div></div>`).join("")}</div>`;
   }
 
   _controls() {

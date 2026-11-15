@@ -22,7 +22,7 @@ npm install
 npm run dev        # http://127.0.0.1:5173  (añade ?debug=1 para FPS y atajos)
 npm run build      # genera dist/ para GitHub Pages o Netlify
 ```
-Controles: **W A S D** caminar · **ratón** mirar (clic para capturar o arrastrar) · **rueda** distancia de cámara · **1–4** capas · **R** ruta A* · **H** guía de capas · **M** atlas de Marte · **I** telemetría · **Esc** pausa.
+Controles: **W A S D** caminar · **ratón** mirar (clic para capturar o arrastrar) · **rueda** distancia de cámara · **1–4** capas · **R** ruta A* · **H** guía de capas · **M** atlas de Marte · **I** telemetría · **V** limpiar el visor · **Esc** pausa.
 
 **Dos modos** en la portada:
 - **Comenzar EVA (modo juego):** la campaña de 5 misiones con sus objetivos científicos, la tormenta solar y el puntaje.
@@ -44,6 +44,16 @@ Atajos con `?debug=1`: **T** tormenta solar · **N** saltar cerca del objetivo �
 | `src/gameplay/pathfinding.js` | A* sobre la cuadrícula de costos (512×512, celdas de 12 m) |
 | `src/ui/hud.js` | HUD de los wireframes, minimapa, brújula, diálogos y telemetría NAV/BIO (tecla I) |
 | `src/ui/atlas.js` | Atlas de Marte: MOLA global + Gale + zona EVA, fenómenos, regla, perfil de elevación, exportar traza |
+| `src/audio.js`, `src/soundscape.js` | Sonido sintetizado en tres buses: dentro del traje (respiración según el esfuerzo real, soporte vital, latidos, pasos por las botas según el suelo, radio con tono Quindar), exterior atenuado por el aire de Marte (viento con ráfagas) e interfaz. Dosímetro con la dosis real del terreno, rover, esclusa y alarmas |
+| `src/engine/colony.js` | Colonia Aeolis: cúpula geodésica de 52 m con cultivos, módulos con entradas iluminadas, plaza con bancos, terraza, quiosco y fuente, torre de aire y agua con luz nocturna, esclusas, módulo exterior con túnel, campo solar y tubería hasta el hábitat. El sitio se elige con el DTM (el más llano a 120-420 m del hábitat) |
+| `src/gameplay/weather.js` | Clima: tormentas de polvo regionales con pronóstico 2,5 min antes (cuenta atrás en el HUD y en el planificador), muro de polvo que se acerca, τ ≈ 4, Sol apagado, polvo en el visor, más consumo, efecto térmico (hasta −18 °C de día y +14 °C de noche) y velo en el minimapa; el rover es refugio parcial. Remolinos diurnos que cruzan el mapa con el viento (el primero aparece a la vista aunque la EVA empiece a las 17:00). El viento de 20-30 m/s empuja como ~3 m/s en la Tierra (densidad del aire ~1 %) |
+| `src/gameplay/difficulty.js` | Dificultad Fácil / Normal / Difícil (en la pantalla de perfil): capacidad de O₂, gasto de batería, daño y frecuencia de tormentas |
+| `src/gameplay/achievements.js` | Logros científicos (medir dentro de una tormenta, acercarse a un remolino, refugiarse a tiempo, entrar en la colonia...): aviso en pantalla, pestaña en la pausa y resumen final |
+| `src/engine/merge.js` | Optimización: fusiona la geometría estática de cada estructura por material y, en el rover y los astronautas, las piezas que se mueven juntas (detectadas ejecutando su animación). Las mallas originales quedan como proxies invisibles para la colisión de la cámara. Junto con sombras a media frecuencia y resolución dinámica, baja de ~1000 a ~300 llamadas de dibujo por fotograma |
+| `src/gfx.js` | Ajustes gráficos guardados: resplandor de luces (bloom) y reflejos del cielo (mapa de entorno PMREM), en Pausa → Sonido y gráficos |
+| `src/engine/windfx.js` | Partículas de viento: rayas de polvo a la velocidad del viento y granos de arena que saltan junto al suelo (saltación con g = 3,72) en las ráfagas |
+| `src/engine/interiors.js` | Interiores caminables: el hábitat Aeolis (literas, mesa, laboratorio, cocina, cultivo hidropónico, trajes de repuesto), la cúpula de la colonia y el invernadero tienen esclusas abiertas, rampas, suelo propio y muros con colisiones; dentro cuentan como refugio presurizado |
+| `src/engine/dustfx.js` | Polvo de pisadas, saltos y aterrizajes: granos balísticos con g = 3,72 m/s² y polvo fino que deriva con el viento, del color del mineral que se pisa |
 | `src/ui/intro.js` | Cinemática de llegada tras "Comenzar EVA": la nave cruza el espacio hacia Marte (relieve MOLA), entra con plasma, falla el paracaídas y se estrella en Gale (terreno real). Se puede saltar |
 | `src/ui/atlas3d.js` | Vista 3D del atlas: globo de Marte con relieve MOLA, Gale y la zona EVA como mallas 3D, retícula en el shader y exageración vertical configurable |
 | `src/ui/profile.js` | Pantalla del perfil fisiológico |

@@ -155,9 +155,47 @@ export class Companion {
     const dx = gx - b.x, dz = gz - b.z, d = Math.hypot(dx, dz);
     if (d < 0.05) { b.speed = 0; return; }
     const step = Math.min(d, v * dt);
-    const nx = b.x + (dx / d) * step, nz = b.z + (dz / d) * step;
-    if (!W.blockedAt(nx, nz)) { b.x = nx; b.z = nz; b.speed = step / dt; b.stuckT = 0; }
-    else { b.speed = 0; b.stuckT += dt; if (b.stuckT > 1.5) { b.route = this.path.find(b.x, b.z, tx, tz); b.routeAt = now; b.stuckT = 0; } }
+    let nx = b.x + (dx / d) * step, nz = b.z + (dz / d) * step;
+    // muros y edificios: el mismo sistema de colisiones que el jugador (se desliza por las paredes)
+    const C = g.colliders;
+    if (C) {
+      const p = this._p || (this._p = { x: 0, z: 0 });
+      const feet = this.groundAt(b.x, b.z);
+      const tryDir = (ang) => {
+        const c = Math.cos(ang), sn = Math.sin(ang);
+        const ux = (dx * c + dz * sn) / d, uz = (-dx * sn + dz * c) / d;
+        p.x = b.x + ux * step; p.z = b.z + uz * step;
+        C.resolve(p, 0.45, feet, 0.45);
+        return Math.hypot(p.x - b.x, p.z - b.z);
+      };
+      let m = tryDir(0);
+      // pared de frente (p. ej. la cupula entre EVA-2 y el jugador): rodea el obstaculo por un lado,
+      // y mantiene ese lado unos segundos para no oscilar
+      if (p.hit && m < step * 0.5) {
+        if (!b.wallSide || now - b.wallAt > 4000) { b.wallSide = Math.random() < 0.5 ? 1 : -1; }
+        b.wallAt = now;
+        for (const a of [0.7, 1.2, 1.6]) { m = tryDir(a * b.wallSide); if (m > step * 0.5) break; }
+      }
+      nx = p.x; nz = p.z;
+    }
+    const moved = Math.hypot(nx - b.x, nz - b.z);
+    if (!W.blockedAt(nx, nz) && moved > step * 0.15) { b.x = nx; b.z = nz; b.speed = moved / dt; b.stuckT = Math.max(0, b.stuckT - dt); }
+    else { b.speed = 0; b.stuckT += dt; }
+    if (b.stuckT > 1.5) {
+      b.route = this.path.find(b.x, b.z, tx, tz); b.routeAt = now; b.stuckT = 0;
+      b.stuckN = (b.stuckN || 0) + 1;
+      // atascado varias veces seguidas (p. ej. dentro de un edificio): reaparece junto al objetivo
+      if (b.stuckN > 3 && Math.hypot(tx - b.x, tz - b.z) > 6) {
+        const a = Math.atan2(b.x - tx, b.z - tz);
+        for (let i = 0; i < 8; i++) {
+          const q = { x: tx + Math.sin(a + i * 0.8) * 2.5, z: tz + Math.cos(a + i * 0.8) * 2.5 };
+          const r0x = q.x, r0z = q.z;
+          if (C) C.resolve(q, 0.45, this.groundAt(q.x, q.z), 0.45);
+          if (!W.blockedAt(q.x, q.z) && Math.hypot(q.x - r0x, q.z - r0z) < 0.05) { b.x = q.x; b.z = q.z; break; }
+        }
+        b.stuckN = 0;
+      }
+    } else if (b.speed > 0.2 && b.stuckT === 0) b.stuckN = 0;
     b.heading = Math.atan2(-dx, -dz);
   }
 
@@ -165,7 +203,7 @@ export class Companion {
   _reading(x, z) {
     const W = this.world, g = this.game;
     return {
-      temp: W.temperature(x, z, g.hour), dose: W.radiation(x, z), slope: W.slope(x, z),
+      temp: g.tempAt(x, z, g.hour), dose: W.radiation(x, z), slope: W.slope(x, z),
       mineral: this.game.data.layers.layers.spectral.classes[W.spectral(x, z)],
     };
   }
