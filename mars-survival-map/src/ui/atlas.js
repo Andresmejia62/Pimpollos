@@ -7,6 +7,7 @@
 import { t, getLang } from "../i18n.js";
 import { assetUrl } from "../data.js";
 import { Globe3D } from "./atlas3d.js";
+import { canvas164, TEX_SIZE } from "./tex164.js";
 import { HackFx } from "./hackfx.js";
 import { typeName, typeIcon, pointFacts } from "../structinfo.js";
 import { MARS_GEO, wrapLon, gcDistance, gcBearing, gcInterpolate, pressureAt, columnMass, boilingPointC, fmtLat, fmtLon, fmtDMS, fmtDist, num } from "../geo.js";
@@ -231,7 +232,7 @@ export class Atlas {
     if (!this.optical.complete) await new Promise((res) => { this.optical.addEventListener("load", res, { once: true }); this.optical.addEventListener("error", res, { once: true }); });
     try {
       const g3 = new Globe3D($("atlasGl"));
-      g3.build(this.rGlobal, this.rGale, { bounds: this.geo.bounds, n: this.world.n, h: this.world.h, yRef: this.world.yRef, image: this.optical }, this.rRegion);
+      g3.build(this.rGlobal, this.rGale, { bounds: this.geo.bounds, n: this.world.n, h: this.world.h, yRef: this.world.yRef, image: this.optical, sizeM: this.world.size }, this.rRegion);
       const v = this.view;
       g3.cam.lat = v.lat; g3.cam.lon = v.lon;
       this.g3 = g3;
@@ -684,6 +685,36 @@ export class Atlas {
     }
   }
 
+  // Patron anclado al suroeste, como las UV de la malla EVA.
+  _drawEvaTiles(alpha) {
+    const ctx = this.ctx, b = this.geo.bounds;
+    const nw = this.project(b.north_lat, b.west_lon_east), se = this.project(b.south_lat, b.east_lon_east);
+    const width = se.x - nw.x, height = se.y - nw.y;
+    const x = Math.max(0, nw.x), y = Math.max(0, nw.y), right = Math.min(this.W, se.x), bottom = Math.min(this.H, se.y);
+    if (right <= x || bottom <= y) return;
+    ctx.save();
+    try {
+      ctx.beginPath(); ctx.rect(x, y, right - x, bottom - y); ctx.clip();
+      ctx.globalCompositeOperation = "overlay";
+      const canvas = canvas164("regolith", true);
+      if (this._evaPatternCanvas !== canvas) {
+        this._evaPattern = ctx.createPattern(canvas, "repeat");
+        this._evaPatternCanvas = canvas;
+      }
+      const pattern = this._evaPattern;
+      for (const [meters, strength] of [[560, 0.30], [56, 0.22]]) {
+        const tw = width * meters / this.world.size, th = height * meters / this.world.size;
+        const px = Math.min(tw, th);
+        if (px <= 6) continue;
+        const t = Math.min(1, (px - 6) / 2), fade = t * t * (3 - 2 * t);
+        pattern.setTransform(new DOMMatrix([tw / TEX_SIZE, 0, 0, th / TEX_SIZE, nw.x, se.y]));
+        ctx.fillStyle = pattern;
+        ctx.globalAlpha = alpha * strength * fade;
+        ctx.fillRect(x, y, right - x, bottom - y);
+      }
+    } finally { ctx.restore(); }
+  }
+
   render() {
     this.dirty = false;
     const ctx = this.ctx, W = this.W, H = this.H, v = this.view;
@@ -716,6 +747,7 @@ export class Atlas {
     if (v.s > 1500 && this.optical.complete) {
       const a = Math.min(1, (v.s - 1500) / 1500);
       this._drawGeoImage(this.optical, b.west_lon_east, b.north_lat, b.east_lon_east - b.west_lon_east, b.north_lat - b.south_lat, this.optical.naturalWidth, this.optical.naturalHeight, a);
+      this._drawEvaTiles(a);
       const ov = this.show.overlay && this.game.s.layer && this.overlays[this.game.s.layer];
       if (ov && ov.complete) this._drawGeoImage(ov, b.west_lon_east, b.north_lat, b.east_lon_east - b.west_lon_east, b.north_lat - b.south_lat, ov.naturalWidth, ov.naturalHeight, a * 0.9);
     }

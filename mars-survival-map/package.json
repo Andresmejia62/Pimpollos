@@ -12,7 +12,7 @@
     "fetch": "python3 data/scripts/fetch_nasa.py",
     "textures": "python3 data/scripts/build_textures.py",
     "structures": "node data/scripts/build_structures.mjs",
-    "test": "node data/scripts/check_far_terrain.mjs"
+    "test": "node data/scripts/check_far_terrain.mjs && node data/scripts/check_tex164.mjs"
   },
   "dependencies": {
     "three": "0.180.0"

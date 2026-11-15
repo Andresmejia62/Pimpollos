@@ -6,6 +6,7 @@
 // La reticula lat/lon se dibuja en el shader, pegada al relieve. Los marcadores y rotulos los pinta el atlas
 // en su lienzo 2D usando project()/unproject() de esta clase.
 import * as THREE from "three";
+import { texture164, meanLuma164 } from "./tex164.js";
 
 const D2R = Math.PI / 180;
 const R_MARS = 3389500;
@@ -38,6 +39,9 @@ const VS = /* glsl */ `
   }`;
 const FS = /* glsl */ `
   uniform sampler2D uMap, uOverlay;
+  uniform sampler2D uTileA, uTileB;
+  uniform float uTileOn, uZoneM;
+  uniform vec2 uTileMean;
   uniform float uStep, uGrid, uOverlayOn, uSeamFix;
   uniform float uExag;           // exageracion vertical actual (x)
   uniform float uDetail;         // cuanto grano fino se anade (0 en la ortoimagen, que ya tiene detalle real)
@@ -70,6 +74,21 @@ const FS = /* glsl */ `
       fr *= 3.7;
     }
     col *= 1.0 + dsum * 0.17 * uDetail;
+
+    // Mosaicos metricos solo en EVA; pendientes reales sin exageracion vertical.
+    if (uTileOn > 0.5) {
+      float tileRock = smoothstep(0.08, 0.4, length(vGrad));
+      vec2 tileLarge = vUv * (uZoneM / 560.0), tileSmall = vUv * (uZoneM / 56.0);
+      vec2 tileFwL = fwidth(tileLarge), tileFwS = fwidth(tileSmall);
+      float tileFadeL = 1.0 - smoothstep(1.0 / 8.0, 1.0 / 6.0, max(tileFwL.x, tileFwL.y));
+      float tileFadeS = 1.0 - smoothstep(1.0 / 8.0, 1.0 / 6.0, max(tileFwS.x, tileFwS.y));
+      vec3 tileL = mix(texture2D(uTileA, tileLarge).rgb, texture2D(uTileB, tileLarge).rgb, tileRock);
+      vec3 tileS = mix(texture2D(uTileA, tileSmall).rgb, texture2D(uTileB, tileSmall).rgb, tileRock);
+      // Centrar con las mismas proporciones de roca y regolito conserva el brillo.
+      float tileMean = mix(uTileMean.x, uTileMean.y, tileRock);
+      col *= clamp(1.0 + (tileL - vec3(tileMean)) * 1.6 * tileFadeL, 0.6, 1.4);
+      col *= clamp(1.0 + (tileS - vec3(tileMean)) * 1.2 * tileFadeS, 0.6, 1.4);
+    }
 
     // ---- casquetes polares (hielo de agua y CO2 estacional), con borde irregular
     if (uIce > 0.5) {
@@ -117,7 +136,8 @@ function terrainMaterial(tex, lift, seamFix, detail = 1) {
   return new THREE.ShaderMaterial({
     vertexShader: VS, fragmentShader: FS,
     uniforms: { uMap: { value: tex }, uOverlay: { value: null }, uOverlayOn: { value: 0 }, uK: { value: 12 / R_MARS }, uLift: { value: lift }, uStep: { value: 30 }, uGrid: { value: 1 }, uSeamFix: { value: seamFix ? 1 : 0 },
-      uExag: { value: 12 }, uDetail: { value: detail }, uIce: { value: 1 } },
+      uExag: { value: 12 }, uDetail: { value: detail }, uIce: { value: 1 },
+      uTileA: { value: tex }, uTileB: { value: tex }, uTileOn: { value: 0 }, uZoneM: { value: 1 }, uTileMean: { value: new THREE.Vector2(1, 1) } },
   });
 }
 
@@ -222,7 +242,7 @@ export class Globe3D {
     this.scene.add(this.atmo);
   }
 
-  // rG, rGale: rasters del atlas ({w, h, ppd, lat_north, lon_west, elev, canvas}); local: {bounds, n, h(Float32), yRef, image}
+  // rG, rGale: rasters del atlas ({w, h, ppd, lat_north, lon_west, elev, canvas}); local: {bounds, n, h(Float32), yRef, image, sizeM}
   build(rG, rGale, local, region = null) {
     const mk = (canvasOrImg) => { const t = new THREE.CanvasTexture(canvasOrImg); t.colorSpace = THREE.NoColorSpace; t.anisotropy = this.renderer.capabilities.getMaxAnisotropy(); t.wrapS = THREE.ClampToEdgeWrapping; return t; };
     const galeN = rGale.lat_north, galeW = rGale.lon_west, galeLat = rGale.h / rGale.ppd, galeLon = rGale.w / rGale.ppd;
@@ -259,6 +279,11 @@ export class Globe3D {
     this.texLocal = mk(local.image);
     const loc = new THREE.Mesh(gridMesh(b.north_lat, b.west_lon_east, b.north_lat - b.south_lat, b.east_lon_east - b.west_lon_east, NL, NL, lElev, 1800), terrainMaterial(this.texLocal, 6e-6, false, 0.15));
     this.localMat = loc.material;
+    this.localMat.uniforms.uTileA.value = texture164("regolith");
+    this.localMat.uniforms.uTileB.value = texture164("bedrock");
+    this.localMat.uniforms.uTileMean.value.set(meanLuma164("regolith"), meanLuma164("bedrock"));
+    this.localMat.uniforms.uZoneM.value = local.sizeM;
+    this.localMat.uniforms.uTileOn.value = 1;
     const meshes = [globe, gale, loc];
     // --- zona de ~60 km: HRSC+MOLA 200 m, una celda por pixel; hundida bajo la zona EVA ---
     if (region) {
