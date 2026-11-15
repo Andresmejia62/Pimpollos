@@ -55,8 +55,8 @@ const UI = {
   resume: { es: "Volver al juego", en: "Resume" },
   controls: { es: "Controles", en: "Controls" },
   controlsList: {
-    es: "W A S D: caminar / conducir · Espacio: saltar · E: subir o bajar del rover · Ratón: mirar (clic para capturar) · Rueda: alejar cámara · 1–4: capas · R: ruta · H: ayuda · F: ayudar a EVA-2 · V: limpiar visor · M: atlas de Marte · I: telemetría · P: nombres de los planetas y lunas · Z X C V B: gestos (saludar, pulgar, sentarse, bailar, estirarse) · Esc: pausa",
-    en: "W A S D: walk / drive · Space: jump · E: board or leave the rover · Mouse: look (click to capture) · Wheel: camera distance · 1–4: layers · R: route · H: help · F: help EVA-2 · V: wipe visor · M: Mars atlas · I: telemetry · P: planet and moon names · Z X C V B: emotes (wave, thumbs up, sit, dance, stretch) · Esc: pause",
+    es: "W A S D: caminar / conducir · Espacio: saltar · E: subir o bajar del rover · Ratón: mirar (clic para capturar) · Rueda: alejar cámara · 1–4: capas · R: ruta · H: ayuda · F: ayudar a EVA-2 · V: limpiar visor · M: atlas de Marte · I: telemetría · P: nombres de los planetas y lunas · Z X C J B: gestos (saludar, pulgar, sentarse, bailar, estirarse) · Esc: pausa",
+    en: "W A S D: walk / drive · Space: jump · E: board or leave the rover · Mouse: look (click to capture) · Wheel: camera distance · 1–4: layers · R: route · H: help · F: help EVA-2 · V: wipe visor · M: Mars atlas · I: telemetry · P: planet and moon names · Z X C J B: emotes (wave, thumbs up, sit, dance, stretch) · Esc: pause",
   },
   stormIn: { es: "Tormenta solar · llega en", en: "Solar storm · arrives in" },
   stormActive: { es: "Tormenta solar activa", en: "Solar storm active" },

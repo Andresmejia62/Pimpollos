@@ -1,5 +1,5 @@
 // Carga de todos los datos del juego: capas de M3 (public/layers) e historia de M4 (public/story).
-const BASE = import.meta.env.BASE_URL;
+const BASE = (import.meta.env && import.meta.env.BASE_URL) || "/";   // (en Node, para las pruebas, no hay import.meta.env)
 
 async function getJSON(path) {
   const r = await fetch(BASE + path);

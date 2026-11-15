@@ -47,7 +47,7 @@ export const EMOTES = {
   wave: { key: "z", dur: 2.8, name: L("Saludar", "Wave") },
   thumbs: { key: "x", dur: 2.2, name: L("Pulgar arriba", "Thumbs up") },
   sit: { key: "c", loop: true, name: L("Sentarse", "Sit down") },
-  dance: { key: "v", dur: 7, name: L("Bailar", "Dance") },
+  dance: { key: "j", dur: 7, name: L("Bailar", "Dance") },        // (V es limpiar el visor)
   stretch: { key: "b", dur: 3.4, name: L("Estirarse", "Stretch") },
   // solo para EVA-2 herido (sin tecla): sentado con la pierna danada estirada y las manos en la rodilla
   hurt: { loop: true, name: L("Herido", "Injured") },

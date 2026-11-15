@@ -3,7 +3,11 @@
 import { floorAt } from "../engine/interiors.js";
 import { loadDiff } from "./difficulty.js";
 import { MARS, PHYS, boxCollider } from "../engine/physics.js";
-import { Physiology, REF, REF_FLAT_W, TERRAIN_ETA, DEFAULT_PROFILE, BASE_KIT_KG, SAMPLE_KG } from "../engine/physiology.js";
+import { Physiology, REF, REF_FLAT_W, DEFAULT_PROFILE, BASE_KIT_KG, SAMPLE_KG } from "../engine/physiology.js";
+import { Rng } from "./rng.js";
+import { stepCore } from "./simcore.js";
+
+const clone = (o) => JSON.parse(JSON.stringify(o));
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -29,6 +33,8 @@ export class Game {
     this.dialogs = Object.fromEntries(data.dialogs.dialogs.map((d) => [d.id, d]));
     this.facts = Object.fromEntries(data.facts.facts.map((f) => [f.id, f]));
     this.listeners = {};
+    this._ext = {};          // estado serializable de otros componentes (clima, EVA-2) para los puntos de control
+    this.rng = new Rng();    // azar de la simulacion (tormentas, remolinos, eventos); se guarda en el checkpoint
     // modo libre: una "mision" sin guion cuyo objetivo lo define el usuario (setFreeTarget)
     this._free = { id: "free", order: 0, free: true, title: { es: "Modo libre · simulación", en: "Free mode · simulation" }, objective_id: null, action: "scan", points: 0 };
     this.setProfile(DEFAULT_PROFILE);
@@ -91,6 +97,74 @@ export class Game {
     this.checkpoint = null;
     delete this.objectives.custom;
     this._free.objective_id = null;
+    this._grade = 0;
+    this.env = null;
+    // carga del kit base: la fisiologia no debe arrastrar las muestras de la partida anterior
+    if (this.bio) {
+      this.bio.setLoad(this.cargoKg());
+      this.loadK = Math.sqrt(REF.total / this.bio.total);
+      this.s.bio.M = this.bio.metabolic(0);
+    }
+    this.rng = new Rng();                          // nueva semilla en cada partida
+    this.emit("reset");
+  }
+
+  // ---- estado serializable y puntos de control ------------------------------------------------------------
+  // Otros componentes (clima, EVA-2) registran como guardar y restaurar su parte del estado
+  registerState(key, provider) { this._ext[key] = provider; }
+  get restoring() { return !!this._restoring; }
+  captureCheckpoint() {
+    const ext = {};
+    for (const [k, p] of Object.entries(this._ext)) ext[k] = clone(p.get());
+    this.checkpoint = { s: clone(this.s), rng: this.rng.getState(), ext };
+    return this.checkpoint;
+  }
+  restoreCheckpoint(cp = this.checkpoint) {
+    if (!cp) return false;
+    this._restoring = true;
+    this.s = clone(cp.s);
+    this.rng.setState(cp.rng);
+    for (const [k, p] of Object.entries(this._ext)) if (cp.ext && cp.ext[k] !== undefined) p.set(clone(cp.ext[k]));
+    // fisiologia y carga del punto de control (sin muestras de lo jugado despues)
+    this._grade = 0;
+    this.env = null;
+    this._applyLoad();
+    this._restoring = false;
+    return true;
+  }
+
+  // ---- recursos: unico punto de entrada para gastarlos (respeta los bloqueos del modo libre) ---------------
+  // key: "oxygen" | "energy" | "integrity"
+  locks() {
+    const s = this.s;
+    return s.free ? { oxygen: !!s.sim.lockO2, energy: !!s.sim.lockEnergy, integrity: !!s.sim.lockIntegrity } : null;
+  }
+  isLocked(key) { const l = this.locks(); return !!(l && l[key]); }
+  spend(key, amount) {
+    if (!(amount > 0) || this.isLocked(key)) return 0;
+    this.s[key] -= amount;
+    if (key === "energy") this.s.energy = Math.max(0, this.s.energy);
+    return amount;
+  }
+  gain(key, amount, cap = 100) {
+    if (!(amount > 0)) return 0;
+    const before = this.s[key];
+    this.s[key] = Math.min(cap, before + amount);
+    return this.s[key] - before;
+  }
+
+  // Contexto del nucleo de simulacion (gameplay/simcore.js), compartido con el planificador
+  simCtx() { return { world: this.world, rules: this.rules, bio: this.bio, o2CapacityG: this.o2CapacityG, diff: this.diff, realPerWorld: this.realPerWorld }; }
+
+  // Refugio en (x, z): misma regla en la partida y en el planificador
+  shelterAt(x, z) {
+    for (const o of Object.values(this.objectives)) {
+      if (!o.shelter) continue;
+      const d = Math.hypot(o.world.x - x, o.world.z - z);
+      // los interiores caminables (cupula, invernadero) solo cuentan si estas dentro de verdad
+      if (o.interior ? d < o.radius_m : d < this.radiusOf(o) + 6) return o.id;
+    }
+    return null;
   }
 
   get mission() { return this.s.free ? this._free : this.missions[this.s.missionIndex]; }
@@ -151,8 +225,8 @@ export class Game {
     const s = this.s;
     s.free = true;
     s.phase = "playing";
-    this.checkpoint = JSON.parse(JSON.stringify(s));
     this.emit("free", true);
+    this.captureCheckpoint();               // despues de que el clima y EVA-2 se inicialicen (handlers de "free")
   }
 
   // Destino propio en (x, z) del mundo. latlon = [lat, lonEste] (lo calcula quien llama con GeoFrame)
@@ -235,8 +309,8 @@ export class Game {
     // misiones con "vehicle": "beside" (mision 3): el rover aparece aparcado junto al astronauta
     if (!s.free && this.mission.vehicle === "beside") this.summonVehicle();
     s.phase = "briefing";
-    this.checkpoint = JSON.parse(JSON.stringify(s));
     this.emit("mission", this.mission);
+    this.captureCheckpoint();               // despues de colocar a EVA-2 junto al jugador (handler de "mission")
   }
 
   // Subobjetivos de una mision (missions.json -> subtargets): puntos reales de una clase mineral de CRISM
@@ -281,19 +355,21 @@ export class Game {
     if (m.layer_hint === "route") this.setRoute(true);
   }
 
+  // Reintentar: restaura jugador, clima, EVA-2 y el estado del generador aleatorio al punto de control
+  // (con las mismas entradas se repiten los mismos eventos)
   retry() {
     if (!this.checkpoint) return;
     if (this.s.free) {
-      // modo libre: vuelve al inicio de la simulacion y conserva el destino definido
-      this.s = JSON.parse(JSON.stringify(this.checkpoint));
-      this._applyLoad();
-      this.emit("free", true);
+      // modo libre: vuelve al inicio de la simulacion; conserva el destino definido y que recursos se gastan
+      const sim = { ...this.s.sim };
+      this.restoreCheckpoint();
+      this.s.sim = sim;
+      this._restoring = true; this.emit("free", true); this._restoring = false;
       return;
     }
-    this.s = JSON.parse(JSON.stringify(this.checkpoint));
+    this.restoreCheckpoint();
     this.s.phase = "briefing";
-    if (this.s.cargo) this._applyLoad();
-    this.emit("mission", this.mission);
+    this._restoring = true; this.emit("mission", this.mission); this._restoring = false;
   }
 
   setLayer(k) { this.s.layer = this.s.layer === k ? null : k; this.emit("layer", this.s.layer); }
@@ -361,10 +437,6 @@ export class Game {
     const s = this.s;
     if (s.phase !== "playing") return;
     const R = this.rules.resources, H = this.rules.hazards, W = this.world;
-    s.realSeconds += dt;
-    s.gameSeconds += dt * this.rules.time.time_scale;
-    const o2Before = s.oxygen, enBefore = s.energy, inBefore = s.integrity;
-
     // Movimiento: en pasos cortos para que las colisiones no se salten obstaculos a pocos FPS
     s.blockedAhead = false;
     const steps = Math.min(4, Math.ceil(dt / 0.034));
@@ -372,101 +444,9 @@ export class Game {
     if (this.dynamics) this.dynamics.step(dt, s.x, s.z);
     if (s.driving) { s.car.x = s.x; s.car.z = s.z; s.car.heading = s.heading; }
 
-    // Ambiente en la posicion actual
-    const slope = W.slope(s.x, s.z);
-    const temp = this.tempAt(s.x, s.z, this.hour);
-    const dose = W.radiation(s.x, s.z);
-    this.env = { slope, temp, dose };
-
-    // Refugios
-    const prevShelter = s.inShelter;
-    s.inShelter = null;
-    for (const o of Object.values(this.objectives)) {
-      // los interiores caminables (cupula, invernadero) solo cuentan si estas dentro de verdad
-      const inside = o.interior ? this.distTo(o) < o.radius_m : this.distTo(o) < this.radiusOf(o) + 6;
-      if (o.shelter && inside) { s.inShelter = o.id; break; }
-    }
-    if (s.inShelter && s.inShelter !== prevShelter) {
-      this.emit("shelter", this.objectives[s.inShelter]);
-      // se dejan las muestras en el rover o en el refugio: vuelve a pesar solo el kit
-      if (s.cargo.carried > 0) {
-        const n = s.cargo.carried;
-        s.cargo.stored += n; s.cargo.carried = 0;
-        this._applyLoad();
-        this.emit("cargoUnload", { n, kg: n * SAMPLE_KG, where: this.objectives[s.inShelter] });
-      }
-    }
-
-    // Recursos (rules.json -> resources), a partir del gasto metabolico del astronauta (engine/physiology.js)
+    // Tiempo, ambiente, refugio, fisiologia y recursos (nucleo compartido con el planificador)
     const onFoot = s.moving && !s.driving;
-    const bio = this.bio, b = s.bio;
-    const dtg = dt * this.rules.time.time_scale;                       // segundos en Marte
-    b.vReal = onFoot ? s.speed * this.realPerWorld : 0;
-    b.grade = onFoot ? this._grade || 0 : 0;
-    b.eta = TERRAIN_ETA[W.spectral(s.x, s.z)] ?? 1.2;
-    // abrirse paso entre rocas cuesta mas (coeficiente de terreno de Pandolf)
-    const rc = W.rockClass(s.x, s.z), B = H.boulders;
-    if (B && rc) b.eta = Math.max(b.eta, rc === 2 ? B.eta_field : B.eta_rocky);
-    b.rock = rc;
-    const Mnow = s.driving ? bio.metabolic(0) * 0.95 : bio.metabolic(b.vReal, b.grade, b.eta);
-    b.M += (Mnow - b.M) * Math.min(1, dt / 1.5);                       // cinetica del VO2 (~30 s en Marte)
-    const pct = bio.pctVO2max(b.M);
-    b.hr = bio.heartRate(b.M);
-    // fatiga: por encima de ~55 % del VO2max se acumula; por debajo se recupera
-    b.fatigue = clamp(b.fatigue + (pct > 0.55 ? (pct - 0.55) * 0.1 : -(0.55 - pct) * 0.12) * dtg, 0, 100);
-    b.kcal += (bio.kcalPerH(b.M) * dtg) / 3600;
-    const o2g = (bio.o2gPerH(b.M) * dtg) / 3600 * (s.energy <= 0 ? 1.5 : 1);
-    b.o2g += o2g;
-    b.co2g += (bio.co2gPerH(b.M) * dtg) / 3600;
-    b.waterg += (bio.waterGPerH(b.M) * dtg) / 3600;
-    s.oxygen -= (100 * o2g) / this.o2CapacityG;
-    // bateria: electronica + ventiladores/bomba (crecen con el calor metabolico) + calefaccion (crece con el frio
-    // y con la superficie corporal, y baja si el cuerpo produce mas calor)
-    const cold = R.energy.cold.extra_per_deg * Math.max(0, R.energy.cold.comfort_c - temp) * (bio.bsa / REF.bsa) * clamp(Math.sqrt(REF_FLAT_W / b.M), 0.7, 1.3);
-    const dK = this.diff || { drainK: 1, damageK: 1 };
-    s.energy -= R.energy.base_drain_per_s * (0.85 + 0.15 * (b.M / REF_FLAT_W)) * (1 + cold) * dK.drainK * dt;
-    const E = this.rules.events.solar_particle_event;
-    const speMult = s.spe && s.spe.phase === "active" ? E.dose_multiplier : 1;
-    const shelterK = s.inShelter ? E.shelter_factor : 1;
-    s.integrity -= R.integrity.radiation.k_per_ugy_h * dose * speMult * shelterK * dK.damageK * dt;
-    b.doseUgy += (dose * speMult * shelterK * dtg) / 3600;           // dosis absorbida real de la EVA (µGy)
-    this._track();
-    if (onFoot && slope > R.integrity.slip.from_deg && slope <= R.integrity.slip.to_deg) s.integrity -= R.integrity.slip.drain_per_s * dK.damageK * dt;
-    if (s.inShelter) {
-      const cap = s.inShelter === "rover" ? R.shelter_refill.rover_cap : 100;
-      if (s.oxygen < cap) s.oxygen = Math.min(cap, s.oxygen + R.shelter_refill.oxygen_per_s * dt);
-      if (s.energy < cap) s.energy = Math.min(cap, s.energy + R.shelter_refill.energy_per_s * dt);
-    }
-    s.energy = Math.max(0, s.energy);
-    s.oxygen = Math.min(100, s.oxygen);
-    // modo libre: recursos "congelados" (la fisiologia y la dosis se siguen calculando y registrando)
-    if (s.free) {
-      if (s.sim.lockO2) s.oxygen = Math.max(s.oxygen, o2Before);
-      if (s.sim.lockEnergy) s.energy = Math.max(s.energy, enBefore);
-      if (s.sim.lockIntegrity) s.integrity = Math.max(s.integrity, inBefore);
-    }
-
-    // Tormenta solar
-    if (s.spe && s.spe.phase !== "ended") {
-      const sp = s.spe;
-      sp.t -= dt;
-      if (sp.phase === "active") {
-        sp.active += dt;
-        if (s.inShelter) sp.sheltered += dt;
-      }
-      if (sp.t <= 0) {
-        if (sp.phase === "warning") { sp.phase = "active"; sp.t = E.duration_s; }
-        else {
-          sp.phase = "ended";
-          s.stormBonus = sp.sheltered >= 0.5 * E.duration_s;
-          this.emit("spe", sp);
-          if (s.free) return;                     // en modo libre la tormenta no cierra ninguna mision
-          if (s.integrity > 0 && s.oxygen > 0) this._completeMission();
-          return;
-        }
-        this.emit("spe", sp);
-      }
-    }
+    if (this._simStep(dt, { x: s.x, z: s.z, vReal: onFoot ? s.speed * this.realPerWorld : 0, grade: onFoot ? this._grade || 0 : 0, onFoot, driving: s.driving })) return;
 
     if (s.oxygen <= 0) { s.oxygen = 0; this._fail("fail_oxygen"); return; }
     if (s.integrity <= 0) { s.integrity = 0; this._fail("fail_integrity"); return; }
@@ -494,7 +474,7 @@ export class Game {
         s.scanProgress += dt;
         if (s.scanProgress >= this.rules.science.scan_time_s) {
           s.scanned = true;
-          s.energy = Math.max(0, s.energy - R.energy.scanner_cost);
+          this.spend("energy", R.energy.scanner_cost);
           s.cargo.carried += 1;          // muestra recogida: se suma a la carga
           this._applyLoad();
           if (s.free) {
@@ -513,6 +493,48 @@ export class Game {
     }
 
     this._tutorial(dt);
+  }
+
+  // Un paso de simulacion fuera del movimiento: reloj, refugio, nucleo (gameplay/simcore.js), tormenta solar.
+  // kin = { x, z, vReal, grade, onFoot, driving }. Devuelve true si el paso cerro la mision (no seguir).
+  // Lo usan Game.update y la prueba de equivalencia con el planificador (mismas entradas, mismo codigo).
+  _simStep(dt, kin) {
+    const s = this.s, W = this.world;
+    s.realSeconds += dt;
+    s.gameSeconds += dt * this.rules.time.time_scale;
+    // Refugios
+    const prevShelter = s.inShelter;
+    s.inShelter = this.shelterAt(s.x, s.z);
+    if (s.inShelter && s.inShelter !== prevShelter) {
+      this.emit("shelter", this.objectives[s.inShelter]);
+      // se dejan las muestras en el rover o en el refugio: vuelve a pesar solo el kit
+      if (s.cargo.carried > 0) {
+        const n = s.cargo.carried;
+        s.cargo.stored += n; s.cargo.carried = 0;
+        this._applyLoad();
+        this.emit("cargoUnload", { n, kg: n * SAMPLE_KG, where: this.objectives[s.inShelter] });
+      }
+    }
+    const hour = this.hour, wx = this.weather;
+    const st = { oxygen: s.oxygen, energy: s.energy, integrity: s.integrity, inShelter: s.inShelter, spe: s.spe, bio: s.bio, locks: this.locks() };
+    const res = stepCore(this.simCtx(), st, {
+      x: kin.x, z: kin.z, hour, vReal: kin.vReal, grade: kin.grade, onFoot: kin.onFoot, driving: kin.driving,
+      dustLevel: this.dustLevel || 0, dustCover: wx ? wx.cover || 0 : 0, dustThermal: wx ? wx.thermalOffset(hour) : 0,
+    }, dt);
+    s.oxygen = st.oxygen; s.energy = st.energy; s.integrity = st.integrity;
+    this.env = { slope: res.env.slope, temp: res.env.temp, dose: res.env.dose };
+    this._track();
+    // Tormenta solar (el reloj lo avanza el nucleo; aqui solo las consecuencias de la campana)
+    if (res.spe === "active") this.emit("spe", s.spe);
+    if (res.spe === "ended") {
+      const E = this.rules.events.solar_particle_event;
+      s.stormBonus = s.spe.sheltered >= 0.5 * E.duration_s;
+      this.emit("spe", s.spe);
+      if (s.free) return true;                     // en modo libre la tormenta no cierra ninguna mision
+      if (s.integrity > 0 && s.oxygen > 0) this._completeMission();
+      return true;
+    }
+    return false;
   }
 
   // ---- fisica del movimiento ---------------------------------------------------------
@@ -632,7 +654,7 @@ export class Game {
           // el rover tiene 1800 kg de inercia: un choque frontal rapido se nota en el traje
           if (drv && -vn > PHYS.carCrashSafe) {
             const damage = (-vn - PHYS.carCrashSafe) * PHYS.carCrashDamage * (this.diff ? this.diff.damageK : 1);
-            s.integrity -= damage;
+            this.spend("integrity", damage);
             this.emit("crash", { impact: -vn, damage });
           }
         }
@@ -676,7 +698,7 @@ export class Game {
         s.grounded = true;
         const safe = drv ? PHYS.carSafeImpact : PHYS.safeImpact;
         const damage = Math.max(0, impact - safe) * (drv ? PHYS.carImpactDamage : PHYS.impactDamage) * (this.diff ? this.diff.damageK : 1);
-        if (damage > 0) s.integrity -= damage;
+        if (damage > 0) this.spend("integrity", damage);
         if (impact > 1.2) this.emit("land", { impact, damage, driving: drv });
       }
     }

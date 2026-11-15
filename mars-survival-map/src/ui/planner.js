@@ -284,6 +284,7 @@ export class Planner {
         ${row(L("Distancia · desnivel", "Distance · elevation"), `${fmtDist(e.dist, lang)} · +${num(e.up, 0, lang)} / −${num(e.down, 0, lang)} m`)}
         ${row(L("Tiempo (juego · Marte)", "Time (game · Mars)"), `${num(e.realMin, 1, lang)} min · ${num(e.marsH, 1, lang)} h · ${t(L("llegada", "arrival"))} ${hhmm(e.arrivalHour)} LMST`)}
         ${row(L("O₂ al llegar · mínimo", "O₂ on arrival · minimum"), `${Math.round(e.o2End)} % · ${Math.round(e.minO2)} %`)}
+        ${(e.stops || []).map((st) => row(L("Parada de recarga · espera", "Refill stop · wait"), `${num(st.waitMin, 1, lang)} min · O₂ ${t(L("mín.", "min"))} ${Math.round(st.minO2Before)} → ${Math.round(st.minO2After)} %`)).join("")}
         ${row(L("Batería · integridad al llegar", "Battery · integrity on arrival"), `${Math.round(e.energyEnd)} % · ${Math.round(e.integrityEnd)} %`)}
         ${row(L("Fatiga al llegar · energía", "Fatigue on arrival · energy"), `${Math.round(e.fatigueEnd)} % · ${num(e.kcal, 0, lang)} kcal`)}
         ${row(L("Pendiente máx. · T mínima", "Max slope · min T"), `${num(e.maxSlope, 1, lang)}° · ${num(e.coldMin, 0, lang)} °C`)}

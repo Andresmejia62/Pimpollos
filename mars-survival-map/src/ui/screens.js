@@ -237,6 +237,8 @@ export class PauseMenu {
       [K("I"), L("Telemetría NAV / BIO", "NAV / BIO telemetry")],
       [K("H"), L("Cómo leer las capas", "How to read the layers")],
       [K("P"), L("Mostrar u ocultar los nombres de los planetas en el cielo", "Show or hide planet names in the sky")],
+      [K("V"), L("Limpiar el polvo del visor", "Wipe dust off the visor")],
+      [K("Z", "X", "C", "J", "B"), L("Gestos: saludar · pulgar · sentarse · bailar · estirarse", "Emotes: wave · thumbs up · sit · dance · stretch")],
       [K("Esc"), L("Pausa", "Pause")],
     ];
     return `<div class="eyebrow">${ui("tabControls")}</div><h2>${t(L("Controles", "Controls"))}</h2>

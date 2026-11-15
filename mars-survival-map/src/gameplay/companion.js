@@ -23,17 +23,29 @@ export class Companion {
     Object.assign(this, { game, world, path, groundAt });
     this.listeners = {};
     this.reset();
+    // su estado (posicion, O2, tareas, bonificaciones, rescate, temporizadores) entra en los puntos de control
+    game.registerState("buddy", { get: () => this.getState(), set: (st) => this.setState(st) });
   }
+  getState() { return JSON.parse(JSON.stringify(this.st)); }
+  // se actualiza en el sitio: el minimapa y la escena guardan una referencia a this.st
+  setState(st) { this._assign(JSON.parse(JSON.stringify(st))); }
+  _assign(v) {
+    if (!this.st) { this.st = v; return; }
+    for (const k of Object.keys(this.st)) delete this.st[k];
+    Object.assign(this.st, v);
+  }
+  // reloj de la simulacion en ms (no el reloj de pared: al reintentar, los temporizadores se repiten igual)
+  get _now() { return this.game.s.realSeconds * 1000; }
   on(e, fn) { (this.listeners[e] ||= []).push(fn); }
   emit(e, p) { (this.listeners[e] || []).forEach((fn) => fn(p)); }
 
   reset() {
     const s = this.game.s;
-    this.st = {
+    this._assign({
       x: s.x - 3, z: s.z + 3, heading: s.heading, speed: 0, o2: 100,
       mode: "follow", route: null, routeAt: 0, stuckT: 0, assist: 0,
       tasksDone: {}, taskT: 0, rescueDone: false, bonus: 0, limp: false,
-    };
+    });
   }
   // al reintentar una mision el compañero vuelve con el jugador
   snapTo(s) {
@@ -69,7 +81,7 @@ export class Companion {
         if (b.assist >= BUDDY.assistS) {
           const late = b.mode === "reserve", bonus = late ? BUDDY.bonusLate : BUDDY.bonusRescue;
           b.mode = "follow"; b.rescueDone = true; b.assist = 0; b.limp = true;
-          s.oxygen -= BUDDY.shareO2; b.o2 = Math.min(100, b.o2 + BUDDY.shareO2 * 1.5);
+          g.spend("oxygen", BUDDY.shareO2); b.o2 = Math.min(100, b.o2 + BUDDY.shareO2 * 1.5);
           b.bonus += bonus; s.science += bonus;
           this.emit("rescued", { bonus, late });
         }
@@ -141,7 +153,7 @@ export class Companion {
     const b = this.st, W = this.world, g = this.game;
     const v = g.rules.movement.walk_speed_mps * k * (b.limp ? BUDDY.limpK : 1);
     let gx = tx, gz = tz;
-    const now = performance.now();
+    const now = this._now;
     const blockedLine = () => { for (let f = 0.1; f <= 1; f += 0.1) if (W.blockedAt(b.x + (tx - b.x) * f, b.z + (tz - b.z) * f)) return true; return false; };
     if (b.route && b.route.length && now - b.routeAt < 3000) {
       const [rx, rz] = b.route[0];
@@ -172,7 +184,7 @@ export class Companion {
       // pared de frente (p. ej. la cupula entre EVA-2 y el jugador): rodea el obstaculo por un lado,
       // y mantiene ese lado unos segundos para no oscilar
       if (p.hit && m < step * 0.5) {
-        if (!b.wallSide || now - b.wallAt > 4000) { b.wallSide = Math.random() < 0.5 ? 1 : -1; }
+        if (!b.wallSide || now - b.wallAt > 4000) { b.wallSide = g.rng.next() < 0.5 ? 1 : -1; }
         b.wallAt = now;
         for (const a of [0.7, 1.2, 1.6]) { m = tryDir(a * b.wallSide); if (m > step * 0.5) break; }
       }

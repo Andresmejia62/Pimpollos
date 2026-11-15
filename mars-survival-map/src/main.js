@@ -291,7 +291,8 @@ async function boot() {
       en: `Vein logged (${(cls.en || "").toLowerCase()} per CRISM). +${points} science. ${left ? `${left} to go.` : "All three! Now scan the boxwork formations."}` } });
     updateBeacons();
   });
-  game.on("mission", () => { hud.clearAlerts(); updateBeacons(); showBriefing(); buddy.snapTo(game.s); });
+  // al reintentar, EVA-2 vuelve al estado del punto de control (no se recoloca: conserva tareas y avances)
+  game.on("mission", () => { hud.clearAlerts(); updateBeacons(); showBriefing(); if (!game.restoring) buddy.snapTo(game.s); });
 
   // ---- EVA-2 -------------------------------------------------------------------------
   // EVA-2 pisa el terreno y, como el jugador, las plataformas bajas que se suben sin saltar
@@ -369,7 +370,7 @@ async function boot() {
   game.on("free", () => {
     hud.clearAlerts(); hud.clearDialogs();
     show("scrBriefing", false); show("scrCard", false); show("scrEnd", false);
-    buddy.reset();
+    if (!game.restoring) buddy.reset();
     if (beacons.custom && !game.objectives.custom) { scene.setBeacon(beacons.custom, { visible: false, target: false, shelter: false }); delete beacons.custom; }
     scene.setOverlay(null); hud.setLayer(null); hud.setRoute(false);
     updateBeacons();
@@ -722,7 +723,7 @@ async function boot() {
     if (k === "i") $("telem").hidden = !$("telem").hidden;
     if (k === "v") { const dirt = weather.visor; if (weather.wipe()) { sfx.wipe(); ach.wiped(dirt); } }
     if (k === "p") sky.labelsOn = !sky.labelsOn;
-    // gestos del personaje (a pie): Z saludar, X pulgar, C sentarse, V bailar, B estirarse
+    // gestos del personaje (a pie): Z saludar, X pulgar, C sentarse, J bailar, B estirarse (V es limpiar el visor)
     const em = !game.s.driving && Object.keys(EMOTES).find((n) => EMOTES[n].key === k);
     if (em && astro.playEmote(em)) {
       sfx.emote();
@@ -879,6 +880,7 @@ async function boot() {
           r = bd < 60 ? [[s.x, s.z], ...P.slice(bi + 1)] : path.find(s.x, s.z, tg.world.x, tg.world.z);
         } else if (tg) r = path.find(s.x, s.z, tg.world.x, tg.world.z);
         if (r) { scene.setRoute(r); hud.minimap.setRoute(r); }
+        else { scene.setRoute([]); hud.minimap.setRoute(null); }   // busqueda fallida: no dejar la ruta antigua a la vista
       }
       scene.setRouteVisible(s.routeOn && !!game.target);
       if (s.free) { if (!game.target && hud.minimap.route) hud.minimap.setRoute(null); sim.update(now); }

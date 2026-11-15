@@ -81,28 +81,99 @@ function wallMaterial() {
 }
 
 const STORM_D = { approach: 45, front: 22, peak: 85, clearing: 40 };
+const NEXT_PHASE = { approach: "front", front: "peak", peak: "clearing", clearing: "none" };
+
+// Efecto termico de una tormenta de nivel L a la hora local dada (funcion pura; la usan el motor y el planificador)
+export function thermalOffsetFor(L, hour) {
+  if (L < 0.01) return 0;
+  const h = ((hour % 24) + 24) % 24;
+  const day = clamp(Math.sin(((h - 6) / 12) * Math.PI), 0, 1);
+  return L * (-18 * day + 14 * (1 - day));
+}
+// Nivel objetivo de la tormenta en una fase (el nivel real lo sigue con un retraso de primer orden)
+function stormTarget(phase, t, clock, gust) {
+  return phase === "front" ? smooth(0, STORM_D.front, t) : phase === "peak" ? 0.88 + 0.12 * Math.sin(clock * 0.7) * gust : phase === "clearing" ? 1 - smooth(0, STORM_D.clearing, t) : 0;
+}
 const FORECAST_LEAD = 150;          // s de aviso antes de que empiece la aproximacion
 
 export class Weather {
+  // El azar que decide la simulacion (cuando llega una tormenta, rafagas, donde y como nace un remolino) sale del
+  // generador con semilla de la partida (game.rng) y se guarda en el punto de control. El azar solo visual (el
+  // dibujo de cada remolino) usa Math.random y no altera la secuencia de eventos.
   constructor(ms, game, { onAlert, onStatic } = {}) {
     Object.assign(this, { ms, game, onAlert, onStatic });
     this.windDir = WIND.clone().normalize();
-    this.gust = 0.25;
-    this.visor = 0;                 // polvo pegado al visor (0..1)
     this.devils = [];
     this.devilNear = 0;             // 0..1: lo cerca que pasa un remolino (para el sonido)
-    this.storm = { phase: "none", t: 0, level: 0, tau: 0.6 };
-    this.clock = 0;                 // segundos reales de juego activo
-    this.nextStorm = (260 + Math.random() * 120) * (game.diff ? game.diff.stormK : 1);
-    this.nextDevil = 12;
-    this.saidForce = false;
-    this.forecastSaid = false;      // aviso previo (pronostico orbital, como el informe diario de MRO/MARCI)
     this.frontR = null;             // radio del frente de polvo mientras se acerca (para el minimapa)
-    this.firstDevil = true;         // el primer remolino aparece a la vista, aunque la EVA empiece por la tarde
+    this.cover = 0;
     // muro de la tormenta: arco de cilindro alrededor del jugador que se va cerrando
     this.wall = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 64, 1, true, 0, 2.4), wallMaterial());
     this.wall.frustumCulled = false; this.wall.renderOrder = 5; this.wall.visible = false;
     ms.scene.add(this.wall);
+    game.weather = this;
+    this.reset();
+    // nueva partida: clima nuevo con la semilla nueva; el estado entra en los puntos de control
+    game.on("reset", () => this.reset());
+    game.registerState("weather", { get: () => this.getState(), set: (st) => this.setState(st) });
+  }
+  get rnd() { return this.game.rng.next(); }
+
+  reset() {
+    this._clearDevils();
+    this.gust = 0.25;
+    this.visor = 0;                 // polvo pegado al visor (0..1)
+    this.storm = { phase: "none", t: 0, level: 0, tau: 0.6 };
+    this.clock = 0;                 // segundos reales de juego activo
+    this.nextStorm = (260 + this.rnd * 120) * (this.game.diff ? this.game.diff.stormK : 1);
+    this.nextDevil = 12;
+    this.saidForce = false;
+    this.forecastSaid = false;      // aviso previo (pronostico orbital, como el informe diario de MRO/MARCI)
+    this.firstDevil = true;         // el primer remolino aparece a la vista, aunque la EVA empiece por la tarde
+    this.game.dustLevel = 0;
+  }
+
+  // ---- estado serializable (sin objetos graficos) ------------------------------------------------------
+  getState() {
+    return {
+      gust: this.gust, visor: this.visor, storm: { ...this.storm }, clock: this.clock, nextStorm: this.nextStorm, nextDevil: this.nextDevil,
+      saidForce: this.saidForce, forecastSaid: this.forecastSaid, firstDevil: this.firstDevil,
+      devils: this.devils.map(({ g, mats, ...d }) => ({ ...d })),
+    };
+  }
+  setState(st) {
+    this._clearDevils();
+    Object.assign(this, { gust: st.gust, visor: st.visor, storm: { ...st.storm }, clock: st.clock, nextStorm: st.nextStorm, nextDevil: st.nextDevil,
+      saidForce: st.saidForce, forecastSaid: st.forecastSaid, firstDevil: st.firstDevil });
+    for (const d of st.devils || []) this._addDevil({ ...d });
+    this.game.dustLevel = this.storm.level;
+    this._lastLv = -1;
+  }
+  _clearDevils() {
+    for (const dv of this.devils || []) { this.ms.scene.remove(dv.g); dv.mats.forEach((m) => m.dispose()); }
+    this.devils = [];
+  }
+
+  // Pronostico del nivel de polvo (0..1) cada `step` s durante `seconds` s, desde el estado actual y sin tocarlo
+  // (ni el generador aleatorio): las rafagas futuras se suponen iguales a la actual. Lo usa el planificador.
+  forecastLevels(seconds, step = 1) {
+    const n = Math.max(1, Math.ceil(seconds / step) + 1), out = new Float32Array(n);
+    let phase = this.storm.phase, t = this.storm.t, level = this.storm.level, clock = this.clock;
+    const sub = Math.min(step, 0.25), k = Math.ceil(step / sub), dt = step / k;
+    const speActive = this.game.s.spe && this.game.s.spe.phase !== "ended";
+    for (let i = 0; i < n; i++) {
+      out[i] = level;
+      for (let j = 0; j < k; j++) {
+        clock += dt;
+        if (phase === "none" && clock > this.nextStorm && !speActive) { phase = "approach"; t = 0; }
+        if (phase !== "none") {
+          t += dt;
+          if (t > STORM_D[phase]) { t = 0; phase = NEXT_PHASE[phase]; }
+          level += (stormTarget(phase, t, clock, this.gust) - level) * Math.min(1, dt * 1.5);
+        } else level += (0 - level) * Math.min(1, dt * 0.5);
+      }
+    }
+    return out;
   }
 
   get windSpeed() {
@@ -124,13 +195,7 @@ export class Weather {
 
   // Efecto termico de la tormenta en el suelo (°C): el polvo tapa el Sol de dia y frena el enfriamiento de noche
   // (lo observado por Viking y Curiosity/REMS en 2018: menos amplitud diaria). Proporcional a la opacidad.
-  thermalOffset(hour) {
-    const L = this.storm.level;
-    if (L < 0.01) return 0;
-    const h = ((hour % 24) + 24) % 24;
-    const day = clamp(Math.sin(((h - 6) / 12) * Math.PI), 0, 1);
-    return L * (-18 * day + 14 * (1 - day));
-  }
+  thermalOffset(hour) { return thermalOffsetFor(this.storm.level, hour); }
 
   _alert(kind) {
     if (!this.onAlert) return;
@@ -149,24 +214,32 @@ export class Weather {
   wipe() { const had = this.visor > 0.05; this.visor = 0; return had; }
 
   // El primero sale delante de la camara, a media distancia, y su trayectoria cruza cerca del jugador
+  // (se usa el rumbo del jugador, no la camara: lo que se dibuja no debe cambiar la simulacion)
   _spawnDevilInView(px, pz) {
-    const cam = this.ms.camera, f = new THREE.Vector3();
-    cam.getWorldDirection(f); f.y = 0; if (f.lengthSq() < 1e-4) f.set(0, 0, -1); f.normalize();
-    const d = 170 + Math.random() * 60;
+    const hd = this.game.s.heading || 0, f = new THREE.Vector3(-Math.sin(hd), 0, -Math.cos(hd));
+    const d = 170 + this.rnd * 60;
     // se coloca a barlovento de un punto delante del jugador, asi el viento lo trae hacia la linea de vision
     const cx = px + f.x * d, cz = pz + f.z * d;
     return this._spawnDevil(px, pz, cx - this.windDir.x * 60, cz - this.windDir.z * 60, 1.3);
   }
 
   _spawnDevil(px, pz, fx, fz, big = 1) {
-    const d = 260 + Math.random() * 480;
+    // siempre se consumen los mismos numeros del generador, nazca o no el remolino
+    const d = 260 + this.rnd * 480;
     const perp = new THREE.Vector3(-this.windDir.z, 0, this.windDir.x);
-    const off = (Math.random() - 0.5) * 420;
+    const off = (this.rnd - 0.5) * 420;
     const x = fx ?? px - this.windDir.x * d + perp.x * off, z = fz ?? pz - this.windDir.z * d + perp.z * off;
-    const w = this.ms.world;
-    if (!w.inside(x, z, 60)) return;
-    const h = (140 + Math.random() * 260) * big, r0 = 3 + Math.random() * 6, r1 = (18 + Math.random() * 28) * big;
-    const seed = Math.random() * 100;
+    const h = (140 + this.rnd * 260) * big, r0 = 3 + this.rnd * 6, r1 = (18 + this.rnd * 28) * big;
+    const life = 80 + this.rnd * 70, speed = 3.5 + this.rnd * 2.5;
+    const seed = this.rnd * 100;                 // fase del serpenteo: mueve el remolino, asi que es de la simulacion
+    if (!this.game.world.inside(x, z, 60)) return;
+    // oscilacion del dibujo: azar visual (no afecta a la simulacion)
+    this._addDevil({ x, z, r0, r1, h, life, age: 0, speed, touched: false, seed, sway: 6 + Math.random() * 14 });
+  }
+
+  // crea el dibujo de un remolino a partir de sus datos (al nacer o al restaurar un punto de control)
+  _addDevil(dv) {
+    const { x, z, r0, h, seed } = dv, r1 = dv.r1 ?? r0 * 5;
     const g = new THREE.Group();
     const core = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, h, 28, 10, true), devilMaterial(seed));
     core.position.y = h / 2;
@@ -179,14 +252,15 @@ export class Weather {
     outer.material.uniforms.uColor.value.multiplyScalar(1.08);
     g.position.set(x, this.ms.heightAt(x, z), z);
     this.ms.scene.add(g);
-    this.devils.push({ g, mats: [core.material, outer.material, skirt.material], x, z, r0, h, life: 80 + Math.random() * 70, age: 0, speed: 3.5 + Math.random() * 2.5, seed, touched: false, sway: 6 + Math.random() * 14 });
+    this.devils.push({ ...dv, r1, g, mats: [core.material, outer.material, skirt.material] });
   }
 
   // dt real; running = la simulacion avanza; p = {x, z} del jugador; hour = hora local; day = 0..1 (luz)
   update(dt, { running, x, z, hour, day, now }) {
     const ms = this.ms, s = this.game.s;
-    // rafagas: paseo aleatorio lento (lo comparten el sonido y las particulas)
-    this.gust = clamp(this.gust + (Math.random() - 0.5) * dt * 2.2 - (this.gust - 0.25) * dt * 0.35, 0, 1);
+    // rafagas: paseo aleatorio lento (lo comparten el sonido y las particulas). Solo avanza con la simulacion
+    // en marcha: en pausa no se consumen numeros del generador.
+    if (running) this.gust = clamp(this.gust + (this.rnd - 0.5) * dt * 2.2 - (this.gust - 0.25) * dt * 0.35, 0, 1);
     const light = 0.3 + 0.7 * day;
     if (running) this.clock += dt;
 
@@ -204,14 +278,13 @@ export class Weather {
         S.phase = { approach: "front", front: "peak", peak: "clearing", clearing: "none" }[S.phase];
         if (S.phase === "front") this._alert("front");
         if (S.phase === "clearing") this._alert("clearing");
-        if (S.phase === "none") { this.nextStorm = this.clock + (420 + Math.random() * 300) * (this.game.diff?.stormK ?? 1); this.forecastSaid = false; }
+        if (S.phase === "none") { this.nextStorm = this.clock + (420 + this.rnd * 300) * (this.game.diff?.stormK ?? 1); this.forecastSaid = false; }
       }
-      const target = S.phase === "front" ? smooth(0, D.front, S.t) : S.phase === "peak" ? 0.88 + 0.12 * Math.sin(this.clock * 0.7) * this.gust : S.phase === "clearing" ? 1 - smooth(0, D.clearing, S.t) : 0;
+      const target = stormTarget(S.phase, S.t, this.clock, this.gust);
       S.level += (target - S.level) * Math.min(1, dt * 1.5);
     } else if (S.phase === "none") S.level += (0 - S.level) * Math.min(1, dt * 0.5);
     S.tau = 0.6 + 3.6 * S.level;
     this.game.dustLevel = S.level;
-    this.game.weather = this;
     if (Math.abs(S.level - (this._lastLv ?? -1)) > 0.004) { ms.setStorm(S.level * 0.95); this._lastLv = S.level; }
 
     // muro de polvo: se acerca durante la aproximacion y te alcanza al empezar el frente
@@ -245,12 +318,9 @@ export class Weather {
       if (dc < 3.4) cover = (dx * this.windDir.x + dz * this.windDir.z) / (dc || 1) > -0.2 ? 0.55 : 0.3;
     }
     this.cover = cover;
-    if (running && outside && S.level > 0.05) {
-      const k = 1 - cover;
-      this.visor = Math.min(0.8, this.visor + S.level * 0.011 * k * dt);
-      s.integrity -= 0.004 * S.level * k * (this.game.diff?.damageK ?? 1) * dt;
-      if (!s.driving) s.energy = Math.max(0, s.energy - this.game.rules.resources.energy.base_drain_per_s * 0.35 * S.level * k * dt);
-    }
+    // (el desgaste del traje y el gasto extra de bateria por el polvo los aplica Game con el nucleo compartido,
+    //  gameplay/simcore.js -> dustDeltas, respetando los bloqueos de gasto del modo libre)
+    if (running && outside && S.level > 0.05) this.visor = Math.min(0.8, this.visor + S.level * 0.011 * (1 - cover) * dt);
     if (!outside) this.visor = Math.max(0, this.visor - dt * 0.5);       // dentro se limpia
     else this.visor = Math.max(0, this.visor - dt * 0.002);
 
@@ -260,7 +330,7 @@ export class Weather {
     const devilHours = h > 9.5 && h < 18.5 && S.level < 0.3;
     const peak = Math.max(0.25, 1 - Math.abs(h - 13) / 5.5);
     if (running && devilHours && this.clock > this.nextDevil && this.devils.length < 3) {
-      this.nextDevil = this.clock + (18 + Math.random() * 28) / peak;
+      this.nextDevil = this.clock + (18 + this.rnd * 28) / peak;
       if (this.firstDevil) { this.firstDevil = false; this._spawnDevilInView(x, z); }
       else this._spawnDevil(x, z);
     }
@@ -270,7 +340,7 @@ export class Weather {
       if (running) dv.age += dt;
       if (!devilHours && dv.life > dv.age + 12) dv.life = dv.age + 12;     // al caer la tarde o con tormenta se deshacen
       const fade = smooth(0, 8, dv.age) * (1 - smooth(dv.life - 12, dv.life, dv.age));
-      if (dv.age > dv.life || !ms.world.inside(dv.x, dv.z, 30)) { ms.scene.remove(dv.g); dv.mats.forEach((m) => m.dispose()); this.devils.splice(i, 1); continue; }
+      if (dv.age > dv.life || !this.game.world.inside(dv.x, dv.z, 30)) { ms.scene.remove(dv.g); dv.mats.forEach((m) => m.dispose()); this.devils.splice(i, 1); continue; }
       if (running) {
         // deriva con el viento y serpentea un poco
         const perpX = -this.windDir.z, perpZ = this.windDir.x, wob = Math.sin(dv.age * 0.23 + dv.seed) * 1.6;
