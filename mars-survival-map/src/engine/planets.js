@@ -104,6 +104,7 @@ export class SkyPlanets {
   constructor(scene, getLabel) {
     this.getLabel = getLabel;
     this.labelsOn = true;
+    this.radius = 15000;              // distancia a la que se dibujan (la escena la ajusta a su cielo)
     // cada planeta es un sprite con un brillo radial (tamaño en pixeles, independiente de la distancia)
     const c = document.createElement("canvas"); c.width = c.height = 64;
     const g = c.getContext("2d"), grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
@@ -122,7 +123,7 @@ export class SkyPlanets {
       const c = document.createElement("canvas"); c.width = 256; c.height = 64;
       const tex = new THREE.CanvasTexture(c);
       tex.colorSpace = THREE.SRGBColorSpace;
-      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, sizeAttenuation: false }));
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, sizeAttenuation: false, fog: false }));
       sp.scale.set(0.2, 0.05, 1);
       sp.center.set(-0.1, 1.15);
       sp.renderOrder = 2;
@@ -164,7 +165,7 @@ export class SkyPlanets {
   // day: 0 noche ... 1 pleno dia (scene.skyMat uDay); tau: opacidad del polvo
   update(camera, hour, day, tau, viewH) {
     const { sun, planets } = this.ephemeris();
-    const v = this._v, R = 15000;
+    const v = this._v, R = this.radius;
     const limit = 6.0 - 10 * day;                 // magnitud limite: ~6 de noche, solo objetos muy brillantes al crepusculo
     const earthDir = new THREE.Vector3();
     this.visible = [];

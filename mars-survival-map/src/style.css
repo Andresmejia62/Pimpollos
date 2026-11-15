@@ -132,20 +132,27 @@ button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .eyebrow.ok { color: var(--safe); }
 .eyebrow svg { width: 18px; height: 18px; }
 .btnrow { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+/* Tarjetas de mision, dato, final y guia: nunca mas altas que la ventana. Si no caben, el contenido se
+   desplaza y la fila de botones se queda fija abajo, siempre a la vista. */
+.card.briefing, .card.factcard, .card.endcard, .card.guide { max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px); overflow-y: auto; overscroll-behavior: contain; padding-bottom: 0; }
+.card.briefing > .btnrow:last-child, .card.factcard > .btnrow:last-child, .card.endcard > .btnrow:last-child, .card.guide > .btnrow:last-child { position: sticky; bottom: 0; z-index: 1; margin-top: 8px; padding: 14px 0 24px; background: linear-gradient(rgba(22, 18, 26, 0), var(--hud-bg-solid) 14px); }
+.card.briefing #briefPlanNote:empty { display: none; }
 .btn { font: 700 17px var(--font-hud); letter-spacing: .05em; text-transform: uppercase; padding: 11px 20px; border-radius: 8px; border: 1px solid var(--hud-border); background: rgba(255,255,255,.06); cursor: pointer; }
 .btn:hover { background: rgba(255,255,255,.12); }
 .btn.primary { background: var(--mars-dust); color: #1a0f0a; border-color: var(--mars-dust); }
 .btn.primary:hover { background: #e9b285; }
 /* Fotos POV reales de Curiosity (Navcam/Mastcam) */
 .pov { margin: 0 0 16px; border-radius: 10px; overflow: hidden; border: 1px solid var(--hud-border); background: #111; }
-.pov img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; max-height: 300px; filter: sepia(.32) saturate(1.5) hue-rotate(-12deg) brightness(1.02); }
+.pov img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; max-height: min(300px, 32vh); filter: sepia(.32) saturate(1.5) hue-rotate(-12deg) brightness(1.02); }
 .pov figcaption { font-size: 13px; line-height: 1.45; padding: 8px 12px; color: var(--hud-text-dim); }
 .pov figcaption b { color: var(--hud-text); font-weight: 600; }
-.factcard .pov img { max-height: 240px; }
-.povhud { right: calc(var(--u) * 22); top: calc(var(--u) * 8.4); width: calc(var(--u) * 16); padding: calc(var(--u) * .6); animation: slideIn .3s ease-out; }
-.povhud .lbl { font-size: calc(var(--u) * 1.05); letter-spacing: .08em; text-transform: uppercase; color: var(--safe); font-weight: 700; margin-bottom: calc(var(--u) * .4); }
-.povhud img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: calc(var(--u) * .4); filter: sepia(.32) saturate(1.5) hue-rotate(-12deg); }
-.povhud .cap { font-family: var(--font-text); font-size: calc(var(--u) * .95); line-height: 1.35; color: var(--hud-text-dim); margin-top: calc(var(--u) * .4); }
+.factcard .pov img { max-height: min(240px, 28vh); }
+/* Vista previa del destino: miniatura discreta pegada al minimapa (el texto completo queda en el title) */
+.povhud { right: calc(var(--u) * 21.6); top: calc(var(--u) * 2); width: calc(var(--u) * 11); padding: calc(var(--u) * .35); animation: slideIn .3s ease-out; opacity: .92; }
+.povhud .lbl { display: flex; justify-content: space-between; gap: calc(var(--u) * .4); font-size: calc(var(--u) * .85); letter-spacing: .06em; text-transform: uppercase; color: var(--safe); font-weight: 700; margin: 0 calc(var(--u) * .15) calc(var(--u) * .3); white-space: nowrap; }
+.povhud .lbl b { color: var(--hud-text); font-weight: 700; }
+.povhud img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: calc(var(--u) * .3); filter: sepia(.32) saturate(1.5) hue-rotate(-12deg); }
+.povhud .cap { font-family: var(--font-text); font-size: calc(var(--u) * .78); color: var(--hud-text-dim); margin: calc(var(--u) * .25) calc(var(--u) * .15) 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 22px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; font: 600 15px var(--font-hud); padding: 5px 11px; border-radius: 99px; border: 1px solid var(--hud-border); }
 .chip svg { width: 16px; height: 16px; }

@@ -182,9 +182,12 @@ export class Hud {
     if (box.dataset.id !== tg.id) {
       box.dataset.id = tg.id;
       $("povHudImg").src = assetUrl(img.file);
-      $("povHudCap").textContent = `${t(img.caption)} · ${img.camera} · sol ${img.sol}`;
+      // en pantalla solo la camara y el sol; la descripcion completa queda como texto emergente
+      $("povHudCap").textContent = `${img.camera} · sol ${img.sol}`;
+      box.title = `${t(img.caption)} · ${img.camera} · sol ${img.sol}`;
+      $("povHudImg").alt = t(img.caption);
     }
-    $("povHudLbl").textContent = `${ui("povArrival")} · ${fmtDist(d)}`;
+    $("povHudLbl").innerHTML = `<span>${ui("povShort")}</span><b>${fmtDist(d)}</b>`;
   }
 
   setLockHint(text) { this._lockHint = text; }
