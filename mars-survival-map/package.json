@@ -11,7 +11,8 @@
     "layers": "python3 data/scripts/build_layers.py",
     "fetch": "python3 data/scripts/fetch_nasa.py",
     "textures": "python3 data/scripts/build_textures.py",
-    "structures": "node data/scripts/build_structures.mjs"
+    "structures": "node data/scripts/build_structures.mjs",
+    "test": "node data/scripts/check_far_terrain.mjs"
   },
   "dependencies": {
     "three": "0.180.0"

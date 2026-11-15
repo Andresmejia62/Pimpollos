@@ -1,6 +1,23 @@
 import * as THREE from "three";
 import { assetUrl } from "../data.js";
 import { Colliders, Dynamics } from "./physics.js";
+import { loadMolaGale } from "./mola.js";
+
+// Ajustes de aspecto (un solo sitio para retocar la luz y la profundidad de toda la escena)
+export const LOOK = {
+  fogDensity: 0.000035,  // 1/m: bruma de polvo (~29 km de alcance). La misma para terreno, rocas, estructuras y relieve lejano
+  dustScaleH: 11100,     // m: altura de escala de la atmosfera; el polvo se aclara con la altura
+  delight: 0.85,         // cuanta luz "horneada" de la ortoimagen HiRISE se quita (0 = nada)
+  flatten: 0.35,         // cuanto se iguala la exposicion entre zonas claras y oscuras del mapa
+  aoFloor: 0.6,          // oscuridad maxima de las hondonadas (antes 0,42)
+  fill: 0.16,            // luz de relleno del cielo polvoriento: ninguna ladera queda en negro
+};
+
+// Los materiales de three.js (rocas, estructuras, astronauta, vehiculos) usan la misma ley de bruma que el
+// terreno: 1 - exp(-densidad * distancia). La de FogExp2 es cuadratica y daria otra sensacion de profundidad.
+THREE.ShaderChunk.fog_fragment = THREE.ShaderChunk.fog_fragment.replace(
+  "float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );",
+  "float fogFactor = 1.0 - exp( - fogDensity * vFogDepth );");
 
 // Colores de Marte (sRGB) para la rampa de albedo: sombra -> polvo -> roca clara
 const COL_LO = "#1f0f09", COL_MID = "#8a5536", COL_HI = "#dcb48f";
@@ -29,22 +46,22 @@ function tileNoise(size, cells, seed) {
 
 // R = altura (grava/arena), G/B = derivadas (relieve fino), A = segundo ruido independiente
 function detailTexture() {
-  const S = 256;
+  const S = 512;
   const h = new Float32Array(S * S), h2 = new Float32Array(S * S);
-  [[8, 0.5, 11], [16, 0.27, 23], [32, 0.14, 37], [64, 0.09, 51]].forEach(([c, w, seed]) => {
+  [[8, 0.45, 11], [16, 0.26, 23], [32, 0.15, 37], [64, 0.09, 51], [128, 0.05, 67]].forEach(([c, w, seed]) => {
     const n = tileNoise(S, c, seed), m = tileNoise(S, c, seed + 1000);
     for (let i = 0; i < h.length; i++) { h[i] += n[i] * w; h2[i] += m[i] * w; }
   });
   // granos: picos dispersos
-  const grain = tileNoise(S, 128, 77);
+  const grain = tileNoise(S, 256, 77);
   for (let i = 0; i < h.length; i++) h[i] = Math.min(1, h[i] * 0.85 + Math.max(0, grain[i] - 0.72) * 1.1);
   const data = new Uint8Array(S * S * 4);
   const at = (x, y) => h[((y + S) % S) * S + ((x + S) % S)];
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
     const i = (y * S + x) * 4;
     data[i] = Math.round(255 * Math.min(1, Math.max(0, h[y * S + x])));
-    data[i + 1] = Math.round(255 * Math.min(1, Math.max(0, 0.5 + (at(x + 1, y) - at(x - 1, y)) * 2.2)));
-    data[i + 2] = Math.round(255 * Math.min(1, Math.max(0, 0.5 + (at(x, y + 1) - at(x, y - 1)) * 2.2)));
+    data[i + 1] = Math.round(255 * Math.min(1, Math.max(0, 0.5 + (at(x + 1, y) - at(x - 1, y)) * 4.4)));
+    data[i + 2] = Math.round(255 * Math.min(1, Math.max(0, 0.5 + (at(x, y + 1) - at(x, y - 1)) * 4.4)));
     data[i + 3] = Math.round(255 * Math.min(1, Math.max(0, h2[y * S + x])));
   }
   const tex = new THREE.DataTexture(data, S, S, THREE.RGBAFormat);
@@ -55,6 +72,42 @@ function detailTexture() {
   tex.anisotropy = 8;
   tex.needsUpdate = true;
   return tex;
+}
+
+// Luz "horneada" en la ortoimagen. Las fotos de HiRISE se tomaron con el sol en una posicion concreta, asi que
+// las laderas que lo miraban salen mas claras. Se ajusta por minimos cuadrados  gris = c0 + cx*nx + cz*nz
+// (nx, nz: normal del terreno hacia el Este y el Sur) sobre una copia reducida de las dos texturas; el sombreador
+// resta esa parte y deja que ilumine solo el sol del juego. Devuelve null si no se puede leer la imagen.
+function fitBakedLight(albedoImg, normalImg, S = 256) {
+  try {
+    const read = (img) => {
+      const c = document.createElement("canvas");
+      c.width = c.height = S;
+      const ctx = c.getContext("2d", { willReadFrequently: true });
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, 0, 0, S, S);
+      return ctx.getImageData(0, 0, S, S).data;
+    };
+    const A = read(albedoImg), N = read(normalImg), n = S * S;
+    let sg = 0, sx = 0, sz = 0;
+    for (let i = 0; i < n; i++) { sg += A[i * 4]; sx += N[i * 4]; sz += N[i * 4 + 2]; }
+    const mg = sg / n / 255, mx = (sx / n / 255) * 2 - 1, mz = (sz / n / 255) * 2 - 1;
+    // ecuaciones normales 2x2 con las variables centradas
+    let sxx = 0, szz = 0, sxz = 0, sxg = 0, szg = 0;
+    for (let i = 0; i < n; i++) {
+      const g = A[i * 4] / 255 - mg, x = (N[i * 4] / 255) * 2 - 1 - mx, z = (N[i * 4 + 2] / 255) * 2 - 1 - mz;
+      sxx += x * x; szz += z * z; sxz += x * z; sxg += x * g; szg += z * g;
+    }
+    const det = sxx * szz - sxz * sxz;
+    if (!(Math.abs(det) > 1e-9)) return null;
+    const lim = (v) => Math.max(-1.5, Math.min(1.5, v));
+    const cx = lim((sxg * szz - szg * sxz) / det), cz = lim((szg * sxx - sxg * sxz) / det);
+    if (![cx, cz, mg, mx, mz].every(Number.isFinite)) return null;
+    return { cx, cz, mx, mz, mean: mg };
+  } catch (e) {
+    console.warn("No se pudo ajustar la luz de la ortoimagen:", e.message);
+    return null;
+  }
 }
 
 const TERRAIN_VS = /* glsl */ `
@@ -73,22 +126,56 @@ const TERRAIN_VS = /* glsl */ `
   }
 `;
 
+// Luz y bruma comunes al terreno cercano, al faldon y al relieve lejano: asi todo el mapa se ilumina igual
+// y la profundidad se lee igual a 100 m que a 100 km.
+const SHADE_GLSL = /* glsl */ `
+  uniform vec3 uSunDir, uSunColor, uAmbient, uFogColor, uColLo, uColMid, uColHi;
+  uniform float uFogDensity, uDustH, uStorm, uFill;
+
+  vec3 ramp(float g) {
+    return g < 0.5 ? mix(uColLo, uColMid, g * 2.0) : mix(uColMid, uColHi, (g - 0.5) * 2.0);
+  }
+
+  // Sol directo + cielo. En Marte el polvo difunde mucha luz: las sombras nunca son negras.
+  //   sky  luz del cielo (mas arriba) y rebote calido del suelo (mas abajo)
+  //   fill relleno alrededor del sol, que envuelve las laderas que no lo miran de frente
+  vec3 marsLight(vec3 base, vec3 N, float ao) {
+    float ndl = dot(N, uSunDir);
+    float wrap = ndl * 0.5 + 0.5;
+    vec3 sky = uAmbient * mix(vec3(0.78, 0.66, 0.58), vec3(1.0), N.y * 0.5 + 0.5);
+    vec3 fill = uSunColor * uFill * wrap * wrap;
+    vec3 direct = uSunColor * max(ndl, 0.0) * (1.0 - 0.5 * uFill);
+    return base * ((sky + fill) * ao + direct * mix(1.0, ao, 0.4));
+  }
+
+  // Muestra la textura de detalle dos veces, la segunda girada y a otra escala, y las promedia: a gran
+  // escala (cientos de metros o mas) asi no se nota que la textura se repite en cuadricula.
+  vec4 untile(sampler2D t, vec2 p) {
+    vec2 q = mat2(0.8, -0.6, 0.6, 0.8) * p * 0.773 + vec2(0.37, 0.61);
+    return (texture2D(t, p) + texture2D(t, q) - 1.0) * 0.72 + 0.5;
+  }
+
+  // Bruma de polvo: exponencial con la distancia y mas tenue con la altura (atmosfera con altura de escala uDustH).
+  // dy = altura del punto respecto a la camara.
+  float marsFog(float dist, float dy) {
+    float k = dy / uDustH;
+    float thin = abs(k) < 0.001 ? 1.0 : (1.0 - exp(-k)) / k;
+    return clamp(1.0 - exp(-dist * uFogDensity * thin * (1.0 + 5.0 * uStorm)), 0.0, 1.0);
+  }
+`;
+
 const TERRAIN_FS = /* glsl */ `
   uniform sampler2D uAlbedo;     // gris HiRISE+CTX (o la ortoimagen coloreada si no hay HD)
   uniform sampler2D uNormalMap;  // normales del DEM a 3 m, espacio de mundo
   uniform sampler2D uAO;         // fraccion de cielo visible
   uniform sampler2D uOverlay;
   uniform sampler2D uDetail;
-  uniform float uHasHD, uOverlayOn, uFogDensity, uUseFlat, uStorm, uSize;
-  uniform vec3 uSunDir, uSunColor, uAmbient, uFogColor, uColLo, uColMid, uColHi;
+  uniform float uHasHD, uOverlayOn, uUseFlat, uSize, uDelight, uFlatten, uAoFloor, uMeanG;
+  uniform vec4 uBake;            // luz horneada en la ortoimagen: (cx, cz, media nx, media nz)
   varying vec2 vUv;
   varying vec3 vNormalW;
   varying vec3 vPosW;
-
-  vec3 ramp(float g) {
-    return g < 0.5 ? mix(uColLo, uColMid, g * 2.0) : mix(uColMid, uColHi, (g - 0.5) * 2.0);
-  }
-
+` + SHADE_GLSL + /* glsl */ `
   void main() {
     float dist = distance(cameraPosition, vPosW);
     float near = 1.0 - smoothstep(25.0, 320.0, dist);
@@ -96,8 +183,8 @@ const TERRAIN_FS = /* glsl */ `
 
     vec4 d1 = texture2D(uDetail, vPosW.xz / 3.3);
     vec4 d2 = texture2D(uDetail, vPosW.xz / 27.0 + 0.37);
-    vec4 d3 = texture2D(uDetail, vPosW.xz / 230.0 + 0.11);
-    vec4 d4 = texture2D(uDetail, vPosW.xz / 1900.0 + 0.53);
+    vec4 d3 = untile(uDetail, vPosW.xz / 230.0 + 0.11);
+    vec4 d4 = untile(uDetail, vPosW.xz / 1900.0 + 0.53);
 
     vec3 N = normalize(vNormalW);
     // tono generico para el terreno lejano (fuera del recorte) y para el borde del recorte
@@ -107,13 +194,20 @@ const TERRAIN_FS = /* glsl */ `
     if (uUseFlat < 0.5) {
       float edge = min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y));
       float inside = smoothstep(0.0, 0.02, edge);         // en el borde se funde con el terreno lejano
-      vec3 nm = normalize(texture2D(uNormalMap, vUv).xyz * 2.0 - 1.0);
+      vec3 nmRaw = texture2D(uNormalMap, vUv).xyz * 2.0 - 1.0;
+      vec3 nm = normalize(nmRaw);
       N = normalize(mix(N, nm, uHasHD * inside));
       vec3 a = texture2D(uAlbedo, vUv).rgb;
       float gt = mix(dot(a, vec3(0.35, 0.5, 0.15)) * 1.25, a.r, uHasHD);
+      // La ortoimagen trae la luz del dia en que se tomo (laderas al sol mas claras). Se resta esa
+      // componente, ajustada contra el mapa de normales al cargar, para que solo ilumine el sol del juego.
+      gt -= uDelight * uHasHD * (uBake.x * (nmRaw.x - uBake.z) + uBake.y * (nmRaw.z - uBake.w));
+      // Exposicion por zonas: acerca el brillo medio de cada zona (~100 m) al del mapa entero
+      gt += (uMeanG - textureLod(uAlbedo, vUv, 6.5).r) * uFlatten * uHasHD;
+      gt = clamp(gt, 0.0, 1.0);
       float gBlur = texture2D(uAlbedo, vUv, 6.0).r;       // version desenfocada (mipmap)
       g = mix(gBlur, gt, inside);
-      ao = mix(1.0, mix(0.42, 1.0, smoothstep(0.6, 1.0, texture2D(uAO, vUv).r)), inside);
+      ao = mix(1.0, mix(uAoFloor, 1.0, smoothstep(0.6, 1.0, texture2D(uAO, vUv).r)), inside);
     } else {
       // terreno lejano: prolonga el tono del borde del recorte y lo lleva al tono generico
       vec2 uvw = vec2(vPosW.x / uSize + 0.5, 0.5 - vPosW.z / uSize);
@@ -121,11 +215,15 @@ const TERRAIN_FS = /* glsl */ `
       float outside = length((uvw - uvc) * uSize);
       g = mix(texture2D(uAlbedo, uvc, 6.0).r, gFlat, smoothstep(0.0, 2200.0, outside) * 0.85 * uHasHD + (1.0 - uHasHD));
     }
-    g = clamp((g - 0.5) * 1.25 + 0.5, 0.0, 1.0);          // un poco mas de contraste
+    g = clamp((g - 0.5) * 1.15 + 0.5, 0.0, 1.0);          // un poco mas de contraste
 
     // roca en las pendientes, arena en lo llano
     float steep = 1.0 - N.y;
     float rock = smoothstep(0.045, 0.15, steep + (d2.r - 0.5) * 0.06);
+    // en las paredes la textura proyectada desde arriba se estira: ahi se mezcla una proyeccion lateral
+    float wall = smoothstep(0.12, 0.4, steep);
+    vec4 dv = texture2D(uDetail, vec2((vPosW.x + vPosW.z) * 0.7, vPosW.y) / 3.3);
+    d1 = mix(d1, dv, wall);
     float strata = sin(vPosW.y * 1.9 + d2.a * 5.0 + d3.r * 6.0) * 0.5 + 0.5;
     strata = mix(strata, sin(vPosW.y * 7.1 + d1.a * 3.0) * 0.5 + 0.5, 0.3);
     // ondulaciones de arena: solo cerca (lejos formarian un patron de rayas)
@@ -135,6 +233,13 @@ const TERRAIN_FS = /* glsl */ `
     float gRock = g * mix(1.0, 0.55 + 0.7 * smoothstep(0.25, 0.75, strata), mid * 0.9) * mix(1.0, 0.76 + 0.48 * d1.a, near);
     vec3 base = ramp(clamp(mix(gSand, gRock * 0.94, rock), 0.0, 1.0));
     base = mix(base, base * vec3(0.86, 0.78, 0.74), rock * 0.7);
+    // variacion de color a gran escala: manchas de polvo claro (mas ocre) y de arena basaltica (mas gris)
+    base *= mix(vec3(1.05, 1.0, 0.93), vec3(0.94, 0.98, 1.04), smoothstep(0.3, 0.7, d4.r * 0.6 + d3.a * 0.4));
+    // el polvo fino se acumula en lo llano y resguardado
+    base = mix(base, base * vec3(1.08, 1.03, 0.95), (1.0 - rock) * smoothstep(0.9, 0.6, ao) * 0.5);
+    // guijarros oscuros sueltos, solo de cerca
+    float pebble = smoothstep(0.80, 0.86, d1.a) * (1.0 - smoothstep(6.0, 28.0, dist)) * (1.0 - rock);
+    base *= 1.0 - 0.35 * pebble;
 
     // relieve fino
     vec2 bump = (d1.gb - 0.5) * 1.7 * near + (d2.gb - 0.5) * 1.0 * mid;
@@ -144,14 +249,52 @@ const TERRAIN_FS = /* glsl */ `
     float ledge = smoothstep(0.55, 0.75, strata) - smoothstep(0.75, 0.95, strata);
     base *= 1.0 - 0.22 * ledge * rock * mid;
 
-    float ndl = max(dot(N, uSunDir), 0.0);
-    vec3 col = base * (uAmbient * ao + uSunColor * ndl);
+    vec3 col = marsLight(base, N, ao);
 
     vec4 ov = texture2D(uOverlay, vUv);
     col = mix(col, ov.rgb, ov.a * uOverlayOn * 0.85);
 
-    float f = 1.0 - exp(-dist * uFogDensity * (1.0 + 5.0 * uStorm));
-    col = mix(col, uFogColor, clamp(f, 0.0, 1.0));
+    col = mix(col, uFogColor, marsFog(dist, vPosW.y - cameraPosition.y));
+    gl_FragColor = vec4(col, 1.0);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
+`;
+
+const FAR_VS = /* glsl */ `
+  varying vec3 vNormalW;
+  varying vec3 vPosW;
+  void main() {
+    vNormalW = normalize(mat3(modelMatrix) * normal);
+    vPosW = (modelMatrix * vec4(position, 1.0)).xyz;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+const FAR_FS = /* glsl */ `
+  uniform sampler2D uDetail;
+  varying vec3 vNormalW;
+  varying vec3 vPosW;
+` + SHADE_GLSL + /* glsl */ `
+  void main() {
+    float dist = distance(cameraPosition, vPosW);
+    vec4 d3 = untile(uDetail, vPosW.xz / 230.0 + 0.11);
+    vec4 d4 = untile(uDetail, vPosW.xz / 1900.0 + 0.53);
+    vec4 d5 = untile(uDetail, vPosW.xz / 17000.0 + 0.29);
+    // a mas de unos kilometros el grano de 230 m ya no se distingue: se apaga para que no haga moare
+    d3 = mix(d3, vec4(0.5), smoothstep(6000.0, 25000.0, dist));
+    vec3 N = normalize(vNormalW);
+    // mismo tono generico que el faldon (asi no hay costura) con manchas grandes de albedo
+    float g = 0.5 + (d3.r - 0.5) * 0.22 + (d4.a - 0.5) * 0.3 + (d5.r - 0.5) * 0.18;
+    g = clamp((g - 0.5) * 1.15 + 0.5, 0.0, 1.0);
+    float steep = 1.0 - N.y;
+    float rock = smoothstep(0.02, 0.1, steep + (d4.r - 0.5) * 0.03);
+    vec3 base = ramp(clamp(mix(g, g * 0.8, rock), 0.0, 1.0));
+    base = mix(base, base * vec3(0.86, 0.78, 0.74), rock * 0.7);
+    base *= mix(vec3(1.05, 1.0, 0.93), vec3(0.94, 0.98, 1.04), smoothstep(0.3, 0.7, d4.r * 0.6 + d3.a * 0.4));
+    // la malla MOLA mide ~925 m por celda: un poco de relieve falso evita que las laderas queden lisas
+    N = normalize(N + vec3(d4.g - 0.5, 0.0, d4.b - 0.5) * 0.35 + vec3(d5.g - 0.5, 0.0, d5.b - 0.5) * 0.25);
+    vec3 col = marsLight(base, N, 1.0);
+    col = mix(col, uFogColor, marsFog(dist, vPosW.y - cameraPosition.y));
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -207,13 +350,14 @@ const SKY_FS = /* glsl */ `
       col += vec3(0.9, 0.93, 1.0) * star * (0.7 + 0.3 * sin(uTime * 3.0 + r * 90.0)) * night * smoothstep(0.0, 0.15, d.y);
     }
 
-    // lunas: Fobos (disco palido) y Deimos (un punto brillante)
+    // lunas a su tamano real en el cielo de Marte: Fobos mide ~0,2 grados (un tercio de nuestra Luna)
+    // y Deimos ~2 minutos de arco, apenas un punto brillante
     float moonLit = 0.5 + 0.5 * uDay;
-    float phobos = smoothstep(0.0085, 0.0065, angTo(d, normalize(vec3(-0.55, 0.62, -0.5))));
-    float crater = noise(d.xz * 900.0);
-    col = mix(col, vec3(0.9, 0.84, 0.77) * moonLit * (0.82 + 0.3 * crater) + col * 0.22, phobos * 0.55);
-    float deimos = smoothstep(0.0032, 0.0018, angTo(d, normalize(vec3(0.62, 0.45, 0.55))));
-    col = mix(col, vec3(0.95, 0.92, 0.88) * moonLit + col * 0.2, deimos * 0.6);
+    float phobos = smoothstep(0.0021, 0.0015, angTo(d, normalize(vec3(-0.55, 0.62, -0.5))));
+    float crater = noise(d.xz * 2600.0);
+    col = mix(col, vec3(0.9, 0.84, 0.77) * moonLit * (0.82 + 0.3 * crater) + col * 0.22, phobos * 0.7);
+    float deimos = smoothstep(0.0009, 0.0003, angTo(d, normalize(vec3(0.62, 0.45, 0.55))));
+    col = mix(col, vec3(0.98, 0.95, 0.9) * (0.6 + 0.6 * moonLit) + col * 0.2, deimos * 0.8);
 
     // velos de polvo altos y cirros de hielo de agua (como los que fotografia Curiosity)
     vec2 q = d.xz / (0.22 + h);
@@ -227,22 +371,11 @@ const SKY_FS = /* glsl */ `
     cloudCol += vec3(0.5, 0.6, 0.8) * pow(s, 6.0) * 0.35;
     col = mix(col, cloudCol, cloud * 0.42 * calm);
 
-    // sol: disco pequeno (Marte esta mas lejos) con aureola azulada, mas marcada al atardecer
+    // sol a su tamano real: desde Marte mide 0,35 grados (en la Tierra 0,53), con aureola azulada al atardecer
     vec3 glow = vec3(0.5, 0.62, 0.85) * (exp(-ang * 14.0) * 0.5 + exp(-ang * 60.0) * 0.9);
     col += glow * (0.6 + 0.9 * uLow) * calm;
-    col += mix(vec3(1.0, 0.97, 0.92), vec3(0.85, 0.92, 1.0), uLow) * smoothstep(0.0064, 0.0048, ang) * 9.0;
-
-    // borde lejano del crater Gale: dos crestas que se pierden en la bruma
-    float az = atan(d.x, d.z);
-    vec2 cd = vec2(cos(az), sin(az));
-    float hf = 0.012 + 0.07 * pow(fbm(cd * 2.6 + 4.0), 1.6) + 0.012 * fbm(cd * 17.0);
-    float hn = -0.004 + 0.05 * pow(fbm(cd * 4.2 + 21.0), 1.5) + 0.008 * fbm(cd * 31.0 + 3.0);
-    vec3 rock = uZenith * 0.55;
-    float below = smoothstep(0.0, -0.035, d.y);
-    vec3 farC = mix(uHorizon, rock, 0.16 + 0.1 * smoothstep(hf - 0.05, hf, d.y));
-    vec3 nearC = mix(uHorizon, rock, 0.3 + 0.14 * smoothstep(hn - 0.04, hn, d.y));
-    col = mix(col, mix(farC, uHorizon, below), smoothstep(hf + 0.0012, hf - 0.0012, d.y));
-    col = mix(col, mix(nearC, uHorizon, below), smoothstep(hn + 0.0012, hn - 0.0012, d.y));
+    col += mix(vec3(1.0, 0.97, 0.92), vec3(0.85, 0.92, 1.0), uLow) * smoothstep(0.0035, 0.0027, ang) * 12.0;
+    // (el borde del crater Gale y el monte Sharp ya no se pintan aqui: son relieve 3D real, ver _buildFarTerrain)
 
     col *= 1.0 - 0.35 * uStorm;
     gl_FragColor = vec4(col, 1.0);
@@ -264,8 +397,18 @@ export class MarsScene {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(58, 1, 0.3, 30000);
+    // Escena lejana: cielo, planetas y el crater Gale entero (relieve MOLA real, hasta ~240 km). Se dibuja antes,
+    // con su propia camara (misma vista, otro rango de profundidad), y luego se borra la profundidad para dibujar
+    // encima la escena cercana. Un solo rango de 0,3 m a 480 km no tendria precision para las dos cosas.
+    this.skyScene = new THREE.Scene();
+    this.farCamera = new THREE.PerspectiveCamera(58, 1, 800, 480000);
+    this.skyRadius = 400000;            // distancia a la que se colocan el cielo y los planetas
+    this.renderer.autoClear = false;
     this.sunDir = new THREE.Vector3(0.4, 0.8, 0.2).normalize();
     this.fogColor = HORIZON_DAY.clone();
+    // bruma para los materiales de three.js: misma densidad y color que el terreno (ver LOOK y fog_fragment arriba)
+    this.scene.fog = new THREE.FogExp2(0xffffff, LOOK.fogDensity);
+    this.scene.fog.color = this.fogColor;
     this.storm = 0;
     this.textures = {};
     this.overlays = {};
@@ -294,7 +437,11 @@ export class MarsScene {
     const tick = (p) => p.then((v) => { onProgress(0.6 * (++done / 7)); return v; });
     const hd = Promise.all([tick(load("textures/albedo_hd.jpg", false)), tick(load("textures/normal_hd.jpg", false)), tick(load("textures/ao.png", false))])
       .catch(() => null);
-    const [ovs, hdTex] = await Promise.all([Promise.all(names.map((k) => tick(load(`layers/${k}_overlay.png`)))), hd]);
+    // relieve real del crater (MOLA) para el terreno lejano; si falta, queda el faldon generico de antes
+    const yRef = this.data.layers.layers.dem.y_ref_m;
+    const molaP = loadMolaGale(assetUrl, this.data.region, yRef).catch((e) => { console.warn("Sin relieve lejano MOLA:", e.message); return null; });
+    const [ovs, hdTex, mola] = await Promise.all([Promise.all(names.map((k) => tick(load(`layers/${k}_overlay.png`)))), hd, molaP]);
+    this.mola = mola;
     names.forEach((k, i) => { this.overlays[k] = ovs[i]; });
     const white = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1); white.needsUpdate = true;
     const flatN = new THREE.DataTexture(new Uint8Array([128, 255, 128, 255]), 1, 1); flatN.needsUpdate = true;
@@ -307,6 +454,7 @@ export class MarsScene {
       this.textures.ao = white;
       this.hasHD = 0;
     }
+    this.bake = this.hasHD ? fitBakedLight(this.textures.albedo.image, this.textures.normal.image) : null;
     this.textures.detail = detailTexture();
     this.textures.empty = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1);
     this.textures.empty.needsUpdate = true;
@@ -314,6 +462,7 @@ export class MarsScene {
     this._buildTerrain();
     onProgress(0.85);
     this._buildApron();
+    this._buildFarTerrain();
     this._buildShadowCatcher();
     this._buildRocks();
     this._buildRoute();
@@ -325,6 +474,9 @@ export class MarsScene {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    this.farCamera.aspect = w / h;
+    this.farCamera.fov = this.camera.fov;
+    this.farCamera.updateProjectionMatrix();
     // tamano en pixeles de 1 m a 1 m de distancia (para las motas de polvo)
     const hpx = h * this.renderer.getPixelRatio();
     this.dustMat.uniforms.uScale.value = hpx / (2 * Math.tan((this.camera.fov * Math.PI) / 360));
@@ -336,10 +488,11 @@ export class MarsScene {
       vertexShader: SKY_VS, fragmentShader: SKY_FS, side: THREE.BackSide, depthWrite: false,
       uniforms: { uSunDir: { value: this.sunDir }, uHorizon: { value: HORIZON_DAY.clone() }, uZenith: { value: ZENITH_DAY.clone() }, uStorm: { value: 0 }, uTime: { value: 0 }, uDay: { value: 1 }, uLow: { value: 0 } },
     });
-    const sky = new THREE.Mesh(new THREE.SphereGeometry(20000, 32, 16), this.skyMat);
+    const sky = new THREE.Mesh(new THREE.SphereGeometry(this.skyRadius * 1.1, 32, 16), this.skyMat);
     sky.frustumCulled = false;
     sky.renderOrder = -1;
-    this.scene.add(sky);
+    this.sky = sky;                     // sigue a la camara: el sol y las lunas quedan en su direccion exacta
+    this.skyScene.add(sky);
   }
 
   // Polvo en suspension: motas que el viento arrastra alrededor de la camara
@@ -432,19 +585,32 @@ export class MarsScene {
     this.dustMat.uniforms.uStorm.value = v;
     if (this.terrainMat) this.terrainMat.uniforms.uStorm.value = v;
     if (this.apron) this.apron.material.uniforms.uStorm.value = v;
+    if (this.farTerrain) this.farTerrain.material.uniforms.uStorm.value = v;
+    this.scene.fog.density = LOOK.fogDensity * (1 + 5 * v);
   }
 
   // ---- terreno --------------------------------------------------------------------------
   _terrainUniforms(flat) {
-    const T = this.textures;
+    const T = this.textures, B = this.bake;
     return {
       uAlbedo: { value: T.albedo }, uNormalMap: { value: T.normal }, uAO: { value: T.ao },
       uOverlay: { value: T.empty }, uDetail: { value: T.detail },
-      uHasHD: { value: this.hasHD }, uSize: { value: this.world.size }, uOverlayOn: { value: 0 }, uUseFlat: { value: flat ? 1 : 0 }, uStorm: { value: 0 },
+      uHasHD: { value: this.hasHD }, uSize: { value: this.world.size }, uOverlayOn: { value: 0 }, uUseFlat: { value: flat ? 1 : 0 },
+      uDelight: { value: LOOK.delight }, uFlatten: { value: LOOK.flatten }, uAoFloor: { value: LOOK.aoFloor },
+      uBake: { value: B ? new THREE.Vector4(B.cx, B.cz, B.mx, B.mz) : new THREE.Vector4() }, uMeanG: { value: B ? B.mean : 0.5 },
+      ...this._shadeUniforms(),
+    };
+  }
+
+  // Luz, bruma y paleta: los comparten el terreno, el faldon y el relieve lejano (mismos objetos uniform)
+  _shadeUniforms() {
+    this.shade ||= {
       uSunDir: { value: this.sunDir }, uSunColor: { value: new THREE.Color(1.3, 1.2, 1.05) }, uAmbient: { value: new THREE.Color(0.4, 0.32, 0.26) },
-      uFogColor: { value: this.fogColor }, uFogDensity: { value: 0.00013 },
+      uFogColor: { value: this.fogColor }, uFogDensity: { value: LOOK.fogDensity }, uDustH: { value: LOOK.dustScaleH }, uFill: { value: LOOK.fill },
       uColLo: { value: new THREE.Color(COL_LO) }, uColMid: { value: new THREE.Color(COL_MID) }, uColHi: { value: new THREE.Color(COL_HI) },
     };
+    // uStorm es propio de cada material (setStorm los actualiza uno a uno)
+    return { ...this.shade, uStorm: { value: this.storm } };
   }
 
   _buildTerrain() {
@@ -493,20 +659,41 @@ export class MarsScene {
     const geo = new THREE.PlaneGeometry(R, R, S, S);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
-    const lim = w.half - 4;
+    const lim = w.half - 4, mola = this.mola;
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i), z = pos.getZ(i);
       const cx = Math.max(-lim, Math.min(lim, x)), cz = Math.max(-lim, Math.min(lim, z));
       const out = Math.hypot(x - cx, z - cz);
-      const trend = z > lim ? out * 0.12 : -out * 0.03; // el monte sigue subiendo hacia el sur
-      pos.setY(i, w.demHeight(cx, cz) + trend - 3 - Math.sin(x * 0.0021) * Math.cos(z * 0.0017) * 40 * Math.min(1, out / 1500));
+      const edge = w.demHeight(cx, cz) - 3;
+      if (mola) {
+        // del borde del recorte (DEM HiRISE + CTX) al relieve real MOLA en 2,6 km, ya con la curvatura de Marte
+        const t = Math.min(1, out / 2600), k = t * t * (3 - 2 * t);
+        pos.setY(i, edge + (mola.worldY(x, z) - edge) * k);
+      } else {
+        const trend = z > lim ? out * 0.12 : -out * 0.03; // sin MOLA: el monte sigue subiendo hacia el sur
+        pos.setY(i, edge + trend - Math.sin(x * 0.0021) * Math.cos(z * 0.0017) * 40 * Math.min(1, out / 1500));
+      }
     }
     geo.computeVertexNormals();
     const u = this._terrainUniforms(true);
-    u.uSunColor = this.terrainMat.uniforms.uSunColor;
-    u.uAmbient = this.terrainMat.uniforms.uAmbient;
     this.apron = new THREE.Mesh(geo, new THREE.ShaderMaterial({ vertexShader: TERRAIN_VS, fragmentShader: TERRAIN_FS, uniforms: u }));
     this.scene.add(this.apron);
+  }
+
+  // Crater Gale completo en 3D: malla del MOLA a escala 1:1 (413 x 384 km), con el borde del crater y el
+  // monte Sharp reales. Va en la escena lejana; lo que cae bajo el faldon cercano no se genera.
+  _buildFarTerrain() {
+    if (!this.mola) return;
+    const { positions, indices, radius } = this.mola.buildMesh(9000);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geo.setIndex(new THREE.BufferAttribute(indices, 1));
+    geo.computeVertexNormals();
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), radius * 1.5);
+    const mat = new THREE.ShaderMaterial({ vertexShader: FAR_VS, fragmentShader: FAR_FS, uniforms: { uDetail: { value: this.textures.detail }, ...this._shadeUniforms() } });
+    this.farTerrain = new THREE.Mesh(geo, mat);
+    this.farTerrain.frustumCulled = false;
+    this.skyScene.add(this.farTerrain);
   }
 
   setOverlay(layer) {
@@ -531,7 +718,7 @@ export class MarsScene {
     // el resultado es NaN, con lo que no se dibuja ninguna sombra
     geo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(pos.length), 3));
     geo.setIndex(idx);
-    const mat = new THREE.ShadowMaterial({ opacity: 0.5, color: "#1a0a05", polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    const mat = new THREE.ShadowMaterial({ opacity: 0.5, color: "#1a0a05", fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     this.catcher = new THREE.Mesh(geo, mat);
     this.catcher.receiveShadow = true;
     this.catcher.frustumCulled = false;
@@ -691,11 +878,12 @@ export class MarsScene {
       const px = x + Math.cos(a) * radius, pz = z + Math.sin(a) * radius;
       pts.push(new THREE.Vector3(px, this.heightAt(px, pz) + 0.3, pz));
     }
-    const ringMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.95 });
+    // las marcas de navegacion no se atenuan con la bruma: deben verse a cualquier distancia
+    const ringMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.95, fog: false });
     const ring = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), ringMat);
     g.add(ring);
     // marcador flotante
-    const gemMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95 });
+    const gemMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, fog: false });
     const gem = new THREE.Mesh(new THREE.OctahedronGeometry(1.5, 0), gemMat);
     gem.scale.set(1, 1.7, 1);
     gem.position.set(x, y + 16, z);
@@ -783,6 +971,14 @@ export class MarsScene {
       }
     }
     for (const fn of this.animated) fn(time, dt);
-    this.renderer.render(this.scene, this.camera);
+    // 1) lejos: cielo, planetas y crater Gale; 2) se borra la profundidad; 3) cerca: terreno, rocas, estructuras
+    const r = this.renderer, cam = this.camera, far = this.farCamera;
+    far.position.copy(cam.position);
+    far.quaternion.copy(cam.quaternion);
+    this.sky.position.copy(cam.position);
+    r.clear();
+    r.render(this.skyScene, far);
+    r.clearDepth();
+    r.render(this.scene, cam);
   }
 }

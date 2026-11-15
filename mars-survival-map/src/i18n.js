@@ -60,6 +60,7 @@ const UI = {
     oxygen: { es: "Oxígeno", en: "Oxygen" },
   },
   povArrival: { es: "Al llegar verás", en: "What you will see" },
+  povShort: { es: "Destino", en: "Destination" },
   povClose: { es: "De cerca", en: "Up close" },
   povTaken: { es: "Foto real de Curiosity", en: "Real Curiosity photo" },
   clickToLook: { es: "Haz clic para mirar con el ratón", en: "Click to look around with the mouse" },

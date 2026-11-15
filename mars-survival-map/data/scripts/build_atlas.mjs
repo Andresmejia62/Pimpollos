@@ -13,9 +13,11 @@
 // asi el mapa tambien sirve para leer la elevacion real en cualquier punto.
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import zlib from "node:zlib";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+// fileURLToPath: con new URL().pathname una ruta con espacios queda como "%20" (y en Windows con "/C:/")
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const RAW = path.join(ROOT, "data/raw/mola");
 const OUT = path.join(ROOT, "public/atlas");
 const PDS = "https://pds-geosciences.wustl.edu/mgs/mgs-m-mola-5-megdr-l3-v1/mgsl_300x";

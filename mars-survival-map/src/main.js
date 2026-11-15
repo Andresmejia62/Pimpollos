@@ -70,7 +70,9 @@ async function boot() {
   const controls = new Controls(canvas);
   const car = buildMarsRover(scene);
   // planetas en el cielo: posiciones reales de hoy vistas desde Gale (engine/planets.js). P = etiquetas
-  const sky = new SkyPlanets(scene.scene, (p, m) => `${t(p.name)}${p.id === "earth" ? " + " + t({ es: "Luna", en: "Moon" }) : ""}  ${m.toFixed(1).replace(".", getLang() === "es" ? "," : ".")}`);
+  // van en la escena lejana, detras del relieve real del crater (el borde y el monte Sharp los tapan)
+  const sky = new SkyPlanets(scene.skyScene, (p, m) => `${t(p.name)}${p.id === "earth" ? " + " + t({ es: "Luna", en: "Moon" }) : ""}  ${m.toFixed(1).replace(".", getLang() === "es" ? "," : ".")}`);
+  sky.radius = scene.skyRadius;
   const skyTau = () => 0.6 + 4 * (scene.storm || 0);           // opacidad tipica del polvo en Gale ~0,5-0,8
   // leyenda de la portada: que planetas hay hoy en el cielo de Gale
   const skyCaption = () => {
