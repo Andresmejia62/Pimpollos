@@ -6,6 +6,7 @@
 // tu traza (tracking), regla de distancia de circulo maximo y perfil de elevacion.
 import { t, getLang } from "../i18n.js";
 import { assetUrl } from "../data.js";
+import { Globe3D } from "./atlas3d.js";
 import { MARS_GEO, wrapLon, gcDistance, gcBearing, gcInterpolate, pressureAt, columnMass, boilingPointC, fmtLat, fmtLon, fmtDMS, fmtDist, num } from "../geo.js";
 
 const $ = (id) => document.getElementById(id);
@@ -65,6 +66,8 @@ export class Atlas {
     this.hover = null;
     this.hits = [];
     this.profileMode = "track";
+    this.is3d = true;        // globo 3D por defecto; el boton 3D vuelve al mapa plano
+    this.g3 = null;
     this.ready = this._load();
     this._bindDom();
   }
@@ -133,6 +136,45 @@ export class Atlas {
       ctx.putImageData(img, 0, 0);
     }
     this._legend();
+    if (this.g3) this.g3.texturesChanged();
+    this.dirty = true;
+  }
+
+  // Crea el globo 3D la primera vez que hace falta (necesita MOLA y la ortoimagen ya cargadas)
+  async _ensure3d() {
+    if (this.g3 || this._making3d) return;
+    this._making3d = true;
+    await this.ready;
+    if (!this.optical.complete) await new Promise((res) => { this.optical.addEventListener("load", res, { once: true }); this.optical.addEventListener("error", res, { once: true }); });
+    try {
+      const g3 = new Globe3D($("atlasGl"));
+      g3.build(this.rGlobal, this.rGale, { bounds: this.geo.bounds, n: this.world.n, h: this.world.h, yRef: this.world.yRef, image: this.optical });
+      const v = this.view;
+      g3.cam.lat = v.lat; g3.cam.lon = v.lon;
+      this.g3 = g3;
+      this._resize();
+    } catch (e) {
+      // sin WebGL: se queda el mapa plano
+      console.warn("Atlas 3D no disponible:", e);
+      this.is3d = false; this._sync3dUi();
+    }
+    this._making3d = false;
+    this.dirty = true;
+  }
+  get on3d() { return this.is3d && this.g3 && this.g3.built; }
+  _elevFn() { return this._ef || (this._ef = (la, lo) => { const e = this.elevAt(la, lo); return e ? e.elev : 0; }); }
+  _sync3dUi() {
+    $("atlasGl").hidden = !this.is3d;
+    $("atlas3d").setAttribute("aria-pressed", String(this.is3d));
+    $("atlasExag").hidden = !this.is3d;
+    this._hint();
+  }
+  set3d(on) {
+    this.is3d = on;
+    this._sync3dUi();
+    if (on) {
+      this._ensure3d().then(() => { if (this.g3) { const v = this.view; Object.assign(this.g3.cam, { lat: v.lat, lon: v.lon, alt: this.g3.altForS(Math.max(v.s, 1)), tilt: v.s > 60 ? 50 : 0, heading: 0 }); this.dirty = true; } });
+    } else this._clampView();
     this.dirty = true;
   }
 
@@ -142,13 +184,16 @@ export class Atlas {
     this.ctx = this.cv.getContext("2d");
     this.pcv = $("atlasProfile");
     const cv = this.cv;
-    let drag = null, moved = 0;
+    let drag = null, moved = 0, orbit = false;
     const touches = new Map();
     let pinch = 0;
     cv.addEventListener("pointerdown", (e) => {
       touches.set(e.pointerId, [e.clientX, e.clientY]);
+      orbit = e.button === 2 || e.ctrlKey || e.altKey;      // en 3D: girar e inclinar la vista
+      this._fly = (this._fly || 0) + 1;
       drag = [e.clientX, e.clientY]; moved = 0; pinch = 0; cv.setPointerCapture(e.pointerId);
     });
+    cv.addEventListener("contextmenu", (e) => e.preventDefault());
     cv.addEventListener("pointercancel", (e) => { touches.delete(e.pointerId); drag = null; });
     cv.addEventListener("pointermove", (e) => {
       const p = this._evt(e);
@@ -165,8 +210,8 @@ export class Atlas {
       if (drag) {
         const dx = e.clientX - drag[0], dy = e.clientY - drag[1];
         moved += Math.abs(dx) + Math.abs(dy);
-        this.view.lon -= dx / this.view.s; this.view.lat += dy / this.view.s;
-        this._clampView();
+        if (this.on3d) { if (orbit) this.g3.orbit(dx, dy); else this.g3.pan(dx, dy); }
+        else { this.view.lon -= dx / this.view.s; this.view.lat += dy / this.view.s; this._clampView(); }
         drag = [e.clientX, e.clientY];
       }
       this._readout();
@@ -174,9 +219,11 @@ export class Atlas {
     });
     cv.addEventListener("pointerup", (e) => {
       touches.delete(e.pointerId);
-      if (drag && moved < 5) this._click(this._evt(e), e.shiftKey);
+      if (drag && moved < 5 && !orbit) this._click(this._evt(e), e.shiftKey);
       drag = null;
     });
+    $("atlas3d").onclick = () => this.set3d(!this.is3d);
+    $("atlasExag").onchange = (e) => { if (this.g3) this.g3.exagMode = e.target.value; this.dirty = true; };
     $("atlasZoomIn").onclick = () => this.zoomAt(this.W / 2, this.H / 2, 1.8);
     $("atlasZoomOut").onclick = () => this.zoomAt(this.W / 2, this.H / 2, 1 / 1.8);
     cv.addEventListener("pointerleave", () => { this.hover = null; this._readout(); });
@@ -204,6 +251,7 @@ export class Atlas {
     const r = this.cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
     this.W = r.width; this.H = r.height; this.dpr = dpr;
     this.cv.width = Math.round(r.width * dpr); this.cv.height = Math.round(r.height * dpr);
+    if (this.g3 && r.width > 0) this.g3.setSize(r.width, r.height, dpr);
     this._clampView();
     this.dirty = true;
   }
@@ -216,18 +264,21 @@ export class Atlas {
     v.lon = wrapLon(v.lon);
   }
   project(lat, lon) {
+    if (this.on3d) return this.g3.project(lat, lon, this._elevFn()(lat, lon));
     const v = this.view;
     let dl = lon - v.lon;
     if (dl > 180) dl -= 360; else if (dl < -180) dl += 360;
     return { x: this.W / 2 + dl * v.s, y: this.H / 2 - (lat - v.lat) * v.s };
   }
   unproject(x, y) {
+    if (this.on3d) return this.g3.unproject(x, y, this._elevFn());
     const v = this.view;
     const lat = v.lat - (y - this.H / 2) / v.s;
     if (lat > 90 || lat < -90) return null;
     return { lat, lon: wrapLon(v.lon + (x - this.W / 2) / v.s) };
   }
   zoomAt(x, y, k) {
+    if (this.on3d) { this._fly = (this._fly || 0) + 1; this.g3.zoom(k); this.dirty = true; return; }
     const before = this.unproject(x, y);
     this.view.s *= k;
     this._clampView();
@@ -241,7 +292,26 @@ export class Atlas {
     }
     this.dirty = true;
   }
-  flyTo(lat, lon, s) {
+  // En 3D: s (px/°) se traduce a altura de camara; opts = { alt, tilt } para fijarlas
+  flyTo(lat, lon, s, opts = {}) {
+    if (this.on3d) {
+      const c = this.g3.cam, a = { ...c }, t0 = performance.now(), dur = 1100, id = (this._fly = (this._fly || 0) + 1);
+      const alt = opts.alt ?? this.g3.altForS(s);
+      const tilt = opts.tilt ?? (alt > 0.6 ? 0 : alt > 0.05 ? 35 : 55);
+      let dl = lon - a.lon; if (dl > 180) dl -= 360; if (dl < -180) dl += 360;
+      let dh = -a.heading; if (dh < -180) dh += 360;
+      const step = (now) => {
+        if (id !== this._fly) return;                     // el usuario movio la vista: se cancela el vuelo
+        const u = Math.min(1, (now - t0) / dur), e = u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
+        c.lon = a.lon + dl * e; c.lat = a.lat + (lat - a.lat) * e;
+        c.alt = Math.exp(Math.log(a.alt) + (Math.log(alt) - Math.log(a.alt)) * e);
+        c.tilt = a.tilt + (tilt - a.tilt) * e; c.heading = a.heading + dh * e;
+        this.dirty = true;
+        if (u < 1 && this.isOpen && this.on3d) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+      return;
+    }
     const a = { ...this.view }, t0 = performance.now(), dur = 900;
     let dl = lon - a.lon; if (dl > 180) dl -= 360; if (dl < -180) dl += 360;
     const step = (now) => {
@@ -256,7 +326,7 @@ export class Atlas {
   go(where) {
     const me = this.playerLL();
     const fit = (km) => Math.min(this.W, this.H) / (km * 1000 / M_PER_DEG);
-    if (where === "global") this.flyTo(0, me.lon, this.minS);
+    if (where === "global") this.flyTo(this.on3d ? 8 : 0, me.lon, this.minS, { alt: 3.3, tilt: 0 });
     else if (where === "gale") this.flyTo(-5.2, 137.6, fit(260));
     else if (where === "eva") { const b = this.geo.bounds; this.flyTo((b.north_lat + b.south_lat) / 2, (b.west_lon_east + b.east_lon_east) / 2, fit(7)); }
     else if (where === "me") this.flyTo(me.lat, me.lon, Math.max(this.view.s, fit(1.5)));
@@ -268,6 +338,7 @@ export class Atlas {
     this._resize();
     this.ready.then(() => {
       if (!this._opened) { this._opened = true; const b = this.geo.bounds; this.view = { lat: (b.north_lat + b.south_lat) / 2, lon: (b.west_lon_east + b.east_lon_east) / 2, s: 4 }; this._resize(); }
+      if (this.is3d && !this.g3) { this._sync3dUi(); this._ensure3d().then(() => this.go(where)); }
       this.go(where);
       this._profile();
       this._info();
@@ -322,15 +393,27 @@ export class Atlas {
     this.dirty = false;
     const ctx = this.ctx, W = this.W, H = this.H, v = this.view;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.fillStyle = "#0b0809"; ctx.fillRect(0, 0, W, H);
+    const is3 = this.on3d;
+    if (is3) ctx.clearRect(0, 0, W, H); else { ctx.fillStyle = "#0b0809"; ctx.fillRect(0, 0, W, H); }
     if (!this.rGlobal) { ctx.fillStyle = "#bfafa3"; ctx.font = "16px Inter, sans-serif"; ctx.fillText(t(L("Cargando MOLA…", "Loading MOLA…")), 20, 30); return; }
     this.hits = [];
-    ctx.imageSmoothingEnabled = v.s < 40;
     const G = this.rGlobal, R = this.rGale;
+    const b = this.geo.bounds;
+    if (is3) {
+      // 3D: el globo se dibuja en WebGL debajo; este lienzo solo pinta marcadores y rotulos encima
+      const g3 = this.g3;
+      g3.updateCamera(this._elevFn());
+      v.lat = g3.cam.lat; v.lon = g3.cam.lon; v.s = g3.s;
+      const steps = [30, 15, 10, 5, 2, 1, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001];
+      const step = steps.find((q) => q * v.s < 170) || 0.001;
+      g3.setOverlay(this.show.overlay && this.game.s.layer ? this.overlays[this.game.s.layer] : null);
+      g3.render(step, this.show.grid);
+      if (this.show.grid) this._gratLabels3d(step);
+    } else {
+    ctx.imageSmoothingEnabled = v.s < 40;
     this._drawGeoImage(G.canvas, 0, 90, 360, 180, G.w, G.h);
     ctx.imageSmoothingEnabled = true;
     if (v.s > 30) this._drawGeoImage(R.canvas, R.lon_west, R.lat_north, R.w / R.ppd, R.h / R.ppd, R.w, R.h, Math.min(1, (v.s - 30) / 30));
-    const b = this.geo.bounds;
     if (v.s > 1500 && this.optical.complete) {
       const a = Math.min(1, (v.s - 1500) / 1500);
       this._drawGeoImage(this.optical, b.west_lon_east, b.north_lat, b.east_lon_east - b.west_lon_east, b.north_lat - b.south_lat, this.optical.naturalWidth, this.optical.naturalHeight, a);
@@ -338,6 +421,7 @@ export class Atlas {
       if (ov && ov.complete) this._drawGeoImage(ov, b.west_lon_east, b.north_lat, b.east_lon_east - b.west_lon_east, b.north_lat - b.south_lat, ov.naturalWidth, ov.naturalHeight, a * 0.9);
     }
     if (this.show.grid) this._graticule();
+    }
     this._rect(R.lat_north, R.lon_west, R.lat_north - R.h / R.ppd, R.lon_west + R.w / R.ppd, "rgba(255,255,255,.25)", [4, 4], v.s > 8 && v.s < 400 ? "MOLA 64 px/°" : null);
     this._rect(b.north_lat, b.west_lon_east, b.south_lat, b.east_lon_east, "#7FD1FF", [6, 4], v.s < 6000 ? t(L("Zona EVA (6 m/px)", "EVA zone (6 m/px)")) : null);
     if (this.show.phenomena) this._phenomena();
@@ -385,18 +469,68 @@ export class Atlas {
   _rect(latN, lonW, latS, lonE, color, dash, label) {
     const a = this.project(latN, lonW), b = this.project(latS, lonE), ctx = this.ctx;
     ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.setLineDash(dash);
+    if (this.on3d) {
+      // en el globo el rectangulo lat/lon se dibuja siguiendo sus cuatro lados sobre el relieve
+      const n = 10, pts = [];
+      for (let i = 0; i <= n; i++) pts.push([latN, lonW + ((lonE - lonW) * i) / n]);
+      for (let i = 1; i <= n; i++) pts.push([latN + ((latS - latN) * i) / n, lonE]);
+      for (let i = 1; i <= n; i++) pts.push([latS, lonE + ((lonW - lonE) * i) / n]);
+      for (let i = 1; i <= n; i++) pts.push([latS + ((latN - latS) * i) / n, lonW]);
+      ctx.beginPath();
+      pts.forEach(([la, lo]) => { const q = this.project(la, lo); ctx.lineTo(q.x, q.y); });
+      ctx.stroke(); ctx.setLineDash([]);
+      if (label && !Number.isNaN(a.x)) { ctx.fillStyle = color; ctx.font = "600 12px Rajdhani, sans-serif"; ctx.shadowColor = "#000"; ctx.shadowBlur = 3; ctx.fillText(label, a.x + 2, a.y - 4); ctx.shadowBlur = 0; }
+      return;
+    }
     ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y); ctx.setLineDash([]);
     if (label && b.x - a.x > 4) { ctx.fillStyle = color; ctx.font = "600 12px Rajdhani, sans-serif"; ctx.shadowColor = "#000"; ctx.shadowBlur = 3; ctx.fillText(label, a.x + 2, a.y - 4); ctx.shadowBlur = 0; }
   }
 
   _kmToPx(km) { return (km * 1000 / M_PER_DEG) * this.view.s; }
 
+  // Traza un circulo geografico: arco simple en el mapa plano; en el globo, el circulo real sobre la esfera
+  _ring(p, r, lat, lon, km) {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    if (!this.on3d || !km || r < 8) { ctx.arc(p.x, p.y, r, 0, 7); return; }
+    const d = (km * 1000) / MARS_GEO.R_mean, p1 = lat * D2R, N = 56;
+    let all = true;
+    for (let i = 0; i <= N; i++) {
+      const th = (i / N) * 2 * Math.PI;
+      const p2 = Math.asin(Math.sin(p1) * Math.cos(d) + Math.cos(p1) * Math.sin(d) * Math.cos(th));
+      const l2 = lon * D2R + Math.atan2(Math.sin(th) * Math.sin(d) * Math.cos(p1), Math.cos(d) - Math.sin(p1) * Math.sin(p2));
+      const q = this.project(p2 / D2R, l2 / D2R);
+      if (Number.isNaN(q.x)) { all = false; continue; }
+      ctx.lineTo(q.x, q.y);
+    }
+    if (all) ctx.closePath();
+  }
+
+  // Rotulos de la reticula en 3D: sobre el meridiano y el paralelo que pasan por el centro de la vista
+  _gratLabels3d(step) {
+    const ctx = this.ctx, v = this.view;
+    const dec = Math.max(0, -Math.floor(Math.log10(step) + 1e-9));
+    const span = Math.min(90, (Math.max(this.W, this.H) / v.s) * 0.75);
+    ctx.font = "600 11px Rajdhani, sans-serif"; ctx.fillStyle = "rgba(255,255,255,.85)"; ctx.shadowColor = "#000"; ctx.shadowBlur = 3;
+    const lat0 = Math.round(v.lat / step) * step, lon0 = Math.round(v.lon / step) * step;
+    for (let la = Math.max(-90, Math.ceil((v.lat - span) / step) * step); la <= Math.min(90, v.lat + span) + 1e-9; la += step) {
+      const q = this.project(la, lon0);
+      if (!Number.isNaN(q.x)) ctx.fillText(`${Math.abs(la).toFixed(dec)}°${la < -1e-9 ? "S" : la > 1e-9 ? "N" : ""}`, q.x + 4, q.y - 3);
+    }
+    const lspan = Math.min(180, span / Math.max(0.2, Math.cos(v.lat * D2R)));
+    for (let lo = Math.ceil((v.lon - lspan) / step) * step; lo <= v.lon + lspan + 1e-9; lo += step) {
+      const q = this.project(lat0, lo);
+      if (!Number.isNaN(q.x)) ctx.fillText(`${wrapLon(lo).toFixed(dec)}°E`, q.x + 4, q.y + 12);
+    }
+    ctx.shadowBlur = 0;
+  }
+
   _features() {
     const ctx = this.ctx, v = this.view, cats = this.feat.categories;
     for (const f of this.feat.features) {
       if (!this.show[f.cat]) continue;
       const p = this.project(f.lat, f.lon);
-      if (p.x < -400 || p.x > this.W + 400 || p.y < -400 || p.y > this.H + 400) continue;
+      if (Number.isNaN(p.x) || p.x < -400 || p.x > this.W + 400 || p.y < -400 || p.y > this.H + 400) continue;
       const col = cats[f.cat].color, sel = this.selected && this.selected.f === f;
       const rpx = f.d_km ? this._kmToPx(f.d_km / 2) : 0;
       ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = sel ? 2.5 : 1.5;
@@ -408,15 +542,15 @@ export class Atlas {
       } else if (f.cat === "volcano") {
         const s = Math.max(7, Math.min(40, rpx * 0.25));
         ctx.beginPath(); ctx.moveTo(p.x, p.y - s); ctx.lineTo(p.x + s, p.y + s * 0.7); ctx.lineTo(p.x - s, p.y + s * 0.7); ctx.closePath(); ctx.stroke();
-        if (rpx > 30) { ctx.setLineDash([3, 4]); ctx.beginPath(); ctx.arc(p.x, p.y, rpx, 0, 7); ctx.stroke(); ctx.setLineDash([]); }
+        if (rpx > 30) { ctx.setLineDash([3, 4]); this._ring(p, rpx, f.lat, f.lon, f.d_km / 2); ctx.stroke(); ctx.setLineDash([]); }
         r = s;
       } else if (f.cat === "crater" || f.cat === "polar") {
         r = Math.max(5, rpx);
-        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.stroke();
+        this._ring(p, r, f.lat, f.lon, f.d_km / 2); ctx.stroke();
         if (rpx < 5) { ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, 7); ctx.fill(); }
       } else {
         r = Math.max(5, rpx);
-        if (rpx > 12) { ctx.setLineDash([2, 6]); ctx.globalAlpha = 0.6; ctx.beginPath(); ctx.arc(p.x, p.y, rpx, 0, 7); ctx.stroke(); ctx.globalAlpha = 1; ctx.setLineDash([]); }
+        if (rpx > 12) { ctx.setLineDash([2, 6]); ctx.globalAlpha = 0.6; this._ring(p, rpx, f.lat, f.lon, f.d_km / 2); ctx.stroke(); ctx.globalAlpha = 1; ctx.setLineDash([]); }
         ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, 7); ctx.fill();
         r = 8;
       }
@@ -440,9 +574,9 @@ export class Atlas {
       const sel = this.selected && this.selected.ph === ph;
       ph.zones.forEach((z) => {
         const p = this.project(z.lat, z.lon), r = Math.max(10, this._kmToPx(z.r_km));
-        if (p.x + r < 0 || p.x - r > this.W || p.y + r < 0 || p.y - r > this.H) return;
+        if (Number.isNaN(p.x) || p.x + r < 0 || p.x - r > this.W || p.y + r < 0 || p.y - r > this.H) return;
         ctx.globalAlpha = sel ? 0.28 : 0.13; ctx.fillStyle = ph.color;
-        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill();
+        this._ring(p, r, z.lat, z.lon, z.r_km); ctx.fill();
         ctx.globalAlpha = sel ? 1 : 0.7; ctx.strokeStyle = ph.color; ctx.lineWidth = sel ? 2.5 : 1.2; ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
         ctx.globalAlpha = 1;
         // insignia numerada en el borde de la zona
@@ -541,7 +675,7 @@ export class Atlas {
 
   _scaleBar() {
     const ctx = this.ctx, v = this.view;
-    const mPerPx = M_PER_DEG / v.s * Math.cos(v.lat * D2R);
+    const mPerPx = (M_PER_DEG / v.s) * (this.on3d ? 1 : Math.cos(v.lat * D2R));
     const target = 120 * mPerPx;
     const nice = [1, 2, 5].flatMap((k) => [1, 10, 100, 1000, 1e4, 1e5, 1e6].map((p) => k * p)).sort((a, b) => a - b);
     const len = nice.reduce((best, n) => (n <= target ? n : best), nice[0]);
@@ -575,7 +709,9 @@ export class Atlas {
     const m = this.measure;
     $("atlasHint").textContent = this.measuring
       ? t(!m || m.b ? L("Regla: haz clic en el punto de inicio", "Ruler: click the start point") : L("Regla: haz clic en el punto final", "Ruler: click the end point"))
-      : t(L("Arrastra para mover · rueda para acercar · clic en un símbolo para ver datos · Mayús+clic para medir", "Drag to pan · wheel to zoom · click a symbol for data · Shift+click to measure"));
+      : this.is3d
+        ? t(L("Arrastra para girar el globo · rueda para acercar · botón derecho o Ctrl+arrastrar para inclinar y rotar · clic en un símbolo para ver datos · Mayús+clic para medir", "Drag to spin the globe · wheel to zoom · right button or Ctrl+drag to tilt and rotate · click a symbol for data · Shift+click to measure"))
+        : t(L("Arrastra para mover · rueda para acercar · clic en un símbolo para ver datos · Mayús+clic para medir", "Drag to pan · wheel to zoom · click a symbol for data · Shift+click to measure"));
   }
 
   _pointBlock(lat, lon) {
@@ -662,7 +798,9 @@ export class Atlas {
       <span>${t(L("Elev.", "Elev."))} <b>${num(e.elev, 0, lang)} m</b> <i class="muted">${t(e.src)}</i></span>
       <span>P <b>${num(P, 0, lang)} Pa</b></span><span>${t(L("Columna", "Column"))} <b>${num(columnMass(P), 1, lang)} g/cm²</b></span>
       <span>H₂O ${bp == null ? `<b class="bad">${t(L("no líquida", "not liquid"))}</b>` : `<b>${t(L("hierve a", "boils at"))} ${num(bp, 1, lang)} °C</b>`}</span>
-      <span class="muted">${t(L("zoom", "zoom"))} ${num(this.view.s, this.view.s < 10 ? 1 : 0, lang)} px/°</span>`;
+      <span class="muted">${this.on3d
+        ? `${t(L("altura de la vista", "view altitude"))} ${fmtDist(this.g3.cam.alt * MARS_GEO.R_mean, lang)} · ${t(L("inclinación", "tilt"))} ${Math.round(this.g3.cam.tilt)}° · ${t(L("relieve", "relief"))} ×${num(this.g3.exag, 1, lang)}`
+        : `${t(L("zoom", "zoom"))} ${num(this.view.s, this.view.s < 10 ? 1 : 0, lang)} px/°`}</span>`;
   }
 
   _legend() {
@@ -701,6 +839,10 @@ export class Atlas {
         this._info();
       };
     });
+    const ex = $("atlasExag"), cur = ex.value || "auto";
+    ex.innerHTML = [["auto", L("Relieve: auto", "Relief: auto")], ["1", L("Relieve ×1 (real)", "Relief ×1 (true)")], ["3", L("Relieve ×3", "Relief ×3")], ["10", L("Relieve ×10", "Relief ×10")], ["25", L("Relieve ×25", "Relief ×25")]]
+      .map(([v, n]) => `<option value="${v}" ${v === cur ? "selected" : ""}>${t(n)}</option>`).join("");
+    $("atlas3d").title = t(L("Globo 3D / mapa plano", "3D globe / flat map"));
     $("atlasMode").innerHTML = Object.entries(MODES).map(([k, v]) => `<option value="${k}" ${k === this.mode ? "selected" : ""}>${t(v)}</option>`).join("");
   }
   applyLang() { if (this.feat) { this._buildSide(); this._legend(); this._info(); this._hint(); this._profile(); this.dirty = true; } }

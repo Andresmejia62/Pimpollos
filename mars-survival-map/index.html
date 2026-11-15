@@ -138,6 +138,10 @@
           <button class="btn sm" data-go="gale" data-ui="goGale"></button>
           <button class="btn sm" data-go="eva" data-ui="goEva"></button>
           <button class="btn sm" data-go="me" data-ui="goMe"></button>
+          <button class="btn sm" id="atlas3d" aria-pressed="true" title="Globo 3D / mapa plano">3D</button>
+          <select id="atlasExag" aria-label="Exageración vertical del relieve">
+            <option value="auto">Relieve auto</option><option value="1">×1 (real)</option><option value="3">×3</option><option value="10">×10</option><option value="25">×25</option>
+          </select>
           <select id="atlasMode" aria-label="Modo"></select>
           <button class="btn sm" id="atlasMeasure" aria-pressed="false" data-ui="ruler"></button>
           <button class="btn sm" id="atlasExport" data-ui="exportCsv"></button>
@@ -146,6 +150,7 @@
       </header>
       <aside class="atlas-side" id="atlasLayers"></aside>
       <div class="atlas-map">
+        <canvas id="atlasGl" aria-hidden="true"></canvas>
         <canvas id="atlasCanvas" aria-label="Mapa de Marte"></canvas>
         <div class="atlas-legend" id="atlasLegend"></div>
         <div class="atlas-zoom"><button id="atlasZoomIn" aria-label="Acercar">+</button><button id="atlasZoomOut" aria-label="Alejar">−</button></div>

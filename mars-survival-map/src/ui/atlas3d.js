@@ -1,0 +1,283 @@
+// Atlas en 3D: globo de Marte con el relieve real de MOLA y, al acercarse, el terreno de Gale (MOLA 64 px/°)
+// y de la zona EVA (DTM HiRISE+CTX) como mallas 3D. Todo en coordenadas planetocentricas, longitud Este.
+//
+// Geometria: cada vertice guarda su direccion en la esfera unidad y su elevacion real (m); el relieve se
+// desplaza en el shader con una exageracion vertical configurable (uK), asi se puede cambiar sin rehacer mallas.
+// La reticula lat/lon se dibuja en el shader, pegada al relieve. Los marcadores y rotulos los pinta el atlas
+// en su lienzo 2D usando project()/unproject() de esta clase.
+import * as THREE from "three";
+
+const D2R = Math.PI / 180;
+const R_MARS = 3389500;
+const FOV = 38;
+
+// lat/lon (grados) -> direccion unitaria. Este queda a la derecha con el norte arriba.
+export function llToDir(lat, lon, out = new THREE.Vector3()) {
+  const p = lat * D2R, l = lon * D2R, c = Math.cos(p);
+  return out.set(c * Math.cos(l), Math.sin(p), -c * Math.sin(l));
+}
+export function dirToLL(v) {
+  const n = v.clone().normalize();
+  return { lat: Math.asin(Math.max(-1, Math.min(1, n.y))) / D2R, lon: ((Math.atan2(-n.z, n.x) / D2R) % 360 + 360) % 360 };
+}
+
+const VS = /* glsl */ `
+  attribute float aElev;
+  uniform float uK, uLift;
+  varying vec2 vUv; varying vec2 vLL; varying vec3 vN; varying vec3 vPos;
+  void main() {
+    vUv = uv;
+    vN = normalize(position);
+    vLL = vec2(atan(-vN.z, vN.x), asin(clamp(vN.y, -1.0, 1.0))) * 57.29578;
+    vec3 p = vN * (1.0 + aElev * uK + uLift);
+    vPos = p;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+  }`;
+const FS = /* glsl */ `
+  uniform sampler2D uMap, uOverlay;
+  uniform float uStep, uGrid, uOverlayOn, uSeamFix;
+  varying vec2 vUv; varying vec2 vLL; varying vec3 vN; varying vec3 vPos;
+  float gridLine(float v, float step) {
+    float g = v / step;
+    float d = abs(fract(g - 0.5) - 0.5) / max(fwidth(g), 1e-6);
+    return 1.0 - clamp(d - 0.4, 0.0, 1.0);
+  }
+  void main() {
+    vec3 col = texture2D(uMap, vUv).rgb;
+    if (uOverlayOn > 0.5) { vec4 o = texture2D(uOverlay, vUv); col = mix(col, o.rgb, o.a * 0.85); }
+    // sombreado suave hacia el limbo: da volumen a la esfera
+    vec3 V = normalize(cameraPosition - vPos);
+    float ndv = clamp(dot(vN, V), 0.0, 1.0);
+    col *= mix(0.45, 1.0, pow(ndv, 0.55));
+    if (uGrid > 0.5) {
+      // la longitud usa el uv para no romperse en la costura 0/360
+      float lon = uSeamFix > 0.5 ? vUv.x * 360.0 : vLL.x;
+      float pole = smoothstep(89.5, 86.0, abs(vLL.y));
+      float g = max(gridLine(vLL.y, uStep), gridLine(lon, uStep) * pole);
+      float eq = max(gridLine(vLL.y, 90.0), gridLine(lon, 180.0) * pole);       // ecuador y meridiano 0/180
+      col = mix(col, vec3(1.0), g * 0.28);
+      col = mix(col, vec3(1.0, 0.82, 0.45), eq * 0.55);
+    }
+    gl_FragColor = vec4(col, 1.0);
+  }`;
+
+function terrainMaterial(tex, lift, seamFix) {
+  return new THREE.ShaderMaterial({
+    vertexShader: VS, fragmentShader: FS,
+    uniforms: { uMap: { value: tex }, uOverlay: { value: null }, uOverlayOn: { value: 0 }, uK: { value: 12 / R_MARS }, uLift: { value: lift }, uStep: { value: 30 }, uGrid: { value: 1 }, uSeamFix: { value: seamFix ? 1 : 0 } },
+  });
+}
+
+// Malla regular en lat/lon. elevFn(i, j) -> metros, con i = columna (oeste -> este), j = fila (norte -> sur).
+function gridMesh(latN, lonW, latSpan, lonSpan, nx, ny, elevFn, skirtM = 0) {
+  const sk = skirtM > 0 ? 1 : 0;
+  const W = nx + 1 + 2 * sk, H = ny + 1 + 2 * sk;
+  const pos = new Float32Array(W * H * 3), uv = new Float32Array(W * H * 2), el = new Float32Array(W * H);
+  const v = new THREE.Vector3();
+  for (let J = 0; J < H; J++) for (let I = 0; I < W; I++) {
+    const i = Math.min(nx, Math.max(0, I - sk)), j = Math.min(ny, Math.max(0, J - sk));
+    const edge = sk && (I === 0 || J === 0 || I === W - 1 || J === H - 1);
+    const lat = latN - (j / ny) * latSpan, lon = lonW + (i / nx) * lonSpan;
+    llToDir(lat, lon, v);
+    const k = J * W + I;
+    pos[k * 3] = v.x; pos[k * 3 + 1] = v.y; pos[k * 3 + 2] = v.z;
+    uv[k * 2] = i / nx; uv[k * 2 + 1] = 1 - j / ny;
+    el[k] = elevFn(i, j) - (edge ? skirtM : 0);
+  }
+  const idx = new Uint32Array((W - 1) * (H - 1) * 6);
+  let q = 0;
+  for (let J = 0; J < H - 1; J++) for (let I = 0; I < W - 1; I++) {
+    const a = J * W + I, b = a + 1, c = a + W, d = c + 1;
+    idx[q++] = a; idx[q++] = c; idx[q++] = b; idx[q++] = b; idx[q++] = c; idx[q++] = d;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  g.setAttribute("aElev", new THREE.BufferAttribute(el, 1));
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1.2);
+  return g;
+}
+
+export class Globe3D {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    this.renderer.setClearColor(0x070506, 1);
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(FOV, 1, 0.01, 20);
+    this.cam = { lat: -5, lon: 137.6, alt: 3.2, tilt: 0, heading: 0 };   // foco en la superficie, altura (radios de Marte)
+    this.exagMode = "auto";
+    this.k = 12;
+    this.W = 1; this.H = 1;
+    this.mats = [];
+    this._v = new THREE.Vector3(); this._v2 = new THREE.Vector3(); this._ray = new THREE.Ray();
+    this._stars();
+    this._atmosphere();
+  }
+
+  _stars() {
+    const n = 1500, p = new Float32Array(n * 3);
+    let s = 12345;
+    const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+    for (let i = 0; i < n; i++) {
+      const u = rnd() * 2 - 1, a = rnd() * 6.2832, r = Math.sqrt(1 - u * u);
+      p[i * 3] = r * Math.cos(a) * 15; p[i * 3 + 1] = u * 15; p[i * 3 + 2] = r * Math.sin(a) * 15;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(p, 3));
+    const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0.7, depthWrite: false }));
+    pts.frustumCulled = false;
+    this.scene.add(pts);
+  }
+
+  _atmosphere() {
+    const mat = new THREE.ShaderMaterial({
+      side: THREE.BackSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      vertexShader: /* glsl */ `varying vec3 vN; varying vec3 vP; void main(){ vN = normalize(position); vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: /* glsl */ `varying vec3 vN; varying vec3 vP;
+        void main(){ vec3 V = normalize(cameraPosition - vP); float f = pow(clamp(1.0 + dot(vN, V), 0.0, 1.0), 3.0);
+          gl_FragColor = vec4(vec3(0.95, 0.55, 0.32) * f, f * 0.9); }`,
+    });
+    this.atmo = new THREE.Mesh(new THREE.SphereGeometry(1.035, 64, 32), mat);
+    this.scene.add(this.atmo);
+  }
+
+  // rG, rGale: rasters del atlas ({w, h, ppd, lat_north, lon_west, elev, canvas}); local: {bounds, n, h(Float32), yRef, image}
+  build(rG, rGale, local) {
+    const mk = (canvasOrImg) => { const t = new THREE.CanvasTexture(canvasOrImg); t.colorSpace = THREE.NoColorSpace; t.anisotropy = this.renderer.capabilities.getMaxAnisotropy(); t.wrapS = THREE.ClampToEdgeWrapping; return t; };
+    const galeN = rGale.lat_north, galeW = rGale.lon_west, galeLat = rGale.h / rGale.ppd, galeLon = rGale.w / rGale.ppd;
+    const b = local.bounds, m64 = 1 / rGale.ppd;
+    // --- globo: 720 x 360 celdas (0,5°). Bajo el parche de Gale se hunde para que no asome ---
+    const NX = 720, NY = 360, sx = rG.w / NX, sy = rG.h / NY;
+    const gElev = (i, j) => {
+      const x = Math.min(rG.w - 1, Math.round(i * sx) % rG.w), y = Math.min(rG.h - 1, Math.round(j * sy));
+      let e = rG.elev[y * rG.w + x];
+      const lat = 90 - (j / NY) * 180, lon = (i / NX) * 360;
+      if (lat < galeN - 0.6 && lat > galeN - galeLat + 0.6 && lon > galeW + 0.6 && lon < galeW + galeLon - 0.6) e -= 9000;
+      return e;
+    };
+    this.texG = mk(rG.canvas);
+    const globe = new THREE.Mesh(gridMesh(90, 0, 180, 360, NX, NY, gElev), terrainMaterial(this.texG, 0, true));
+    // --- Gale: MOLA 64 px/°, una celda por pixel; hundido bajo la zona EVA ---
+    const cElev = (i, j) => {
+      const x = Math.min(rGale.w - 1, i), y = Math.min(rGale.h - 1, j);
+      let e = rGale.elev[y * rGale.w + x];
+      const lat = galeN - (j / rGale.h) * galeLat, lon = galeW + (i / rGale.w) * galeLon;
+      if (lat < b.north_lat - m64 && lat > b.south_lat + m64 && lon > b.west_lon_east + m64 && lon < b.east_lon_east - m64) e -= 2500;
+      return e;
+    };
+    this.texGale = mk(rGale.canvas);
+    const gale = new THREE.Mesh(gridMesh(galeN, galeW, galeLat, galeLon, rGale.w, rGale.h, cElev, 7000), terrainMaterial(this.texGale, 3e-6, false));
+    // --- zona EVA: DTM del juego (1024 -> 256 celdas), ortoimagen CTX ---
+    const NL = 256, st = local.n / NL;
+    const lElev = (i, j) => local.h[Math.min(local.n - 1, Math.round(j * st)) * local.n + Math.min(local.n - 1, Math.round(i * st))] + local.yRef;
+    this.texLocal = mk(local.image);
+    const loc = new THREE.Mesh(gridMesh(b.north_lat, b.west_lon_east, b.north_lat - b.south_lat, b.east_lon_east - b.west_lon_east, NL, NL, lElev, 1800), terrainMaterial(this.texLocal, 6e-6, false));
+    this.localMat = loc.material;
+    for (const m of [globe, gale, loc]) { m.frustumCulled = false; this.scene.add(m); this.mats.push(m.material); }
+    this.built = true;
+  }
+
+  texturesChanged() { if (this.texG) { this.texG.needsUpdate = true; this.texGale.needsUpdate = true; } }
+  setOverlay(img) {
+    if (!this.localMat) return;
+    if (img && img.complete && img.naturalWidth) {
+      if (this._ovImg !== img) { this._ovImg = img; this._ovTex = new THREE.CanvasTexture(img); this._ovTex.colorSpace = THREE.NoColorSpace; }
+      this.localMat.uniforms.uOverlay.value = this._ovTex; this.localMat.uniforms.uOverlayOn.value = 1;
+    } else this.localMat.uniforms.uOverlayOn.value = 0;
+  }
+
+  setSize(w, h, dpr) {
+    this.W = w; this.H = h;
+    this.renderer.setPixelRatio(dpr);
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+  }
+
+  // pixeles por grado de arco en el foco (mirando en vertical): la "escala" que usa el atlas para decidir rotulos
+  get s() { return (D2R * this.H) / (2 * this.cam.alt * Math.tan((FOV * D2R) / 2)); }
+  altForS(s) { return (D2R * this.H) / (2 * s * Math.tan((FOV * D2R) / 2)); }
+  get exag() { return this.k; }
+
+  // exageracion vertical: automatica (12x de lejos -> 2x de cerca) o fija
+  _updateK() {
+    this.k = this.exagMode === "auto" ? Math.max(1.5, Math.min(12, 2 + 4.35 * Math.log10(this.cam.alt / 0.005))) : +this.exagMode;
+    for (const m of this.mats) m.uniforms.uK.value = this.k / R_MARS;
+  }
+
+  // elevFn(lat, lon) -> m (la da el atlas). Coloca la camara segun foco, altura, inclinacion y rumbo.
+  updateCamera(elevFn) {
+    const c = this.cam;
+    c.lat = Math.max(-89.5, Math.min(89.5, c.lat));
+    c.lon = ((c.lon % 360) + 360) % 360;
+    c.alt = Math.max(0.0009, Math.min(6, c.alt));
+    c.tilt = Math.max(0, Math.min(80, c.tilt));
+    this._updateK();
+    const p = c.lat * D2R, l = c.lon * D2R;
+    const n = llToDir(c.lat, c.lon, this._n || (this._n = new THREE.Vector3()));
+    const east = (this._e || (this._e = new THREE.Vector3())).set(-Math.sin(l), 0, -Math.cos(l));
+    const north = (this._no || (this._no = new THREE.Vector3())).set(-Math.sin(p) * Math.cos(l), Math.cos(p), Math.sin(p) * Math.sin(l));
+    const h = c.heading * D2R, t = c.tilt * D2R;
+    const f = (this._f || (this._f = new THREE.Vector3())).copy(north).multiplyScalar(Math.cos(h)).addScaledVector(east, Math.sin(h));
+    const e0 = elevFn ? elevFn(c.lat, c.lon) : 0;
+    const P = this._v.copy(n).multiplyScalar(1 + (e0 * this.k) / R_MARS);
+    this.focusPoint = (this.focusPoint || new THREE.Vector3()).copy(P);
+    this.camera.position.copy(P).addScaledVector(n, c.alt * Math.cos(t)).addScaledVector(f, -c.alt * Math.sin(t));
+    this.camera.up.copy(c.tilt < 1 ? f : n);
+    this.camera.lookAt(P);
+    this.camera.near = Math.max(1e-5, c.alt * 0.02);
+    this.camera.far = c.alt + 4 + 16;
+    this.camera.updateProjectionMatrix();
+    this.camera.updateMatrixWorld(true);
+    this.screenRight = (this._r || (this._r = new THREE.Vector3())).copy(east).multiplyScalar(Math.cos(h)).addScaledVector(north, -Math.sin(h));
+    this.screenUp = f;
+  }
+
+  render(gridStep, gridOn) {
+    for (const m of this.mats) { m.uniforms.uStep.value = gridStep; m.uniforms.uGrid.value = gridOn ? 1 : 0; }
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  // lat, lon, elevacion (m) -> pixeles; NaN si queda en la cara oculta o fuera de la vista
+  project(lat, lon, elev = 0) {
+    const v = llToDir(lat, lon, this._v2).multiplyScalar(1 + ((elev + 60) * this.k) / R_MARS);
+    // visible si la superficie mira hacia la camara
+    const cx = this.camera.position.x - v.x, cy = this.camera.position.y - v.y, cz = this.camera.position.z - v.z;
+    const facing = (v.x * cx + v.y * cy + v.z * cz) / (v.length() * Math.hypot(cx, cy, cz));
+    if (facing < 0.02) return { x: NaN, y: NaN };
+    v.project(this.camera);
+    if (v.z < -1 || v.z > 1) return { x: NaN, y: NaN };
+    return { x: (v.x * 0.5 + 0.5) * this.W, y: (1 - (v.y * 0.5 + 0.5)) * this.H };
+  }
+
+  // pixel -> lat/lon sobre el relieve (interseccion rayo-esfera, refinada con la elevacion del punto)
+  unproject(x, y, elevFn) {
+    const o = this.camera.position;
+    const d = this._v2.set((x / this.W) * 2 - 1, -((y / this.H) * 2 - 1), 0.5).unproject(this.camera).sub(o).normalize();
+    let r = 1, hit = null;
+    for (let it = 0; it < 3; it++) {
+      const b = o.dot(d), c = o.lengthSq() - r * r, disc = b * b - c;
+      if (disc < 0) return hit;
+      const tt = -b - Math.sqrt(disc);
+      if (tt < 0) return hit;
+      const pnt = this._v.copy(o).addScaledVector(d, tt);
+      hit = dirToLL(pnt);
+      if (!elevFn) break;
+      r = 1 + (elevFn(hit.lat, hit.lon) * this.k) / R_MARS;
+    }
+    return hit;
+  }
+
+  // arrastrar: mueve el foco sobre la superficie (dx, dy en pixeles)
+  pan(dx, dy) {
+    const c = this.cam, s = this.s, h = c.heading * D2R;
+    const dE = (-dx * Math.cos(h) + dy * Math.sin(h)) / s, dN = (dx * Math.sin(h) + dy * Math.cos(h)) / s / Math.max(0.35, Math.cos(c.tilt * D2R));
+    c.lat += dN;
+    c.lon += dE / Math.max(0.05, Math.cos(c.lat * D2R));
+  }
+  // boton derecho / Ctrl + arrastrar: girar el rumbo e inclinar la vista
+  orbit(dx, dy) { this.cam.heading = (this.cam.heading - dx * 0.3 + 360) % 360; this.cam.tilt -= dy * 0.3; }
+  zoom(k) { this.cam.alt /= k; }
+}

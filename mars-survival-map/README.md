@@ -40,6 +40,7 @@ Atajos con `?debug=1`: **T** tormenta solar · **N** saltar cerca del objetivo �
 | `src/gameplay/pathfinding.js` | A* sobre la cuadrícula de costos (512×512, celdas de 12 m) |
 | `src/ui/hud.js` | HUD de los wireframes, minimapa, brújula, diálogos y telemetría NAV/BIO (tecla I) |
 | `src/ui/atlas.js` | Atlas de Marte: MOLA global + Gale + zona EVA, fenómenos, regla, perfil de elevación, exportar traza |
+| `src/ui/atlas3d.js` | Vista 3D del atlas: globo de Marte con relieve MOLA, Gale y la zona EVA como mallas 3D, retícula en el shader y exageración vertical configurable |
 | `src/ui/profile.js` | Pantalla del perfil fisiológico |
 | `src/engine/physiology.js` | Gasto metabólico (Pandolf a 0,379 g), VO₂, FC, fatiga |
 | `src/geo.js` | Lat/lon ↔ mundo, distancias de círculo máximo, presión y agua líquida |

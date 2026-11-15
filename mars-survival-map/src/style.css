@@ -402,3 +402,6 @@ button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
   .plan-grid { grid-template-columns: 1fr; }
   .plan-map { min-height: 300px; height: 56vh; }
 }
+#atlasGl { pointer-events: none; }
+.atlas-map #atlasCanvas { z-index: 1; }
+.atlas-map .atlas-legend, .atlas-map .atlas-zoom { z-index: 2; }

@@ -15,6 +15,14 @@ Todo usa coordenadas **planetocéntricas, longitud Este 0–360°** (convención
 
 Formato `.z`: elevación cuantizada (4 m global, 1 m Gale), diferencia con el píxel de la izquierda en zigzag, dos planos de bytes, zlib. El navegador lo descomprime con `DecompressionStream` y calcula el relieve sombreado; por eso se puede leer la elevación en cualquier punto.
 
+## Vista 3D (por defecto)
+El atlas abre como un **globo 3D** de Marte (`src/ui/atlas3d.js`); el botón **3D** vuelve al mapa plano y conserva la posición.
+- **Tres mallas con la misma elevación real:** el globo (MOLA, celdas de 0,5°), el cráter Gale (MOLA 64 px/°, una celda por píxel) y la zona EVA (DTM HiRISE+CTX con la ortoimagen CTX encima). Al acercarse se ve el relieve en 3D.
+- **Exageración vertical** configurable (auto, ×1 real, ×3, ×10, ×25). En automático va de ×12 con el planeta entero a ×1,5–2 de cerca. La lectura bajo el cursor indica siempre el valor en uso; las elevaciones que se muestran son las reales.
+- **Retícula lat/lon pegada al relieve** (se dibuja en el shader), con el ecuador y el meridiano 0°/180° resaltados y el paso adaptado al zoom.
+- **Controles:** arrastrar gira el globo, la rueda acerca, botón derecho o Ctrl+arrastrar inclina y rota la vista (hasta 80°).
+- Todo lo demás funciona igual que en 2D: lectura de latitud, longitud y elevación bajo el cursor (rayo contra el relieve), clic en marcadores, zonas de fenómenos como círculos reales sobre la esfera, traza de Curiosity, tu traza, la regla y el perfil de elevación.
+
 ## Qué muestra
 - **Lectura bajo el cursor:** latitud/longitud (decimal y DMS), elevación (con el producto de origen), presión estimada, columna de aire (g/cm², el "escudo" contra la radiación) y si el agua puede ser líquida.
   - Presión: `P = 610 Pa · e^(−h / 11,1 km)` (atmósfera isoterma; varía ±12 % con la estación).
