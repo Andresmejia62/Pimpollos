@@ -116,6 +116,18 @@
     <div class="credits" data-ui="credits"></div>
   </div>
 
+  <div class="screen intro-screen" id="scrIntro" hidden>
+    <canvas id="introCanvas" aria-hidden="true"></canvas>
+    <div class="intro-glow" id="introGlow"></div>
+    <div class="intro-flash" id="introFlash"></div>
+    <div class="intro-hud" id="introHud" aria-live="off"></div>
+    <div class="intro-warn" id="introWarn" hidden><svg><use href="#i-octagon"/></svg><span data-ui="introWarn"></span></div>
+    <button class="btn sm intro-skip" id="introSkip" data-ui="introSkip"></button>
+    <div class="intro-card" id="introCard" hidden>
+      <div class="card"><div id="introCardBody"></div><div class="btnrow"><button class="btn primary" id="introGo" data-ui="continue"></button></div></div>
+    </div>
+  </div>
+
   <div class="screen dim" id="scrProfile" hidden>
     <div class="card profile">
       <div class="eyebrow" data-ui="profileEyebrow"></div>

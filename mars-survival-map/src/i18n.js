@@ -89,6 +89,8 @@ const UI = {
   planEyebrow: { es: "Planificación desde el hábitat · antes de salir", en: "Planning from the habitat · before heading out" },
   planClear: { es: "Borrar puntos", en: "Clear waypoints" },
   planUse: { es: "Usar esta ruta", en: "Use this route" },
+  introSkip: { es: "Saltar ⏭", en: "Skip ⏭" },
+  introWarn: { es: "ALERTA · PARACAÍDAS NO DESPLEGADO", en: "ALERT · PARACHUTE FAILED TO DEPLOY" },
   tabStatus: { es: "Misión", en: "Mission" },
   tabBody: { es: "Traje y cuerpo", en: "Suit and body" },
   tabControls: { es: "Controles", en: "Controls" },

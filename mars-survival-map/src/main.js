@@ -19,6 +19,7 @@ import { LoadingScreen, PauseMenu } from "./ui/screens.js";
 import { SkyPlanets } from "./engine/planets.js";
 import { Planner } from "./ui/planner.js";
 import { Companion } from "./gameplay/companion.js";
+import { IntroCinematic } from "./ui/intro.js";
 import { loadSpaceWeather, REFERENCE_EVENT, LEVEL_TEXT, LEVEL_COLOR } from "./spaceweather.js";
 import { Vector3 as THREE_V } from "three";
 
@@ -252,10 +253,12 @@ async function boot() {
 
   // ---- botones --------------------------------------------------------------------
   // Comenzar: primero el perfil fisico del astronauta, luego la primera mision
+  // Comenzar EVA: cinematica de llegada (cohete -> entrada atmosferica -> impacto en Gale) y luego el perfil
+  const intro = new IntroCinematic({ ms: scene, site: game.objectives.habitat.world, geo, getMarsRaster: () => atlas.rGlobal || null });
   $("btnStart").onclick = () => {
     initAudio();
     show("scrTitle", false);
-    profile.open();
+    intro.play(() => profile.open());
   };
   profile.onBack = () => show("scrTitle");
   profile.onConfirm = (p) => {
@@ -329,7 +332,11 @@ async function boot() {
     const now = nowMs / 1000;
     const s = game.s;
 
-    if (s.phase === "title") {
+    if (intro.groundActive) {
+      // cinematica: la parte de la superficie usa el terreno real del juego
+      intro.frameGround(dt);
+      updateSky(16.4);
+    } else if (s.phase === "title") {
       // portada: crepusculo en Gale con los planetas que se ven HOY desde Marte (la Tierra, Venus, ...)
       const a = now * 0.03;
       const cx = titleCenter.x + Math.sin(a) * 140, cz = titleCenter.z - 60 + Math.cos(a) * 40;
@@ -403,7 +410,7 @@ async function boot() {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  window.__msm = { game, scene, world, path, controls, atlas, geo, car, astro, sky, buddy, planner }; // para depurar desde la consola
+  window.__msm = { game, scene, world, path, controls, atlas, geo, car, astro, sky, buddy, planner, intro }; // para depurar desde la consola
 }
 
 boot().catch((e) => {
