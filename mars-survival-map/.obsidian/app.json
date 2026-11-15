@@ -1,6 +1,0 @@
-{
-  "userIgnoreFilters": [
-    "dist/",
-    "node_modules/"
-  ]
-}
