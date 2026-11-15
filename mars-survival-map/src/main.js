@@ -1,4 +1,4 @@
-import { loadAll } from "./data.js";
+import { loadAll, assetUrl } from "./data.js";
 import { t, ui, getLang, setLang } from "./i18n.js";
 import { World } from "./engine/world.js";
 import { MarsScene } from "./engine/scene.js";
@@ -89,6 +89,18 @@ async function boot() {
   $("scrLoading").classList.add("out");
   setTimeout(() => show("scrLoading", false), 700);
 
+  // Foto real de Curiosity (public/pov/pov.json): role = "arrival" (llegada) o "closeup" (de cerca)
+  function povFigure(id, oid, role) {
+    const fig = $(id), img = data.pov?.images?.[oid]?.[role];
+    fig.hidden = !img;
+    if (!img) return;
+    fig.querySelector("img").src = assetUrl(img.file);
+    fig.querySelector("img").alt = t(img.caption);
+    fig.querySelector("figcaption").innerHTML =
+      `<b>${ui(role === "arrival" ? "povArrival" : "povClose")}:</b> ${t(img.caption)} ` +
+      `<span>${ui("povTaken")} · ${img.camera} · sol ${img.sol} · NASA/JPL-Caltech</span>`;
+  }
+
   function showBriefing() {
     const m = game.mission, o = game.objectives[m.objective_id];
     const s = game.s;
@@ -100,6 +112,7 @@ async function boot() {
     $("briefNum").textContent = `${ui("mission")} ${m.order} ${ui("of")} ${game.missions.length}`;
     $("briefTitle").textContent = t(m.title);
     $("briefText").textContent = t(m.brief);
+    povFigure("briefPov", m.objective_id, "arrival");
     $("briefChips").innerHTML = `
       <span class="chip danger"><svg><use href="#${hazardIcon}"/></svg>${ui("hazard")}: ${ui("hazards." + m.hazard_main)}</span>
       <span class="chip"><svg><use href="#i-layers"/></svg>${ui("layerHint")}: <kbd>${keyOf[m.layer_hint] || "R"}</kbd> ${ui("layers." + (m.layer_hint || "route"))}</span>
@@ -117,6 +130,9 @@ async function boot() {
   game.on("shelter", (o) => { const d = game.dialogs[o.id === "rover" ? "d_shelter_rover" : "d_shelter_habitat"]; if (d) hud.dialogQueue.push(d); });
   game.on("spe", (sp) => { if (sp.phase === "warning") { sfx.klaxon(); if (game.s.layer !== "radiation") game.setLayer("radiation"); game.setRoute(true); } updateBeacons(); });
   game.on("scanStart", () => sfx.scan());
+  game.on("cargoUnload", ({ n, kg, where }) => hud.showAlert({ id: "a_cargo_unload", severity: "info", text: {
+    es: `Dejaste ${n} muestra${n > 1 ? "s" : ""} (${kg.toFixed(1).replace(".", ",")} kg) en ${where.name.es}. Caminas más ligero.`,
+    en: `You left ${n} sample${n > 1 ? "s" : ""} (${kg.toFixed(1)} kg) at ${where.name.en}. You walk lighter.` } }));
   game.on("jump", () => sfx.step());
   game.on("land", ({ damage, driving }) => {
     sfx.step();
@@ -129,6 +145,7 @@ async function boot() {
     controls.unlock();
     $("cardPts").textContent = "+" + mission.points;
     $("cardTitle").textContent = t(objective.name);
+    povFigure("cardPov", objective.id, "closeup");
     $("cardFactTitle").textContent = `${ui("fact")} · ${t(fact.title)}`;
     $("cardFact").textContent = t(fact.text);
     $("cardSource").textContent = `${ui("source")}: ${fact.source}`;

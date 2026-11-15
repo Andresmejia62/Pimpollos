@@ -1,7 +1,7 @@
 // Estado y reglas del juego. Implementa public/layers/rules.json (M3) tal cual
 // y la campana de public/story/missions.json (M4).
 import { MARS, PHYS, boxCollider } from "../engine/physics.js";
-import { Physiology, REF, REF_FLAT_W, TERRAIN_ETA, DEFAULT_PROFILE } from "../engine/physiology.js";
+import { Physiology, REF, REF_FLAT_W, TERRAIN_ETA, DEFAULT_PROFILE, BASE_KIT_KG, SAMPLE_KG } from "../engine/physiology.js";
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -32,11 +32,20 @@ export class Game {
 
   // Perfil fisico del astronauta (engine/physiology.js): cambia la velocidad, el salto y el gasto de O2 y bateria
   setProfile(profile) {
-    this.bio = new Physiology(profile);
+    this.bio = new Physiology(profile, this.s ? this.cargoKg() : BASE_KIT_KG);
     this.speedK = this.bio.vDesign / REF.vDesign;              // pierna mas larga -> marcha mas rapida (Froude)
+    this.loadK = Math.sqrt(REF.total / this.bio.total);        // misma potencia de piernas, mas masa -> algo mas lento
     this.realPerWorld = REF.vDesign / this.rules.movement.walk_speed_mps;
     // capacidad de O2 del traje: 8 h para el astronauta de referencia caminando en llano (rules.json -> oxygen)
     this.o2CapacityG = REF.o2gPerH(REF_FLAT_W) * 8 * (this.rules.resources.oxygen.metabolic_calibration || 1);
+  }
+
+  // Carga a pie: kit base + muestras recogidas y no entregadas todavia
+  cargoKg() { const c = this.s.cargo; return c.kit + c.carried * SAMPLE_KG; }
+  _applyLoad() {
+    this.bio.setLoad(this.cargoKg());
+    this.loadK = Math.sqrt(REF.total / this.bio.total);
+    this.emit("cargo", this.s.cargo);
   }
 
   on(evt, fn) { (this.listeners[evt] ||= []).push(fn); }
@@ -52,6 +61,7 @@ export class Game {
       missionIndex: 0, phase: "title",
       scanProgress: 0, scanned: false, moving: false, speed: 0, movedTotal: 0,
       blockedAhead: false, inShelter: null,
+      cargo: { kit: BASE_KIT_KG, carried: 0, stored: 0 },   // muestras: en la mochila / entregadas en refugios
       spe: null, stormBonus: false,
       science: 0, layer: null, routeOn: false,
       tutorialStep: 0, tutorialTimer: 0, routeToggledInStep: false,
@@ -145,6 +155,7 @@ export class Game {
     if (!this.checkpoint) return;
     this.s = JSON.parse(JSON.stringify(this.checkpoint));
     this.s.phase = "briefing";
+    if (this.s.cargo) this._applyLoad();
     this.emit("mission", this.mission);
   }
 
@@ -235,7 +246,16 @@ export class Game {
     for (const o of Object.values(this.objectives)) {
       if (o.shelter && this.distTo(o) < this.radiusOf(o) + 6) { s.inShelter = o.id; break; }
     }
-    if (s.inShelter && s.inShelter !== prevShelter) this.emit("shelter", this.objectives[s.inShelter]);
+    if (s.inShelter && s.inShelter !== prevShelter) {
+      this.emit("shelter", this.objectives[s.inShelter]);
+      // se dejan las muestras en el rover o en el refugio: vuelve a pesar solo el kit
+      if (s.cargo.carried > 0) {
+        const n = s.cargo.carried;
+        s.cargo.stored += n; s.cargo.carried = 0;
+        this._applyLoad();
+        this.emit("cargoUnload", { n, kg: n * SAMPLE_KG, where: this.objectives[s.inShelter] });
+      }
+    }
 
     // Recursos (rules.json -> resources), a partir del gasto metabolico del astronauta (engine/physiology.js)
     const onFoot = s.moving && !s.driving;
@@ -244,6 +264,10 @@ export class Game {
     b.vReal = onFoot ? s.speed * this.realPerWorld : 0;
     b.grade = onFoot ? this._grade || 0 : 0;
     b.eta = TERRAIN_ETA[W.spectral(s.x, s.z)] ?? 1.2;
+    // abrirse paso entre rocas cuesta mas (coeficiente de terreno de Pandolf)
+    const rc = W.rockClass(s.x, s.z), B = H.boulders;
+    if (B && rc) b.eta = Math.max(b.eta, rc === 2 ? B.eta_field : B.eta_rocky);
+    b.rock = rc;
     const Mnow = s.driving ? bio.metabolic(0) * 0.95 : bio.metabolic(b.vReal, b.grade, b.eta);
     b.M += (Mnow - b.M) * Math.min(1, dt / 1.5);                       // cinetica del VO2 (~30 s en Marte)
     const pct = bio.pctVO2max(b.M);
@@ -312,6 +336,8 @@ export class Game {
         if (s.scanProgress >= this.rules.science.scan_time_s) {
           s.scanned = true;
           s.energy = Math.max(0, s.energy - R.energy.scanner_cost);
+          s.cargo.carried += 1;          // muestra recogida: se suma a la carga
+          this._applyLoad();
           s.phase = "card";
           this.emit("scanComplete", { mission: m, objective: obj, fact: this.facts[m.fact_id] });
         }
@@ -340,7 +366,7 @@ export class Game {
     const slopeHere = W.slope(s.x, s.z);
     const slopeK = clamp(1 - (slopeHere - H.slope.slow_above_deg) / 26, 0.5, 1);
     const fatigueK = 1 - 0.45 * Math.min(1, s.bio.fatigue / 100);
-    const top = this.rules.movement.walk_speed_mps * slopeK * (drv ? DRIVE.speed_k : (s.energy <= 0 ? 0.4 : 1) * this.speedK * fatigueK);
+    const top = this.rules.movement.walk_speed_mps * slopeK * (drv ? DRIVE.speed_k : (s.energy <= 0 ? 0.4 : 1) * this.speedK * fatigueK * (this.loadK || 1));
 
     // velocidad deseada: a pie va hacia donde se pulsa; el rover gira poco a poco y avanza de frente
     let tx = 0, tz = 0;

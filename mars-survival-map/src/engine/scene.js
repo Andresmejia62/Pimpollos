@@ -581,7 +581,7 @@ export class MarsScene {
     }
     geo.computeVertexNormals();
     const mat = new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 1, metalness: 0, flatShading: true });
-    this.rockMax = 2400;
+    this.rockMax = 3400;
     this.rocks = new THREE.InstancedMesh(geo, mat, this.rockMax);
     this.rocks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.rocks.count = 0;
@@ -627,6 +627,36 @@ export class MarsScene {
           col.setHSL(0.045 + rnd() * 0.035, 0.3 + rnd() * 0.2, 0.2 + rnd() * 0.16);
           this.rocks.setColorAt(k, col);
           k++;
+        }
+      }
+    }
+    // Bloques grandes donde el DTM marca terreno rocoso (rules.json -> hazards.boulders): no se pueden pisar
+    const B = this.world.rules.hazards.boulders;
+    if (B && this.world.decode.rough) {
+      for (let gz = cz - RAD; gz <= cz + RAD; gz++) {
+        for (let gx = cx - RAD; gx <= cx + RAD; gx++) {
+          let seed = ((gx * 2654435761) ^ (gz * 40503)) >>> 0;
+          const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+          for (let i = 0; i < 26 && k < this.rockMax; i++) {
+            const x = (gx + rnd()) * CELL, z = (gz + rnd()) * CELL;
+            const u = rnd(), v = rnd(), w = rnd();
+            if (!this.world.inside(x, z, 10)) continue;
+            const rc = this.world.rockClass(x, z);
+            // densidad: campo de bloques ~1 cada 60 m2; terreno rocoso ~1 cada 250 m2
+            if (!rc || u > (rc === 2 ? 0.95 : 0.25)) continue;
+            const r = rc === 2 ? 1.0 + v * v * 2.5 : 0.6 + v * 1.2;   // radio: 1-3,5 m / 0,6-1,8 m
+            p.set(x, this.heightAt(x, z) + r * 0.12, z);
+            e.set(w * 6.28, rnd() * 6.28, rnd() * 0.6);
+            q.setFromEuler(e);
+            s.set(r * (0.85 + rnd() * 0.4), r * (0.55 + rnd() * 0.35), r * (0.85 + rnd() * 0.4));
+            m.compose(p, q, s);
+            this.rocks.setMatrixAt(k, m);
+            const rad = ((s.x + s.z) / 2) * 0.85;
+            solid.push({ x, z, r: rad, top: p.y + s.y * 0.85, big: true });
+            col.setHSL(0.04 + rnd() * 0.03, 0.28 + rnd() * 0.15, 0.17 + rnd() * 0.12);
+            this.rocks.setColorAt(k, col);
+            k++;
+          }
         }
       }
     }

@@ -23,6 +23,7 @@ export class World {
     order.forEach((k, i) => { this.planes[k] = grid.subarray(i * nn, (i + 1) * nn); });
     const dec = (k) => ({ min: L[k].decode.min, max: L[k].decode.max });
     this.decode = { slope: dec("slope"), radiation: dec("radiation"), thermal: dec("thermal"), thermal_night: dec("thermal_night") };
+    if (L.rough && this.planes.rough) this.decode.rough = dec("rough");
     this.dayCurve = rules.day_curve.points;
   }
 
@@ -58,6 +59,12 @@ export class World {
   slope(x, z) { return this._scalar("slope", x, z); }
   radiation(x, z) { return this._scalar("radiation", x, z); }
   spectral(x, z) { return this.planes.spectral[this.index(x, z)]; }
+  // rugosidad a escala metrica (m): > 0,6 terreno rocoso, > 0,9 campo de bloques (rules.json -> hazards.boulders)
+  rough(x, z) { return this.decode.rough ? this._scalar("rough", x, z) : 0; }
+  rockClass(x, z) {
+    const B = this.rules.hazards.boulders, r = this.rough(x, z);
+    return !B ? 0 : r > B.field_above_m ? 2 : r > B.rocky_above_m ? 1 : 0;
+  }
   // Temperatura del suelo a la hora local (interpola noche <-> 10:00 con day_curve)
   temperature(x, z, hour) {
     const f = this.dayFraction(hour);

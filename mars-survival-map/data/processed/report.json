@@ -1,6 +1,6 @@
 {
   "source": "real",
-  "seconds": 14.1,
+  "seconds": 8.8,
   "elevation_m": {
     "min": -4329.79,
     "p05": -4187.38,
@@ -46,9 +46,9 @@
   "percent_blocked": 11.64,
   "hazard_share_percent": {
     "slope": [
-      61.5,
-      26.9,
-      11.6
+      56.8,
+      26.8,
+      16.4
     ],
     "radiation": [
       13.9,
@@ -223,6 +223,15 @@
     "p05": 301.0,
     "p50": 403.0,
     "p95": 528.0
+  },
+  "roughness": {
+    "method": "rms del relieve residual (DEM a 3 m menos su version suavizada ~20 m)",
+    "rocky_above_m": 0.6,
+    "boulder_field_above_m": 0.9,
+    "map_pct_rocky": 20.2,
+    "map_pct_field": 8.8,
+    "curiosity_stops_pct_rocky": 12.3,
+    "_doc": "Curiosity evita el terreno rocoso: en zonas suaves lo visita ~35 % menos de lo esperable (validacion)."
   },
   "curiosity_traverse_slope_deg": {
     "points": 857,

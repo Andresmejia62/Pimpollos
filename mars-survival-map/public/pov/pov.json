@@ -1,0 +1,124 @@
+{
+  "credit": "NASA/JPL-Caltech (Curiosity, imágenes crudas de dominio público)",
+  "source": "https://mars.nasa.gov/msl/multimedia/raw-images/",
+  "images": {
+    "obj_arcillas": {
+      "arrival": {
+        "file": "pov/obj_arcillas_arrival.jpg",
+        "sol": 2481,
+        "instrument": "NAV_LEFT",
+        "camera": "Navcam",
+        "date_utc": "2019-07-30T09:19:15.000Z",
+        "raw_url": "https://mars.jpl.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/02481/opgs/edr/ncam/NLB_617748149EDR_F0763002NCAM00277M_.JPG",
+        "caption": {
+          "es": "Lecho de roca de Glen Torridon; al fondo, el borde del cráter Gale.",
+          "en": "Glen Torridon bedrock; Gale crater rim in the distance."
+        }
+      },
+      "closeup": {
+        "file": "pov/obj_arcillas_closeup.jpg",
+        "sol": 2481,
+        "instrument": "NAV_LEFT",
+        "camera": "Navcam",
+        "date_utc": "2019-07-30T09:17:09.000Z",
+        "raw_url": "https://mars.jpl.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/02481/opgs/edr/ncam/NLB_617748023EDR_F0763002NCAM00354M_.JPG",
+        "caption": {
+          "es": "Losas de roca arcillosa: el suelo que vas a escanear.",
+          "en": "Clay-bearing rock slabs: the ground you will scan."
+        }
+      }
+    },
+    "obj_sulfatos": {
+      "arrival": {
+        "file": "pov/obj_sulfatos_arrival.jpg",
+        "sol": 3608,
+        "instrument": "NAV_LEFT",
+        "camera": "Navcam",
+        "date_utc": "2022-09-30T07:53:09.000Z",
+        "raw_url": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/03608/opgs/edr/ncam/NLB_717793245EDR_F0971734NCAM00270M_.JPG",
+        "caption": {
+          "es": "Valle entre mesetas de la unidad de sulfatos.",
+          "en": "Valley between buttes in the sulfate unit."
+        }
+      },
+      "closeup": {
+        "file": "pov/obj_sulfatos_closeup.jpg",
+        "sol": 3608,
+        "instrument": "NAV_LEFT",
+        "camera": "Navcam",
+        "date_utc": "2022-09-30T07:57:19.000Z",
+        "raw_url": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/03608/opgs/edr/ncam/NLB_717793495EDR_F0971734NCAM00354M_.JPG",
+        "caption": {
+          "es": "Rocas en capas finas, típicas de los sulfatos.",
+          "en": "Thinly layered rocks, typical of sulfates."
+        }
+      }
+    },
+    "obj_azufre": {
+      "arrival": {
+        "file": "pov/obj_azufre_arrival.jpg",
+        "sol": 4200,
+        "instrument": "NAV_LEFT",
+        "camera": "Navcam",
+        "date_utc": "2024-05-30T13:50:51.000Z",
+        "raw_url": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04200/opgs/edr/ncam/NLB_770345410EDR_F1072484NCAM00256M_.JPG",
+        "caption": {
+          "es": "Canal Gediz Vallis, con ondulaciones de arena y bloques.",
+          "en": "Gediz Vallis channel, with sand ripples and boulders."
+        }
+      },
+      "closeup": {
+        "file": "pov/obj_azufre_closeup.jpg",
+        "sol": 4200,
+        "instrument": "NAV_LEFT",
+        "camera": "Navcam",
+        "date_utc": "2024-05-30T13:55:33.000Z",
+        "raw_url": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04200/opgs/edr/ncam/NLB_770345692EDR_F1072484NCAM00354M_.JPG",
+        "caption": {
+          "es": "Piedras claras dispersas: aquí aparecieron los cristales de azufre.",
+          "en": "Scattered light stones: the sulfur crystals were found here."
+        }
+      }
+    },
+    "obj_boxwork": {
+      "arrival": {
+        "file": "pov/obj_boxwork_arrival.jpg",
+        "sol": 4671,
+        "instrument": "NAV_LEFT",
+        "camera": "Navcam",
+        "date_utc": "2025-09-26T13:14:58.000Z",
+        "raw_url": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04671/opgs/edr/ncam/NLB_812160456EDR_F1190486NCAM00294M_.JPG",
+        "caption": {
+          "es": "Crestas de la región boxwork y mesetas del Monte Sharp.",
+          "en": "Boxwork ridges and Mount Sharp buttes."
+        }
+      },
+      "closeup": {
+        "file": "pov/obj_boxwork_closeup.jpg",
+        "sol": 4671,
+        "instrument": "NAV_RIGHT",
+        "camera": "Navcam",
+        "date_utc": "2025-09-26T13:17:01.000Z",
+        "raw_url": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04671/opgs/edr/ncam/NRB_812160579EDR_F1190486NCAM00354M_.JPG",
+        "caption": {
+          "es": "Roca fracturada y cementada: las vetas que forman el boxwork.",
+          "en": "Fractured, cemented rock: the veins that build the boxwork."
+        }
+      }
+    },
+    "refugio_sur": {
+      "arrival": {
+        "file": "pov/refugio_sur_arrival.jpg",
+        "sol": 4558,
+        "instrument": "NAV_LEFT",
+        "camera": "Navcam",
+        "date_utc": "2025-06-02T11:27:48.000Z",
+        "raw_url": "https://mars.nasa.gov/msl-raw-images/proj/msl/redops/ods/surface/sol/04558/opgs/edr/ncam/NLB_802131722EDR_F1161890NCAM00262M_.JPG",
+        "caption": {
+          "es": "Llano al pie de una meseta estratificada, junto al Refugio Sur.",
+          "en": "Flat ground below a layered butte, next to the South Shelter."
+        }
+      }
+    }
+  }
+}

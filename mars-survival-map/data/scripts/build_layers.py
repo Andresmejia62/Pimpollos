@@ -173,7 +173,8 @@ def main():
 
     hz = rules["hazards"]
     blocked = slope > hz["slope"]["blocked_above_deg"]
-    cost = L.traverse_cost(slope, rad, t_day, rules)
+    rough = inp["rough"] if source == "real" else np.zeros_like(slope)
+    cost = L.traverse_cost(slope, rad, t_day, rules, rough=rough)
     cost256 = downsample_cost(cost, n // 256)
 
     # ---- Rangos de codificacion --------------------------------------------
@@ -181,6 +182,7 @@ def main():
     dem_max = float(math.ceil(dem.max()))
     ranges = {
         "slope": (0.0, 60.0),
+        "rough": (0.0, 3.0),
         "radiation": (5.0, 10.0),
         "thermal": (-80.0, 10.0),
         "thermal_night": (-120.0, -40.0),
@@ -201,15 +203,20 @@ def main():
     # Binarios para el motor web (los PNG de 16 bits pierden precision al decodificarse en el navegador)
     dem_u16 = np.round(np.clip((dem - y_ref) / (dem_max - y_ref), 0, 1) * 65535).astype("<u2")
     dem_u16.tofile(OUT / "dem.bin")
-    grid_order = ["slope", "radiation", "thermal", "thermal_night", "spectral", "cost"]
+    grid_order = ["slope", "radiation", "thermal", "thermal_night", "spectral", "cost", "rough"]
     def u8(a, lo, hi):
         return np.round(np.clip((a - lo) / (hi - lo), 0, 1) * 255).astype(np.uint8)
     planes = [u8(slope, *ranges["slope"]), u8(rad, *ranges["radiation"]), u8(t_day, *ranges["thermal"]),
-              u8(t_night, *ranges["thermal_night"]), spectral.astype(np.uint8), cost]
+              u8(t_night, *ranges["thermal_night"]), spectral.astype(np.uint8), cost, u8(rough, *ranges["rough"])]
+    L.save_png8(rough, *ranges["rough"], OUT / "rough.png")
     np.stack(planes).astype(np.uint8).tofile(OUT / "grid.bin")
 
     pal = rules["palette"]
     slope_lv = level(slope, lambda a: a < hz["slope"]["safe_below_deg"], lambda a: a > hz["slope"]["blocked_above_deg"])
+    # la capa 1 tambien muestra el terreno rocoso: puntos = rocoso, rayas = campo de bloques
+    if "boulders" in hz:
+        slope_lv = np.maximum(slope_lv, np.where(rough > hz["boulders"]["field_above_m"], 2,
+                                                 np.where(rough > hz["boulders"]["rocky_above_m"], 1, 0)).astype(np.uint8))
     rad_lv = level(rad, lambda a: a < hz["radiation"]["safe_below_ugy_h"], lambda a: a > hz["radiation"]["danger_above_ugy_h"])
     tmp_lv = level(t_day, lambda a: a > hz["temperature"]["safe_above_c"], lambda a: a < hz["temperature"]["danger_below_c"])
     L.hazard_overlay(slope_lv, pal, OUT / "slope_overlay.png")
@@ -303,6 +310,9 @@ def main():
                          "classes": SPECTRAL_CLASSES,
                          "description": ("Clases minerales (indice = valor del pixel). " +
                                          real_log.get("spectral_method", "Sinteticas por elevacion."))},
+            "rough": scalar("rough.png", "m (rms del relieve a escala metrica)", ranges["rough"],
+                            "Rugosidad del DTM HiRISE+CTX: > 0,6 m terreno rocoso, > 0,9 m campo de bloques (estimacion). "
+                            "Se muestra en la capa de pendiente (slope_overlay.png) y entra en el costo de la ruta.", "slope_overlay.png"),
             "cost": {"file": "cost.png", "kind": "cost", "file_256": "cost_256.png",
                      "decode": "0 = intransitable; costo = pixel / 25",
                      "description": "Costo de recorrido para A* (ver rules.json -> pathfinding)."},

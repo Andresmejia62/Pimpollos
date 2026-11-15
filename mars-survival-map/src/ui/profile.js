@@ -78,7 +78,7 @@ export class ProfileScreen {
     $("pfOut").innerHTML = `
       <table class="kv">
         <tr><th colspan="2">${t(L("Cuerpo en Marte (0,379 g)", "Body on Mars (0.379 g)"))}</th></tr>
-        <tr><td>${t(L("Masa con traje", "Mass with suit"))}</td><td>${num(b.total, 0, lang)} kg <span class="muted">(${t(L("inercia igual que en la Tierra", "same inertia as on Earth"))})</span></td></tr>
+        <tr><td>${t(L("Masa con traje y equipo", "Mass with suit and kit"))}</td><td>${num(b.total, 0, lang)} kg <span class="muted">(${t(L("inercia igual que en la Tierra", "same inertia as on Earth"))})</span></td></tr>
         <tr><td>${t(L("Peso en Marte", "Weight on Mars"))}</td><td>${num(b.weightMarsN, 0, lang)} N <span class="muted">${t(L("= pesar", "= weighing"))} ${num(b.total * 0.379, 1, lang)} kg ${t(L("en la Tierra", "on Earth"))}</span></td></tr>
         <tr><td>IMC · ${t(L("superficie corporal", "body surface"))}</td><td>${num(b.bmi, 1, lang)} · ${num(b.bsa, 2, lang)} m² ${cmp(b.bsa, REF.bsa)}</td></tr>
         <tr><td>${t(L("Metabolismo basal", "Basal metabolism"))}</td><td>${num(b.bmrKcal, 0, lang)} kcal/${t(L("día", "day"))} (${num(b.bmrW, 0, lang)} W)</td></tr>

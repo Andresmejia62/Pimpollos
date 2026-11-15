@@ -130,6 +130,16 @@ button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .btn:hover { background: rgba(255,255,255,.12); }
 .btn.primary { background: var(--mars-dust); color: #1a0f0a; border-color: var(--mars-dust); }
 .btn.primary:hover { background: #e9b285; }
+/* Fotos POV reales de Curiosity (Navcam/Mastcam) */
+.pov { margin: 0 0 16px; border-radius: 10px; overflow: hidden; border: 1px solid var(--hud-border); background: #111; }
+.pov img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; max-height: 300px; filter: sepia(.32) saturate(1.5) hue-rotate(-12deg) brightness(1.02); }
+.pov figcaption { font-size: 13px; line-height: 1.45; padding: 8px 12px; color: var(--hud-text-dim); }
+.pov figcaption b { color: var(--hud-text); font-weight: 600; }
+.factcard .pov img { max-height: 240px; }
+.povhud { right: calc(var(--u) * 22); top: calc(var(--u) * 8.4); width: calc(var(--u) * 16); padding: calc(var(--u) * .6); animation: slideIn .3s ease-out; }
+.povhud .lbl { font-size: calc(var(--u) * 1.05); letter-spacing: .08em; text-transform: uppercase; color: var(--safe); font-weight: 700; margin-bottom: calc(var(--u) * .4); }
+.povhud img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: calc(var(--u) * .4); filter: sepia(.32) saturate(1.5) hue-rotate(-12deg); }
+.povhud .cap { font-family: var(--font-text); font-size: calc(var(--u) * .95); line-height: 1.35; color: var(--hud-text-dim); margin-top: calc(var(--u) * .4); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 22px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; font: 600 15px var(--font-hud); padding: 5px 11px; border-radius: 99px; border: 1px solid var(--hud-border); }
 .chip svg { width: 16px; height: 16px; }

@@ -207,6 +207,24 @@ def paint_objectives(classes: np.ndarray, objectives, px: float) -> None:
             classes[np.hypot(rr - r0, cc - c0) * px < 2.0 * o.get("radius_m", 15)] = k
 
 
+def roughness(region, raw: Path, pts) -> np.ndarray:
+    """Rugosidad a escala metrica (m): rms del relieve que queda al quitar la forma del terreno (~20 m),
+    calculada sobre el DEM CTX+HiRISE a la mitad del tamano de pixel y llevada a la cuadricula con el maximo.
+    Marca terreno rocoso y campos de bloques. Es una estimacion: el DTM de HiRISE (1 m) no resuelve bloques
+    sueltos de menos de ~2 m."""
+    cfg = dict(region.cfg)
+    n2 = region.n * 2
+    cfg["grid_px"] = n2
+    cfg["pixel_size_m"] = region.size / n2
+    from region import Region as _R
+    r2 = _R(cfg)
+    dem = merge_dem(r2, raw, {}, [(p[0], p[1] * 2, p[2] * 2, p[3], p[4], p[5]) for p in pts])
+    res = dem - smooth(dem, 3, 2)
+    rough = np.sqrt(smooth(res * res, 2, 1))
+    n = region.n
+    return rough.reshape(n, 2, n, 2).max(axis=(1, 3)).astype(np.float32)
+
+
 def build_inputs(region, raw: Path, objectives=()) -> dict:
     log = {}
     n = region.n
@@ -286,5 +304,16 @@ def build_inputs(region, raw: Path, objectives=()) -> dict:
         log["thermal_inertia_method"] = "Aproximada desde el albedo CTX (230-520 TIU). Pendiente: mosaico THEMIS."
     ti = ti.astype(np.float32)
 
-    return {"dem": dem, "thermal_inertia": ti, "spectral": classes, "albedo": albedo,
+    rough = roughness(region, raw, pts)
+    ROCKY, FIELD = 0.6, 0.9
+    gentle_tr = [rough[min(r, n - 1), min(c, n - 1)] for _, r, c, *_ in pts]
+    log["roughness"] = {
+        "method": "rms del relieve residual (DEM a 3 m menos su version suavizada ~20 m)",
+        "rocky_above_m": ROCKY, "boulder_field_above_m": FIELD,
+        "map_pct_rocky": round(100 * float((rough > ROCKY).mean()), 1),
+        "map_pct_field": round(100 * float((rough > FIELD).mean()), 1),
+        "curiosity_stops_pct_rocky": round(100 * float((np.array(gentle_tr) > ROCKY).mean()), 1),
+        "_doc": "Curiosity evita el terreno rocoso: en zonas suaves lo visita ~35 % menos de lo esperable (validacion).",
+    }
+    return {"rough": rough, "dem": dem, "thermal_inertia": ti, "spectral": classes, "albedo": albedo,
             "optical_gray": albedo, "log": log, "traverse": pts}

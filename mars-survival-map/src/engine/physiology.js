@@ -26,6 +26,16 @@ export const SUITS = {
   xemu: { mass: 145, name: { es: "xEMU de Artemis (~145 kg)", en: "Artemis xEMU (~145 kg)" } },
 };
 
+// Equipo cientifico de campo que se lleva a pie (ademas del traje). Masas de referencia: kit de geologia de
+// Apollo (martillo, pala, pinzas, bolsas: ~6 kg en la Tierra) y espectrometros portatiles de campo (~3 kg).
+export const FIELD_KIT = [
+  { id: "tools", kg: 6.5, name: { es: "Herramientas de geología (martillo, pala, pinzas)", en: "Geology tools (hammer, scoop, tongs)" } },
+  { id: "spectrometer", kg: 3.2, name: { es: "Espectrómetro portátil", en: "Handheld spectrometer" } },
+  { id: "bags", kg: 0.8, name: { es: "Bolsas y contenedores de muestras", en: "Sample bags and containers" } },
+];
+export const BASE_KIT_KG = FIELD_KIT.reduce((a, k) => a + k.kg, 0);   // 10,5 kg
+export const SAMPLE_KG = 1.8;                                          // muestra de roca + contenedor por objetivo
+
 // Rango antropometrico de seleccion de astronautas de NASA (157,5-190,5 cm)
 export const NASA_HEIGHT = [157.5, 190.5];
 export const LIMITS = { mass: [45, 120], height: [150, 200], age: [25, 60], vo2max: [25, 65] };
@@ -59,12 +69,19 @@ export function sanitize(p) {
 }
 
 export class Physiology {
-  constructor(profile) { this.setProfile(profile); }
+  // loadKg = equipo y muestras que se cargan ademas del traje (Pandolf lo trata igual que el traje: carga L)
+  constructor(profile, loadKg = BASE_KIT_KG) { this.loadKg = loadKg; this.setProfile(profile); }
+
+  setLoad(kg) {
+    this.loadKg = Math.max(0, kg);
+    this.setProfile(this.p);
+  }
 
   setProfile(profile) {
     const p = (this.p = sanitize(profile));
     const h = p.height / 100;
-    const W = p.mass, L = SUITS[p.suit].mass;
+    const W = p.mass, L = SUITS[p.suit].mass + (this.loadKg || 0);
+    this.suitKg = SUITS[p.suit].mass;
     this.W = W; this.L = L; this.total = W + L;
     this.bmi = W / (h * h);
     this.bsa = 0.007184 * W ** 0.425 * p.height ** 0.725;                   // DuBois (m^2)
@@ -119,6 +136,6 @@ export class Physiology {
   }
 }
 
-// Astronauta de referencia: con el se calibraron las reglas del juego (rules.json)
+// Astronauta de referencia (con el kit base de campo): con el se calibraron las reglas del juego (rules.json)
 export const REF = new Physiology(DEFAULT_PROFILE);
 export const REF_FLAT_W = REF.metabolic(REF.vDesign);

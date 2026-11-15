@@ -125,7 +125,7 @@ def surface_temperature_c(cos_i: np.ndarray, thermal_inertia: np.ndarray,
 
 
 def traverse_cost(slope: np.ndarray, rad: np.ndarray, temp: np.ndarray, rules: dict,
-                  extra_blocked: np.ndarray | None = None) -> np.ndarray:
+                  extra_blocked: np.ndarray | None = None, rough: np.ndarray | None = None) -> np.ndarray:
     """Costo por celda para A*. 0 = intransitable; 1..254 = costo; ver rules.json -> pathfinding."""
     pf = rules["pathfinding"]
     th = rules["hazards"]
@@ -138,6 +138,9 @@ def traverse_cost(slope: np.ndarray, rad: np.ndarray, temp: np.ndarray, rules: d
     c += pf["w_radiation"] * np.clip((rad - r_lo) / (r_hi - r_lo), 0, 1)
     t_lo, t_hi = th["temperature"]["danger_below_c"], th["temperature"]["safe_above_c"]
     c += pf["w_cold"] * np.clip((t_hi - temp) / (t_hi - t_lo), 0, 1)
+    if rough is not None and "boulders" in th:
+        b_lo, b_hi = th["boulders"]["rocky_above_m"], th["boulders"]["field_above_m"]
+        c += pf.get("w_rocks", 0) * np.clip((rough - b_lo) / (b_hi - b_lo), 0, 1.5)
     out = np.clip(np.round(c * pf["encode_scale"]), 1, 254).astype(np.uint8)
     out[blocked] = 0
     return out

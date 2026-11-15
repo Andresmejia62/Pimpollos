@@ -52,6 +52,8 @@
 
     <section class="panel tutorial" id="tutorial" hidden></section>
 
+    <section class="panel povhud" id="povHud" hidden aria-label="Vista del destino"><div class="lbl" id="povHudLbl"></div><img id="povHudImg" alt=""><div class="cap" id="povHudCap"></div></section>
+
     <nav class="panel layers" id="layerbar" aria-label="Capas de datos">
       <button data-layer="slope" aria-pressed="false"><kbd>1</kbd><span data-ui="layers.slope"></span></button>
       <button data-layer="radiation" aria-pressed="false"><kbd>2</kbd><span data-ui="layers.radiation"></span></button>
@@ -160,6 +162,7 @@
       <div class="eyebrow" id="briefNum"></div>
       <h2 id="briefTitle"></h2>
       <p class="body" id="briefText"></p>
+      <figure class="pov" id="briefPov" hidden><img alt=""><figcaption></figcaption></figure>
       <div class="chips" id="briefChips"></div>
       <div class="btnrow"><button class="btn primary" id="btnBegin" data-ui="startMission"></button></div>
     </div>
@@ -169,6 +172,7 @@
     <div class="card factcard">
       <div class="fc-head"><div class="eyebrow ok"><svg><use href="#i-check"/></svg><span data-ui="completed"></span></div><div class="pts" id="cardPts"></div></div>
       <h2 id="cardTitle"></h2>
+      <figure class="pov" id="cardPov" hidden><img alt=""><figcaption></figcaption></figure>
       <div class="layercard">
         <h3 id="cardFactTitle"></h3>
         <p class="fact" id="cardFact"></p>

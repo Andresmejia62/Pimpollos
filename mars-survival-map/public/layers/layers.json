@@ -162,7 +162,7 @@
       "thermal_inertia_method": "THEMIS cuantitativa (mosaico global USGS/ASU 30S120E, 100 m), remuestreada a 6 m y suavizada. Exactitud absoluta ~20%."
     }
   },
-  "generated_unix": 1794689640,
+  "generated_unix": 1794703072,
   "region": "region.json",
   "rules": "rules.json",
   "image_orientation": "fila 0 = norte, columna 0 = oeste; ver region.json -> world",
@@ -269,6 +269,19 @@
       },
       "description": "Clases minerales (indice = valor del pixel). CRISM MTRDR (MRO), parametros de Viviano-Beck et al. 2014: phyllo: D2300 > 0.002 y BD2290 > 0 (filosilicatos Fe/Mg); sulfate: SINDEX2 > 0.008 y (BD1900_2 > 0.002 o BD2100_2 > 0.002) (sulfatos poli/monohidratados); mafic: OLINDEX3 > percentil 90 del recorte y albedo bajo (arena basaltica). Mediana por pixel de los productos que lo cubren. Boxwork = crestas locales cerca de la traza 2025 (morfologia, no espectral); dunas = arena mafica CRISM o zonas mas oscuras de CTX."
     },
+    "rough": {
+      "file": "rough.png",
+      "kind": "scalar",
+      "bits": 8,
+      "units": "m (rms del relieve a escala metrica)",
+      "decode": {
+        "min": 0.0,
+        "max": 3.0,
+        "formula": "valor = min + pixel/255 * (max - min)"
+      },
+      "description": "Rugosidad del DTM HiRISE+CTX: > 0,6 m terreno rocoso, > 0,9 m campo de bloques (estimacion). Se muestra en la capa de pendiente (slope_overlay.png) y entra en el costo de la ruta.",
+      "overlay": "slope_overlay.png"
+    },
     "cost": {
       "file": "cost.png",
       "kind": "cost",
@@ -279,7 +292,7 @@
     "optical": {
       "file": "optical.png",
       "kind": "rgb",
-      "description": "Ortoimagenes HiRISE (2 m) con el tono de CTX, reducidas a la cuadricula y coloreadas. La version de 4096 px para el motor esta en public/textures/albedo_hd.jpg (build_textures.py)."
+      "description": "Ortoimagen CTX (MRO) reproyectada al recorte, coloreada en tonos marcianos y combinada con un sombreado suave del DEM. Resolucion nativa 20 m: para detalle cercano M1 usa textura de suelo."
     },
     "binary": {
       "dem": {
@@ -296,7 +309,7 @@
         "dtype": "uint8",
         "layout": "planar [capa][fila][col]",
         "shape": [
-          6,
+          7,
           1024,
           1024
         ],
@@ -306,7 +319,8 @@
           "thermal",
           "thermal_night",
           "spectral",
-          "cost"
+          "cost",
+          "rough"
         ],
         "decode": "slope/radiation/thermal/thermal_night: min + v/255*(max-min) (ver cada capa); spectral: clase; cost: 0 = intransitable, costo = v/25"
       },

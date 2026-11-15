@@ -24,12 +24,26 @@ Ecuación de Pandolf et al. (1977) para marcha con carga, adaptada a 0,379 g:
 M = 1,3·BMR + 2·(W+L)·(L/W)²·gr                           (de pie, sosteniendo el traje)
   + K_traje · η·(W+L)·(1,5·v² + 0,35·v·G·gr) · f_loc      (locomoción; G = pendiente en %)
 ```
-- `W` masa corporal, `L` masa del traje, `v` velocidad real (m/s), `gr = 3,721/9,807 = 0,379`.
+- `W` masa corporal, `L` carga = traje + equipo de campo + muestras, `v` velocidad real (m/s), `gr = 3,721/9,807 = 0,379`.
 - `f_loc = 0,4 + 0,6·gr`: el coste de la marcha horizontal no baja en proporción a la gravedad (Farley y McMahon 1992; Griffin et al. 1999).
 - `K_traje = 1,2`: un traje presurizado obliga a vencer el par de las articulaciones (Norcross et al. 2010, NASA/TP-2010-216139).
 - **Bajadas** (G < 0): se descuenta parte del término de pendiente, sin bajar del 55 % del coste en llano (frenar también cuesta). Simplificación inspirada en Santee et al. (2003).
 - **Terreno** (`η`, coeficiente de Pandolf), a partir de la capa espectral CRISM: regolito firme 1,2 · crestas boxwork 1,5 · arena de duna 2,1.
 - Traje fuera del rango de estatura de NASA (157,5–190,5 cm): +8 %.
+
+## Equipo y muestras (carga)
+El astronauta no camina solo con el traje: lleva un **kit de campo de 10,5 kg** (`FIELD_KIT` en `src/engine/physiology.js`):
+
+| Elemento | Masa | Referencia |
+|---|---|---|
+| Herramientas de geología (martillo, pala, pinzas) | 6,5 kg | Kit de geología de Apollo |
+| Espectrómetro portátil | 3,2 kg | Espectrómetros de campo comerciales |
+| Bolsas y contenedores de muestras | 0,8 kg | — |
+
+- Cada objetivo escaneado añade una **muestra de 1,8 kg** a la carga `L`. Más carga sube el término de pie y el de locomoción de Pandolf, y con ellos el O₂, el CO₂, la FC y la fatiga.
+- **Velocidad:** la potencia de las piernas no cambia, pero hay más masa que mover: `v ∝ √(masa_ref / masa_total)` (≈ −1 % por muestra).
+- **Rover y refugios:** al entrar en el rover o en un refugio, las muestras se quedan allí y la carga vuelve al kit base. El rover sirve para transportar herramientas y muestras, como propone el reto de NASA.
+- El astronauta de referencia (con el que se calibra la capacidad de O₂) lleva el kit base, así que el balance probado no cambia; solo las muestras que no se entregan cuestan oxígeno extra.
 
 ## De W a recursos del juego
 | Recurso | Cálculo |

@@ -11,14 +11,14 @@ const SEV_ICON = { info: "i-info", caution: "i-warn", danger: "i-octagon" };
 const SEV_LABEL = { info: { es: "Info", en: "Info" }, caution: { es: "Precaución", en: "Caution" }, danger: { es: "Peligro", en: "Danger" } };
 
 const LEGENDS = {
-  slope: { name: { es: "Pendiente", en: "Slope" }, items: [["safe", { es: "Menos de 12°: camino fácil", en: "Under 12°: easy going" }], ["caution", { es: "12–25°: lento, gasta O₂", en: "12–25°: slow, uses O₂" }], ["danger", { es: "Más de 25°: bloqueado", en: "Over 25°: blocked" }]] },
+  slope: { name: { es: "Pendiente y rocas", en: "Slope and rocks" }, items: [["safe", { es: "Menos de 12°, suelo firme", en: "Under 12°, firm ground" }], ["caution", { es: "12–25° o terreno rocoso: lento, gasta O₂", en: "12–25° or rocky ground: slow, uses O₂" }], ["danger", { es: "Más de 25° o campo de bloques: evítalo", en: "Over 25° or boulder field: avoid" }]] },
   radiation: { name: { es: "Radiación (µGy/h)", en: "Radiation (µGy/h)" }, items: [["safe", { es: "< 8,3: el terreno te protege", en: "< 8.3: terrain shields you" }], ["caution", { es: "8,3–8,7: normal", en: "8.3–8.7: normal" }], ["danger", { es: "> 8,7: zona expuesta", en: "> 8.7: exposed" }]] },
   thermal: { name: { es: "Temperatura del suelo", en: "Ground temperature" }, items: [["safe", { es: "Más de −25 °C", en: "Above −25 °C" }], ["caution", { es: "−25 a −45 °C", en: "−25 to −45 °C" }], ["danger", { es: "Menos de −45 °C: +energía", en: "Below −45 °C: +power use" }]] },
   spectral: { name: { es: "Minerales (CRISM)", en: "Minerals (CRISM)" }, items: [["clay", { es: "Arcillas", en: "Clays" }], ["sulfate", { es: "Sulfatos", en: "Sulfates" }], ["boxwork", { es: "Vetas boxwork", en: "Boxwork veins" }], ["dunes", { es: "Arena basáltica", en: "Basaltic sand" }]] },
 };
 
 const GUIDE = [
-  ["slope", "1", { es: "Rayas = más de 25°: no se puede pasar. Puntos = lento y gasta más O₂.", en: "Stripes = over 25°: impassable. Dots = slow, uses more O₂." }, { es: "DTM HiRISE + CTX", en: "HiRISE + CTX DTM" }],
+  ["slope", "1", { es: "Rayas = más de 25° o campo de bloques: evítalo. Puntos = pendiente o terreno rocoso: lento y gasta más O₂.", en: "Stripes = over 25° or boulder field: avoid. Dots = slope or rocky ground: slow, uses more O₂." }, { es: "DTM HiRISE + CTX (pendiente y rugosidad)", en: "HiRISE + CTX DTM (slope and roughness)" }],
   ["radiation", "2", { es: "Liso = el terreno tapa parte del cielo. Rayas = zona expuesta. Importa sobre todo en una tormenta solar.", en: "Smooth = terrain blocks part of the sky. Stripes = exposed. Matters most during a solar storm." }, { es: "RAD (Curiosity)", en: "RAD (Curiosity)" }],
   ["thermal", "3", { es: "Rayas = suelo bajo −45 °C: la calefacción gasta energía extra. Busca laderas al sol.", en: "Stripes = ground below −45 °C: heating uses extra power. Seek sunny slopes." }, { es: "REMS + THEMIS", en: "REMS + THEMIS" }],
   ["spectral", "4", { es: "Cian arcillas · lila sulfatos · blanco boxwork · azul arena. Tus objetivos están sobre su mineral.", en: "Cyan clays · lilac sulfates · white boxwork · blue sand. Your targets sit on their mineral." }, { es: "CRISM (MRO)", en: "CRISM (MRO)" }],
@@ -71,6 +71,9 @@ export class Hud {
     $("missionLbl").textContent = `${ui("mission")} ${m.order}/${this.game.missions.length}`;
     $("missionTitle").textContent = t(m.title);
     $("missionObj").textContent = `${t(tg.name)} · ${fmtDist(d)}`;
+
+    // vista del destino (foto real de Curiosity) al acercarse
+    this._povHud(tg, d);
 
     // tutorial
     const tut = this.game.tutorialText();
@@ -149,7 +152,8 @@ export class Hud {
       row("O₂", `${num(remG, 0, lang)} g · ${num(remH, 1, lang)} h ${t({ es: "a este ritmo", en: "at this rate" })}`, remH < 1 ? "bad" : "") +
       row(t({ es: "GASTO", en: "USED" }), `${num(b.kcal, 0, lang)} kcal · O₂ ${num(b.o2g, 0, lang)} g · CO₂ ${num(b.co2g, 0, lang)} g`) +
       row(t({ es: "DOSIS", en: "DOSE" }), `${num(b.doseUgy, 1, lang)} µGy · ${num(b.doseUgy * Q_RAD, 1, lang)} µSv`) +
-      row(t({ es: "TERRENO", en: "TERRAIN" }), `η ${num(b.eta, 1, lang)} ${b.eta >= 2 ? t({ es: "arena suelta", en: "loose sand" }) : b.eta > 1.3 ? t({ es: "crestas", en: "ridges" }) : t({ es: "regolito firme", en: "firm regolith" })}`, b.eta >= 2 ? "warn" : "");
+      row(t({ es: "CARGA", en: "LOAD" }), `${num(bio.loadKg, 1, lang)} kg · ${s.cargo.carried} ${t({ es: "muestras", en: "samples" })} · ${t({ es: "traje", en: "suit" })} ${num(bio.suitKg, 0, lang)} kg`, s.cargo.carried >= 3 ? "warn" : "") +
+      row(t({ es: "TERRENO", en: "TERRAIN" }), `η ${num(b.eta, 1, lang)} ${b.rock === 2 ? t({ es: "campo de bloques", en: "boulder field" }) : b.rock === 1 ? t({ es: "terreno rocoso", en: "rocky ground" }) : b.eta >= 2 ? t({ es: "arena suelta", en: "loose sand" }) : b.eta > 1.3 ? t({ es: "crestas", en: "ridges" }) : t({ es: "regolito firme", en: "firm regolith" })}`, b.eta >= 1.8 || b.rock === 2 ? "warn" : "");
     const f = Math.round(b.fatigue);
     $("tmFat").style.width = f + "%";
     $("tmFat").parentElement.classList.toggle("low", f > 40 && f <= 75);
@@ -166,6 +170,21 @@ export class Hud {
     pct.classList.toggle("low", low && !crit);
     pct.classList.toggle("crit", crit);
     pct.textContent = Math.round(Math.max(0, v)) + "%";
+  }
+
+  _povHud(tg, d) {
+    const box = $("povHud");
+    const s = this.game.s;
+    const img = tg && this.data.pov?.images?.[tg.id]?.arrival;
+    const show = !!img && d < 300 && d > (tg.radius_m || 15) && !s.scanned && s.phase === "playing";
+    if (box.hidden !== !show) box.hidden = !show;
+    if (!show) return;
+    if (box.dataset.id !== tg.id) {
+      box.dataset.id = tg.id;
+      $("povHudImg").src = assetUrl(img.file);
+      $("povHudCap").textContent = `${t(img.caption)} · ${img.camera} · sol ${img.sol}`;
+    }
+    $("povHudLbl").textContent = `${ui("povArrival")} · ${fmtDist(d)}`;
   }
 
   setLockHint(text) { this._lockHint = text; }
