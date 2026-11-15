@@ -7,6 +7,7 @@
 import { t, getLang } from "../i18n.js";
 import { assetUrl } from "../data.js";
 import { Globe3D } from "./atlas3d.js";
+import { HackFx } from "./hackfx.js";
 import { MARS_GEO, wrapLon, gcDistance, gcBearing, gcInterpolate, pressureAt, columnMass, boilingPointC, fmtLat, fmtLon, fmtDMS, fmtDist, num } from "../geo.js";
 
 const $ = (id) => document.getElementById(id);
@@ -63,6 +64,27 @@ function rampLUT(stops, lo, hi, n = 1024, log = false) {
   return { lut, n, a, b, log };
 }
 
+// Relieve HRSC+MOLA 200 m e imagen THEMIS de dia 100 m de la zona que rodea el recorte EVA
+// (public/atlas/region.json, generado por data/scripts/fetch_region.py). Se pinta a la resolucion de la
+// imagen: el color sale del DEM (como el resto del atlas) y THEMIS aporta el detalle real de la superficie.
+async function loadRegion() {
+  const meta = await fetch(assetUrl("atlas/region.json")).then((r) => { if (!r.ok) throw new Error("region"); return r.json(); });
+  const d = meta.dem;
+  const raw = new Int16Array(await fetch(assetUrl("atlas/" + d.file)).then((r) => r.arrayBuffer()));
+  const elev = new Float32Array(d.w * d.h);
+  let last = 0;
+  for (let i = 0; i < elev.length; i++) { const v = raw[i]; elev[i] = v === d.nodata ? last : (last = v); }
+  const img = new Image();
+  // (img.decode() no siempre se resuelve en algunos navegadores incrustados: se espera al evento load)
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = assetUrl("atlas/" + meta.image.file); });
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth; c.height = img.naturalHeight;
+  const cx = c.getContext("2d");
+  cx.drawImage(img, 0, 0);
+  const photo = cx.getImageData(0, 0, c.width, c.height).data;
+  return { id: "region", ...d, elev, canvas: document.createElement("canvas"), photo, image: meta.image, meta };
+}
+
 async function loadRaster(meta, offset) {
   const r = await fetch(assetUrl("atlas/" + meta.file));
   if (!r.ok) throw new Error(`atlas/${meta.file}: ${r.status}`);
@@ -85,7 +107,7 @@ export class Atlas {
   constructor({ game, world, geo, data }) {
     this.game = game; this.world = world; this.geo = geo; this.data = data;
     this.isOpen = false;
-    this.mode = "hypso";
+    this.mode = "mars";      // tono marciano por defecto
     this.show = { grid: true, crater: true, volcano: true, region: true, canyon: true, polar: true, lander: true, phenomena: true, msl: true, drills: true, track: true, objectives: true, overlay: true };
     this.view = { lon: 137.8, lat: -5.0, s: 4 };
     this.measure = null;     // { a: {lat,lon}, b: {lat,lon} }
@@ -109,12 +131,14 @@ export class Atlas {
     this.meta = meta; this.feat = feat; this.trav = trav.points; this.drills = drills.drills;
     const [g, gale] = await Promise.all(meta.rasters.map((m) => loadRaster(m, meta.offset_m)));
     this.rGlobal = g; this.rGale = gale;
+    this.rRegion = await loadRegion().catch(() => null);      // ~60 km alrededor de la zona EVA (opcional)
     this.optical = new Image(); this.optical.src = assetUrl("layers/optical.png");
     this.overlays = {};
     ["slope", "radiation", "thermal", "spectral"].forEach((k) => { const im = new Image(); im.src = assetUrl(`layers/${k}_overlay.png`); this.overlays[k] = im; });
     this.optical.onload = () => this.dirty = true;
     this._shade(this.rGlobal, 18);
     this._shade(this.rGale, 4);
+    if (this.rRegion) this._shade(this.rRegion, 2);
     this._paint();
     this._buildSide();
     this._buildSearch();
@@ -167,9 +191,35 @@ export class Atlas {
       }
       ctx.putImageData(img, 0, 0);
     }
+    if (this.rRegion) this._paintRegion(lut);
     this._legend();
     if (this.g3) this.g3.texturesChanged();
     this.dirty = true;
+  }
+
+  // Zona de ~60 km: color de la rampa segun el DEM (200 m) y brillo de THEMIS (100 m) para el detalle real
+  _paintRegion(lut) {
+    const r = this.rRegion, im = r.image, W = im.w, H = im.h;
+    const c = r.canvas; c.width = W; c.height = H;
+    const ctx = c.getContext("2d"), out = ctx.createImageData(W, H), px = out.data;
+    const P = this.mode === "pressure";
+    for (let y = 0; y < H; y++) {
+      const lat = im.lat_north - (y + 0.5) / im.ppd;
+      const dy = Math.max(0, Math.min(r.h - 1, Math.round((r.lat_north - lat) * r.ppd - 0.5)));
+      for (let x = 0; x < W; x++) {
+        const lon = im.lon_west + (x + 0.5) / im.ppd;
+        const dx = Math.max(0, Math.min(r.w - 1, Math.round((lon - r.lon_west) * r.ppd - 0.5)));
+        const di = dy * r.w + dx, e = r.elev[di];
+        const v = P ? pressureAt(e) : e;
+        const tv = lut.log ? Math.log(Math.max(1, v)) : v;
+        const k = Math.max(0, Math.min(lut.n - 1, Math.round(((tv - lut.a) / (lut.b - lut.a)) * (lut.n - 1)))) * 3;
+        const t = r.photo[(y * W + x) * 4] / 255;                // THEMIS: 0 oscuro .. 1 claro
+        const s = (P ? 0.55 + 0.45 * r.shade[di] : 0.45 + 0.55 * r.shade[di]) * (0.45 + 0.9 * t);
+        const o = (y * W + x) * 4;
+        px[o] = Math.min(255, lut.lut[k] * s); px[o + 1] = Math.min(255, lut.lut[k + 1] * s); px[o + 2] = Math.min(255, lut.lut[k + 2] * s); px[o + 3] = 255;
+      }
+    }
+    ctx.putImageData(out, 0, 0);
   }
 
   // Crea el globo 3D la primera vez que hace falta (necesita MOLA y la ortoimagen ya cargadas)
@@ -180,7 +230,7 @@ export class Atlas {
     if (!this.optical.complete) await new Promise((res) => { this.optical.addEventListener("load", res, { once: true }); this.optical.addEventListener("error", res, { once: true }); });
     try {
       const g3 = new Globe3D($("atlasGl"));
-      g3.build(this.rGlobal, this.rGale, { bounds: this.geo.bounds, n: this.world.n, h: this.world.h, yRef: this.world.yRef, image: this.optical });
+      g3.build(this.rGlobal, this.rGale, { bounds: this.geo.bounds, n: this.world.n, h: this.world.h, yRef: this.world.yRef, image: this.optical }, this.rRegion);
       const v = this.view;
       g3.cam.lat = v.lat; g3.cam.lon = v.lon;
       this.g3 = g3;
@@ -473,7 +523,7 @@ export class Atlas {
   // En 3D: s (px/°) se traduce a altura de camara; opts = { alt, tilt } para fijarlas
   flyTo(lat, lon, s, opts = {}) {
     if (this.on3d) {
-      const c = this.g3.cam, a = { ...c }, t0 = performance.now(), dur = 1100, id = (this._fly = (this._fly || 0) + 1);
+      const c = this.g3.cam, a = { ...c }, t0 = performance.now(), dur = opts.dur || 1100, id = (this._fly = (this._fly || 0) + 1);
       const alt = opts.alt ?? this.g3.altForS(s);
       const tilt = opts.tilt ?? (alt > 0.6 ? 0 : alt > 0.05 ? 35 : 55);
       let dl = lon - a.lon; if (dl > 180) dl -= 360; if (dl < -180) dl += 360;
@@ -490,9 +540,10 @@ export class Atlas {
       requestAnimationFrame(step);
       return;
     }
-    const a = { ...this.view }, t0 = performance.now(), dur = 900;
+    const a = { ...this.view }, t0 = performance.now(), dur = opts.dur || 900, id = (this._fly = (this._fly || 0) + 1);
     let dl = lon - a.lon; if (dl > 180) dl -= 360; if (dl < -180) dl += 360;
     const step = (now) => {
+      if (id !== this._fly) return;
       const u = Math.min(1, (now - t0) / dur), e = u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
       this.view.lon = a.lon + dl * e; this.view.lat = a.lat + (lat - a.lat) * e;
       this.view.s = Math.exp(Math.log(a.s) + (Math.log(s) - Math.log(a.s)) * e);
@@ -501,22 +552,80 @@ export class Atlas {
     };
     requestAnimationFrame(step);
   }
-  go(where) {
+  go(where, opts = {}) {
+    if (where === "tour") return this.tour();
+    this._tourId = 0;                                     // un salto pedido a mano corta el recorrido
     const me = this.playerLL();
     const fit = (km) => Math.min(this.W, this.H) / (km * 1000 / M_PER_DEG);
-    if (where === "global") this.flyTo(this.on3d ? 8 : 0, me.lon, this.minS, { alt: 3.3, tilt: 0 });
-    else if (where === "gale") this.flyTo(-5.2, 137.6, fit(260));
-    else if (where === "eva") { const b = this.geo.bounds; this.flyTo((b.north_lat + b.south_lat) / 2, (b.west_lon_east + b.east_lon_east) / 2, fit(7)); }
-    else if (where === "me") this.flyTo(me.lat, me.lon, Math.max(this.view.s, fit(1.5)));
+    if (where === "global") this.flyTo(this.on3d ? 8 : 0, me.lon, this.minS, { alt: 3.3, tilt: 0, ...opts });
+    else if (where === "gale") this.flyTo(-5.2, 137.6, fit(260), opts);
+    else if (where === "eva") { const b = this.geo.bounds; this.flyTo((b.north_lat + b.south_lat) / 2, (b.west_lon_east + b.east_lon_east) / 2, fit(7), opts); }
+    else if (where === "me") this.flyTo(me.lat, me.lon, Math.max(where === "me" && opts.fromTour ? 0 : this.view.s, fit(1.5)), opts);
   }
 
-  open(where = "eva") {
+  // Recorrido de entrada: Marte entero -> crater Gale -> zona EVA -> tu posicion (~5 s), con la capa terminal.
+  // Cada tramo espera a que termine el anterior; si el usuario mueve la vista o pulsa un boton, se detiene.
+  async tour() {
+    const id = (this._tourId = (this._tourId || 0) + 1);
+    const fx = (this.fx ||= new HackFx());
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const me = this.playerLL(), b = this.geo.bounds;
+    const evaLL = [(b.north_lat + b.south_lat) / 2, (b.west_lon_east + b.east_lon_east) / 2];
+    const legs = [
+      ["global", 450, 250, { name: "Marte", lat: 8, lon: me.lon, src: "MOLA 8 px/° (~7,4 km)" }],
+      ["gale", 1200, 300, { name: "Cráter Gale", lat: -5.2, lon: 137.6, src: "MOLA 64 px/° + HRSC" }],
+      ["eva", 1000, 280, { name: "Zona EVA", lat: evaLL[0], lon: evaLL[1], src: "DTM HiRISE + CTX 6 m/px" }],
+      ["me", 800, 0, { name: this.game.bio?.p?.name || "EVA-1", lat: me.lat, lon: me.lon, src: "telemetría del traje" }],
+    ];
+    fx.start();
+    const g3 = this.on3d && this.g3;
+    const stop = () => fx.stop();
+    // cada tramo anuncia en el terminal la capa de relieve que se usa: Gale (MOLA 64 px/°), la zona de 60 km
+    // y el DTM de la zona EVA
+    for (const [where, dur, pause, info] of legs) {
+      if (id !== this._tourId || !this.isOpen) { stop(); return; }
+      const tid = this._tourId;
+      this.go(where, { dur, fromTour: true });
+      this._tourId = tid;                                 // go() lo pone a 0: el recorrido sigue siendo el dueno
+      fx.leg({ ...info, dur });
+      if (g3 && where === "gale") {
+        const G = this.rGale;
+        setTimeout(() => fx.line(`cargando MOLA 64 px/° · ${G.w}×${G.h}`, "dim"), 360);
+      }
+      if (g3 && where === "eva") {
+        if (this.rRegion) {
+          const R = this.rRegion;
+          setTimeout(() => fx.line(`cargando HRSC 200 m + THEMIS 100 m`, "dim"), 360);
+        }
+        setTimeout(() => { if (id === this._tourId) { fx.line("cargando DTM HiRISE+CTX 6 m/px", "dim"); } }, dur * 0.4);
+      }
+      // espera vigilando: si el usuario toma el control a mitad del tramo, la capa se quita al instante
+      const fly = this._fly, end = performance.now() + dur + pause;
+      while (performance.now() < end) {
+        await wait(50);
+        if (fly !== this._fly || id !== this._tourId || !this.isOpen) { stop(); return; }
+      }
+    }
+    fx.finish();
+  }
+
+  // Coloca la vista en Marte entero sin animacion (punto de partida del recorrido)
+  _startGlobal() {
+    const me = this.playerLL();
+    if (this.g3) { this._fly = (this._fly || 0) + 1; Object.assign(this.g3.cam, { lat: 8, lon: me.lon, alt: 3.3, tilt: 0, heading: 0 }); }
+    this.view = { lat: 0, lon: me.lon, s: this.minS || 2 };
+    this.dirty = true;
+  }
+  _afterOpen() { this._profile(); this._info(); this._readout(); }
+
+  open(where = "tour") {
     this.isOpen = true;
     $("scrAtlas").hidden = false;
     this._resize();
     this.ready.then(() => {
       if (!this._opened) { this._opened = true; const b = this.geo.bounds; this.view = { lat: (b.north_lat + b.south_lat) / 2, lon: (b.west_lon_east + b.east_lon_east) / 2, s: 4 }; this._resize(); }
-      if (this.is3d && !this.g3) { this._sync3dUi(); this._ensure3d().then(() => this.go(where)); }
+      if (where === "tour") this._startGlobal();
+      if (this.is3d && !this.g3) { this._sync3dUi(); this._ensure3d().then(() => { this._startGlobal(); this.go(where); }); return this._afterOpen(); }
       this.go(where);
       this._profile();
       this._info();
@@ -526,7 +635,7 @@ export class Atlas {
     const loop = () => { if (!this.isOpen) return; if (this.dirty) this.render(); requestAnimationFrame(loop); };
     requestAnimationFrame(loop);
   }
-  close() { this.isOpen = false; $("scrAtlas").hidden = true; this.onClose && this.onClose(); }
+  close() { this.isOpen = false; this._tourId = 0; if (this.fx) this.fx.stop(); $("scrAtlas").hidden = true; this.onClose && this.onClose(); }
   toggle(where) { this.isOpen ? this.close() : this.open(where); }
 
   playerLL() { const s = this.game.s; return this.geo.toLatLon(s.x, s.z); }
@@ -544,6 +653,8 @@ export class Atlas {
       return { elev: this.world.demHeight(p.x, p.z) + this.world.yRef, src: L("DTM HiRISE+CTX · 6 m/px", "HiRISE+CTX DTM · 6 m/px"), local: p };
     }
     if (!this.rGlobal) return null;
+    const rr = this.rRegion && this.sampleRaster(this.rRegion, lat, lon);
+    if (rr != null && rr !== false) return { elev: rr, src: L("HRSC+MOLA · 200 m/px", "HRSC+MOLA · 200 m/px") };
     const g = this.sampleRaster(this.rGale, lat, lon);
     if (g != null) return { elev: g, src: L("MOLA · 64 px/° (~925 m)", "MOLA · 64 px/° (~925 m)") };
     return { elev: this.sampleRaster(this.rGlobal, lat, lon), src: L("MOLA · 8 px/° (~7,4 km)", "MOLA · 8 px/° (~7.4 km)") };
@@ -592,6 +703,8 @@ export class Atlas {
     this._drawGeoImage(G.canvas, 0, 90, 360, 180, G.w, G.h);
     ctx.imageSmoothingEnabled = true;
     if (v.s > 30) this._drawGeoImage(R.canvas, R.lon_west, R.lat_north, R.w / R.ppd, R.h / R.ppd, R.w, R.h, Math.min(1, (v.s - 30) / 30));
+    const RG = this.rRegion;
+    if (RG && v.s > 150) { const im = RG.image; this._drawGeoImage(RG.canvas, im.lon_west, im.lat_north, im.w / im.ppd, im.h / im.ppd, im.w, im.h, Math.min(1, (v.s - 150) / 150)); }
     if (v.s > 1500 && this.optical.complete) {
       const a = Math.min(1, (v.s - 1500) / 1500);
       this._drawGeoImage(this.optical, b.west_lon_east, b.north_lat, b.east_lon_east - b.west_lon_east, b.north_lat - b.south_lat, this.optical.naturalWidth, this.optical.naturalHeight, a);

@@ -144,10 +144,11 @@ export class Globe3D {
   }
 
   // rG, rGale: rasters del atlas ({w, h, ppd, lat_north, lon_west, elev, canvas}); local: {bounds, n, h(Float32), yRef, image}
-  build(rG, rGale, local) {
+  build(rG, rGale, local, region = null) {
     const mk = (canvasOrImg) => { const t = new THREE.CanvasTexture(canvasOrImg); t.colorSpace = THREE.NoColorSpace; t.anisotropy = this.renderer.capabilities.getMaxAnisotropy(); t.wrapS = THREE.ClampToEdgeWrapping; return t; };
     const galeN = rGale.lat_north, galeW = rGale.lon_west, galeLat = rGale.h / rGale.ppd, galeLon = rGale.w / rGale.ppd;
     const b = local.bounds, m64 = 1 / rGale.ppd;
+    const rb = region ? { n: region.lat_north, w: region.lon_west, s: region.lat_north - region.h / region.ppd, e: region.lon_west + region.w / region.ppd } : null;
     // --- globo: 720 x 360 celdas (0,5°). Bajo el parche de Gale se hunde para que no asome ---
     const NX = 720, NY = 360, sx = rG.w / NX, sy = rG.h / NY;
     const gElev = (i, j) => {
@@ -165,6 +166,8 @@ export class Globe3D {
       let e = rGale.elev[y * rGale.w + x];
       const lat = galeN - (j / rGale.h) * galeLat, lon = galeW + (i / rGale.w) * galeLon;
       if (lat < b.north_lat - m64 && lat > b.south_lat + m64 && lon > b.west_lon_east + m64 && lon < b.east_lon_east - m64) e -= 2500;
+      // bajo la zona de 60 km (HRSC+MOLA 200 m) tambien se hunde: si no, el MOLA grueso asomaria por encima
+      else if (rb && lat < rb.n - m64 && lat > rb.s + m64 && lon > rb.w + m64 && lon < rb.e - m64) e -= 2500;
       return e;
     };
     this.texGale = mk(rGale.canvas);
@@ -175,11 +178,25 @@ export class Globe3D {
     this.texLocal = mk(local.image);
     const loc = new THREE.Mesh(gridMesh(b.north_lat, b.west_lon_east, b.north_lat - b.south_lat, b.east_lon_east - b.west_lon_east, NL, NL, lElev, 1800), terrainMaterial(this.texLocal, 6e-6, false));
     this.localMat = loc.material;
-    for (const m of [globe, gale, loc]) { m.frustumCulled = false; this.scene.add(m); this.mats.push(m.material); }
+    const meshes = [globe, gale, loc];
+    // --- zona de ~60 km: HRSC+MOLA 200 m, una celda por pixel; hundida bajo la zona EVA ---
+    if (region) {
+      const rStep = 1 / region.ppd;
+      const rElev = (i, j) => {
+        let e = region.elev[Math.min(region.h - 1, j) * region.w + Math.min(region.w - 1, i)];
+        const lat = rb.n - (j / region.h) * (rb.n - rb.s), lon = rb.w + (i / region.w) * (rb.e - rb.w);
+        if (lat < b.north_lat - rStep && lat > b.south_lat + rStep && lon > b.west_lon_east + rStep && lon < b.east_lon_east - rStep) e -= 1500;
+        return e;
+      };
+      this.texRegion = mk(region.canvas);
+      const reg = new THREE.Mesh(gridMesh(rb.n, rb.w, rb.n - rb.s, rb.e - rb.w, region.w, region.h, rElev, 2500), terrainMaterial(this.texRegion, 4.5e-6, false));
+      meshes.push(reg);
+    }
+    for (const m of meshes) { m.frustumCulled = false; this.scene.add(m); this.mats.push(m.material); }
     this.built = true;
   }
 
-  texturesChanged() { if (this.texG) { this.texG.needsUpdate = true; this.texGale.needsUpdate = true; } }
+  texturesChanged() { if (this.texG) { this.texG.needsUpdate = true; this.texGale.needsUpdate = true; if (this.texRegion) this.texRegion.needsUpdate = true; } }
   setOverlay(img) {
     if (!this.localMat) return;
     if (img && img.complete && img.naturalWidth) {

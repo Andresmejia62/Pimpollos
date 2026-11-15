@@ -519,3 +519,13 @@ button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .sim-log .li { color: var(--hud-text-dim); font-size: calc(var(--u) * .86); line-height: 1.35; }
 .sim-log .li b { color: var(--safe); }
 #hud .sim select, #hud .sim input, #hud .sim label { pointer-events: auto; }
+
+/* ---- Atlas: terminal del recorrido de entrada ---------------------------------- */
+.hackfx { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: hidden; transition: opacity .35s;
+  font: 500 10px/1.35 ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: #39ff9c; text-shadow: 0 0 6px rgba(57,255,156,.5); }
+.hackfx.out { opacity: 0; }
+.fx-term { position: absolute; right: 70px; bottom: 54px; width: min(260px, 40%); padding: 6px 8px; background: rgba(2,14,8,.75); border: 1px solid rgba(57,255,156,.4); border-radius: 4px; }
+.fx-term .dim { color: rgba(57,255,156,.55); }
+.fx-term .ok { color: #ffd34d; text-shadow: 0 0 6px rgba(255,211,77,.6); }
+.fx-bar { margin-top: 4px; letter-spacing: .02em; }
+@media (max-width: 760px) { .fx-term { right: 12px; left: 12px; width: auto; bottom: 120px; } }

@@ -373,8 +373,8 @@ async function boot() {
     controls.enabled = true;
     game.startMission(0);
   };
-  $("btnAtlas").onclick = () => openAtlas("global");
-  $("minimap").onclick = () => openAtlas("eva");
+  $("btnAtlas").onclick = () => openAtlas("tour");
+  $("minimap").onclick = () => openAtlas("tour");
   // Cerrar el atlas con M o Esc funciona siempre, tambien abierto desde la portada o la pausa (antes dependia de
   // los controles del juego, que solo se activan al empezar la EVA). En fase de captura y cortando el evento,
   // para que la misma pulsacion no lo vuelva a abrir ni abra la pausa.
@@ -403,7 +403,7 @@ async function boot() {
   const pause = new PauseMenu({
     game, geo, world,
     onResume: () => setPaused(false),
-    onAtlas: () => { setPaused(false); openAtlas("eva"); },
+    onAtlas: () => { setPaused(false); openAtlas("tour"); },
     onGuide: () => show("scrGuide"),
     onLang: toggleLang,
     onRetry: () => { setPaused(false); hud.clearDialogs(); game.retry(); },
@@ -432,7 +432,7 @@ async function boot() {
     if (k === "r") game.setRoute();
     if (k === "e" && game.toggleVehicle()) sfx.blip();
     if (k === "h") show("scrGuide", $("scrGuide").hidden);
-    if (k === "m") openAtlas("eva");
+    if (k === "m") openAtlas("tour");
     if (k === "i") $("telem").hidden = !$("telem").hidden;
     if (k === "p") sky.labelsOn = !sky.labelsOn;
     // gestos del personaje (a pie): Z saludar, X pulgar, C sentarse, V bailar, B estirarse

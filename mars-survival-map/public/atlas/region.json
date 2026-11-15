@@ -1,0 +1,26 @@
+{
+ "_doc": "Relieve e imagen de ~60 km alrededor del recorte EVA para el atlas 3D. Generado por data/scripts/fetch_region.py.",
+ "dem": {
+  "w": 297,
+  "h": 297,
+  "lat_north": -4.269561887278897,
+  "lon_west": 136.8940542929721,
+  "ppd": 296.37350000000583,
+  "res_m": 200.0,
+  "file": "region_dem.bin",
+  "dtype": "int16",
+  "nodata": -32768,
+  "source": "Mars MGS MOLA - MEX HRSC Blended DEM Global 200m v2 (USGS Astrogeology)",
+  "url": "https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/Mars/HRSC_MOLA_Blend/Mars_HRSC_MOLA_BlendDEM_Global_200mp_v2.tif"
+ },
+ "image": {
+  "w": 594,
+  "h": 593,
+  "lat_north": -4.269950089588962,
+  "lon_west": 136.8939175270298,
+  "ppd": 592.7469752330621,
+  "file": "region_themis.jpg",
+  "source": "Mars Odyssey THEMIS Day IR Global Mosaic 100m v12 (ASU / USGS)",
+  "url": "https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/Mars_MO_THEMIS-IR-Day_mosaic_global_100m_v12.tif"
+ }
+}
