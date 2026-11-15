@@ -13,6 +13,8 @@ import { INTERIORS, makeGround } from "./engine/interiors.js";
 import { Achievements, ACHIEVEMENTS } from "./gameplay/achievements.js";
 import { MINERALS, drawSpectrum } from "./ui/spectrum.js";
 import { Controls } from "./engine/controls.js";
+import { TOUCH } from "./device.js";
+import { TouchUI } from "./ui/touch.js";
 import { Game } from "./gameplay/game.js";
 import { AlertSystem } from "./gameplay/alerts.js";
 import { Pathfinder } from "./gameplay/pathfinding.js";
@@ -67,7 +69,7 @@ async function boot() {
     buddyAstro.opts.accent = p.look.accent === "blue" ? "#d4541c" : "#2f7de1"; buddyAstro.setLook({}); };
   applyProfile(loadProfile());
   const profile = new ProfileScreen(game.o2CapacityG);
-  const openAtlas = (where) => { atlas.open(where); controls.unlock(); sfx.whoosh(true); };
+  const openAtlas = (where) => { atlas.open(where); controls.unlock(); sfx.whoosh(true); if (touch) touch.update({ active: false }); };
 
   // ---- sonido ambiente, polvo y camara ---------------------------------------------------
   const soundscape = new Soundscape();
@@ -141,6 +143,11 @@ async function boot() {
     scene.setRoute(pts); hud.minimap.setRoute(pts);
   };
   const controls = new Controls(canvas);
+  // movil y tableta: joystick, camara con el dedo y botones (ui/touch.js); en ordenador no se crea nada
+  // (la condicion de "activo" se evalua en cada toque; las variables que usa se declaran mas abajo)
+  const touchActive = () => game.s.phase === "playing" && !paused && !intro.active && !atlas.isOpen && $("scrGuide").hidden && $("scrPlan").hidden && $("scrProfile").hidden;
+  const touch = TOUCH ? new TouchUI(controls, canvas, () => touchActive()) : null;
+  if (TOUCH) $("telem").hidden = true;           // en el movil la telemetria ocupa la zona del pulgar: se abre con ⓘ
   const car = buildMarsRover(scene);
   // planetas en el cielo: posiciones reales de hoy vistas desde Gale (engine/planets.js). P = etiquetas
   // van en la escena lejana, detras del relieve real del crater (el borde y el monte Sharp los tapan)
@@ -228,7 +235,7 @@ async function boot() {
   const veinBeacons = { list: [], key: null };
 
   // ---- idioma y pantallas ----------------------------------------------------------
-  const toggleLang = () => { setLang(getLang() === "es" ? "en" : "es"); hud.applyLang(); atlas.applyLang(); skyCaption(); if (game.s.phase === "briefing") showBriefing(); if (game.s.free) sim.render(); };
+  const toggleLang = () => { setLang(getLang() === "es" ? "en" : "es"); hud.applyLang(); atlas.applyLang(); if (touch) touch.applyLang(); skyCaption(); if (game.s.phase === "briefing") showBriefing(); if (game.s.free) sim.render(); };
   hud.applyLang();
   skyCaption();
   // la carga se desvanece sobre la portada
@@ -696,7 +703,7 @@ async function boot() {
     onMenu: () => location.reload(),
   });
   pause.ach = ach;
-  const setPaused = (p) => { paused = p; show("scrPause", p); if (p) { controls.unlock(); pause.open(); } else pause.close(); };
+  const setPaused = (p) => { paused = p; show("scrPause", p); if (p) { controls.unlock(); pause.open(); if (touch) touch.update({ active: false }); } else pause.close(); };
   document.querySelectorAll("#layerbar button").forEach((b) => {
     b.onclick = () => (b.dataset.layer === "route" ? game.setRoute() : game.setLayer(b.dataset.layer));
   });
@@ -886,8 +893,12 @@ async function boot() {
       if (s.free) { if (!game.target && hud.minimap.route) hud.minimap.setRoute(null); sim.update(now); }
       else if (!$("simPanel").hidden) $("simPanel").hidden = true;
       updateBeacons();
-      hud.setLockHint(controls.locked || s.phase !== "playing" ? "" : ui("clickToLook"));
+      hud.setLockHint(controls.locked || s.phase !== "playing" || TOUCH ? "" : ui("clickToLook"));
       hud.update(now);
+    }
+    if (touch) {
+      // los controles tactiles solo se ven (y solo actuan) con la partida en marcha y sin menus encima
+      touch.update({ active: touchActive(), driving: s.driving, free: s.free, car: !$("carPrompt").hidden, assist: !$("buddyPrompt").hidden, visor: !$("visorPrompt").hidden });
     }
     dust.update(dt, 0.35 + 0.65 * scene.skyMat.uniforms.uDay.value);
     car.update(dt, s.car.x, s.car.z, s.car.heading, s.driving ? s.speed : 0, now, s.driving ? s.y : null, s.driving ? s.air : 0);
@@ -913,7 +924,7 @@ async function boot() {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  window.__msm = { game, scene, world, path, controls, atlas, geo, car, astro, buddyAstro, sky, buddy, planner, intro, sim, soundscape, dust, weather, windfx, ach, interiors: INTERIORS }; // para depurar desde la consola
+  window.__msm = { game, scene, world, path, controls, atlas, geo, car, astro, buddyAstro, sky, buddy, planner, intro, sim, soundscape, dust, weather, windfx, ach, interiors: INTERIORS, touch, touchActive }; // para depurar desde la consola
 }
 
 boot().catch((e) => {

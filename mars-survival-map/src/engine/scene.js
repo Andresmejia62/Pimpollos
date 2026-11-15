@@ -28,7 +28,7 @@ const SANITIZE = {
       gl_FragColor = vec4(clamp(col, 0.0, 48.0), 1.0);
     }`,
 };
-import { GFX, onGfx } from "../gfx.js";
+import { GFX, onGfx, MAX_DPR, SHADOW_SIZE } from "../gfx.js";
 
 // Dibuja las dos escenas (lejana y cercana) en el bufer del compositor, como render() sin post-proceso
 class DualRenderPass extends Pass {
@@ -558,7 +558,7 @@ export class MarsScene {
     this.world = world;
     this.data = data;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_DPR));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.22;
@@ -718,7 +718,7 @@ export class MarsScene {
     this.hemi = new THREE.HemisphereLight("#e9c6a4", "#6a4230", 1.0);
     this.sun = new THREE.DirectionalLight("#fff0dc", 2.4);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.mapSize.set(SHADOW_SIZE, SHADOW_SIZE);
     const c = this.sun.shadow.camera;
     // la luz esta a 200 m del jugador hacia el sol: mas alla de ~60 m por detras nada proyecta sombra en la zona visible
     c.left = -46; c.right = 46; c.top = 46; c.bottom = -46; c.near = 1; c.far = 260;
@@ -1216,7 +1216,7 @@ export class MarsScene {
     this._adaptT = (this._adaptT || 0) + dt;
     this._goodT = this._ft < 1 / 57 ? (this._goodT || 0) + dt : 0;
     if (this._adaptT < 2) return;
-    const base = Math.min(window.devicePixelRatio, 1.75), lo = Math.max(0.75, base * 0.6), pr = this.renderer.getPixelRatio();
+    const base = Math.min(window.devicePixelRatio, MAX_DPR), lo = Math.max(0.75, base * 0.6), pr = this.renderer.getPixelRatio();
     let next = pr;
     if (this._ft > 1 / 42 && pr > lo + 0.01) next = Math.max(lo, pr - 0.15);
     else if (this._goodT > 8 && pr < base - 0.01) { next = Math.min(base, pr + 0.1); this._goodT = 0; }

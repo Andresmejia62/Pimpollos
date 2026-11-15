@@ -1,4 +1,12 @@
 import { t, ui, getLang } from "../i18n.js";
+import { TOUCH } from "../device.js";
+// En pantallas tactiles, los pasos del tutorial que nombran teclas se muestran con los controles en pantalla
+// (los textos originales de public/story/missions.json no se tocan)
+const TOUCH_TUTORIAL = {
+  t_move: { es: "Mueve el joystick (toca la mitad izquierda) para caminar. Arrastra el dedo a la derecha para mirar.", en: "Use the joystick (touch the left half) to walk. Drag on the right half to look around." },
+  t_layers: { es: "Toca «1 Pendiente/rocas» para ver la capa de PENDIENTE. Rayas rojas = demasiado empinado, no se puede pasar.", en: "Tap «1 Slope/rocks» to show the SLOPE layer. Red stripes = too steep, you cannot pass." },
+  t_route: { es: "Toca «R Ruta» para ver la ruta sugerida en el minimapa.", en: "Tap «R Route» to show the suggested route on the minimap." },
+};
 import { assetUrl } from "../data.js";
 import { typeName, typeIcon, pointFacts } from "../structinfo.js";
 import { gcDistance, gcBearing, pressureAt, fmtLat, fmtLon, fmtDist as fmtD, num } from "../geo.js";
@@ -81,7 +89,8 @@ export class Hud {
     this._structCard();
 
     // tutorial
-    const tut = this.game.tutorialText() || (s.scanBlocked ? { es: `Antes de escanear encuentra las ${this.game.subsLeft} vetas que faltan: activa la capa espectral (4) para verlas.`, en: `Before scanning, find the ${this.game.subsLeft} remaining veins: turn on the spectral layer (4) to see them.` } : null);
+    const step = TOUCH && this.game.mission && this.game.mission.tutorial && this.game.mission.tutorial[s.tutorialStep];
+    const tut = (step && TOUCH_TUTORIAL[step.id]) || this.game.tutorialText() || (s.scanBlocked ? { es: `Antes de escanear encuentra las ${this.game.subsLeft} vetas que faltan: activa la capa espectral (4) para verlas.`, en: `Before scanning, find the ${this.game.subsLeft} remaining veins: turn on the spectral layer (4) to see them.` } : null);
     $("tutorial").hidden = !tut;
     if (tut) $("tutorial").textContent = t(tut);
 

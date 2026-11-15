@@ -1,5 +1,6 @@
 import { Raycaster, Vector3 } from "three";
-// Entrada de teclado/raton y camara en tercera persona.
+import { TOUCH } from "../device.js";
+// Entrada de teclado/raton (y tactil, via ui/touch.js) y camara en tercera persona.
 export class Controls {
   constructor(canvas) {
     this.canvas = canvas;
@@ -10,6 +11,9 @@ export class Controls {
     this.locked = false;
     this.handlers = {};
     this.enabled = false;
+    // entrada tactil (ui/touch.js): joystick analogico [lado, adelante] con modulo <= 1, y salto mantenido
+    this.touchMove = null;
+    this.touchJump = false;
     window.addEventListener("keydown", (e) => {
       if (e.repeat) return;
       const k = e.key.toLowerCase();
@@ -21,7 +25,8 @@ export class Controls {
     window.addEventListener("keyup", (e) => this.keys.delete(e.key.toLowerCase()));
     window.addEventListener("blur", () => this.keys.clear());
     canvas.addEventListener("click", () => {
-      if (this.enabled && !this.locked && canvas.requestPointerLock) {
+      // en pantallas tactiles no hay captura del puntero: la camara se gira arrastrando el dedo
+      if (!TOUCH && this.enabled && !this.locked && canvas.requestPointerLock) {
         const p = canvas.requestPointerLock();
         if (p && p.catch) p.catch(() => {});
       }
@@ -52,6 +57,20 @@ export class Controls {
   }
 
   on(evt, fn) { this.handlers[evt] = fn; }
+
+  // ---- API para los controles tactiles: las mismas acciones que el teclado, por el mismo camino --------------
+  // pulsar una tecla (accion discreta: E, V, R, Esc...): mismo manejador que keydown
+  press(k) { if (this.enabled && this.handlers.key) this.handlers.key(k, { target: null, preventDefault() {} }); }
+  // mantener una tecla (F para ayudar a EVA-2): el juego la lee igual que si estuviera pulsada en el teclado
+  hold(k, on) { if (on) this.keys.add(k); else this.keys.delete(k); }
+  // girar la camara con el dedo (px de desplazamiento)
+  look(dx, dy) {
+    this.yaw -= dx * 0.0055;
+    this.pitch = Math.max(-1.1, Math.min(0.45, this.pitch - dy * 0.0042));
+  }
+  zoomBy(k) { this.dist = Math.max(3, Math.min(120, this.dist * k)); }
+  // suelta todo (al perder el foco, al pausar o si el sistema cancela un toque)
+  releaseTouch() { this.touchMove = null; this.touchJump = false; this.keys.delete("f"); }
   unlock() { if (document.pointerLockElement) document.exitPointerLock(); }
 
   // Vector de movimiento en el plano (x Este, z Sur) segun WASD/flechas y la orientacion de la camara
@@ -62,16 +81,23 @@ export class Controls {
     if (k.has("s") || k.has("arrowdown")) f -= 1;
     if (k.has("d") || k.has("arrowright")) s += 1;
     if (k.has("a") || k.has("arrowleft")) s -= 1;
+    let mag = 1;
+    // joystick tactil: solo si no se usa el teclado; el modulo (0..1) da la velocidad (andar despacio o normal)
+    if (!f && !s && this.touchMove) {
+      [s, f] = this.touchMove;
+      mag = Math.min(1, Math.hypot(s, f));
+      if (mag < 1e-3) return null;
+    }
     if (!f && !s) return null;
     // yaw = 0 mira al norte (-z); yaw = PI mira al sur (+z)
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
     const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
     let x = fx * f + rx * s, z = fz * f + rz * s;
     const l = Math.hypot(x, z);
-    return [x / l, z / l];
+    return [(x / l) * mag, (z / l) * mag];
   }
 
-  jumpHeld() { return this.keys.has(" "); }
+  jumpHeld() { return this.keys.has(" ") || this.touchJump; }
 
   // Coloca la camara detras del jugador sin atravesar el terreno ni las estructuras.
   // occluders(x, z) -> grupos 3D cercanos: si alguno se interpone entre la cabeza y la camara (un techo, una
