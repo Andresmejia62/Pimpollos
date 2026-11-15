@@ -1,0 +1,55 @@
+{
+ "_doc": "Generado por data/scripts/build_atlas.mjs. Elevacion = u*q - offset_m (ver cabecera del script para el formato), en metros sobre el areoide MOLA. Pixel (col, fila) -> lon = lon_west + (col+0.5)/ppd, lat = lat_north - (fila+0.5)/ppd.",
+ "offset_m": 10000,
+ "mars": {
+  "radius_mean_m": 3389500,
+  "radius_equatorial_m": 3396190,
+  "g_ms2": 3.721,
+  "datum_pressure_pa": 610,
+  "scale_height_m": 11100
+ },
+ "rasters": [
+  {
+   "id": "global",
+   "file": "mola_global.z",
+   "w": 2880,
+   "h": 1440,
+   "q": 4,
+   "ppd": 8,
+   "lat_north": 90,
+   "lon_west": 0,
+   "min": -8135,
+   "max": 21159.25,
+   "source": "MGS MOLA MEGDR megt90n000eb (16 pix/grado), promediado a 8 pix/grado",
+   "url": "https://pds-geosciences.wustl.edu/mgs/mgs-m-mola-5-megdr-l3-v1/mgsl_300x/meg016/megt90n000eb.img"
+  },
+  {
+   "id": "gale",
+   "file": "mola_gale.z",
+   "w": 448,
+   "h": 416,
+   "q": 1,
+   "ppd": 64,
+   "lat_north": -2,
+   "lon_west": 134.5,
+   "min": -4609,
+   "max": 1995,
+   "source": "MGS MOLA MEGDR megt00n000gb (64 pix/grado), recorte",
+   "url": "https://pds-geosciences.wustl.edu/mgs/mgs-m-mola-5-megdr-l3-v1/mgsl_300x/meg064/megt00n000gb.img"
+  }
+ ],
+ "check": {
+  "_doc": "Elevacion MOLA en la posicion de aterrizaje de Curiosity frente a su propia medida (elev_geoid).",
+  "landing": {
+   "lat": -4.589467,
+   "lon": 137.441633,
+   "msl_elev_m": -4500.971,
+   "mola_gale_m": -4505
+  }
+ },
+ "curiosity_landing": {
+  "lat": -4.589467,
+  "lon": 137.441633,
+  "sol": 3
+ }
+}

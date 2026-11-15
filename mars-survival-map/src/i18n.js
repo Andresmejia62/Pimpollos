@@ -46,8 +46,8 @@ const UI = {
   resume: { es: "Volver al juego", en: "Resume" },
   controls: { es: "Controles", en: "Controls" },
   controlsList: {
-    es: "W A S D: caminar / conducir · Espacio: saltar · E: subir o bajar del rover · Ratón: mirar (clic para capturar) · Rueda: alejar cámara · 1–4: capas · R: ruta · H: ayuda · M: atlas de Marte · I: telemetría · Esc: pausa",
-    en: "W A S D: walk / drive · Space: jump · E: board or leave the rover · Mouse: look (click to capture) · Wheel: camera distance · 1–4: layers · R: route · H: help · M: Mars atlas · I: telemetry · Esc: pause",
+    es: "W A S D: caminar / conducir · Espacio: saltar · E: subir o bajar del rover · Ratón: mirar (clic para capturar) · Rueda: alejar cámara · 1–4: capas · R: ruta · H: ayuda · M: atlas de Marte · I: telemetría · P: nombres de los planetas · Esc: pausa",
+    en: "W A S D: walk / drive · Space: jump · E: board or leave the rover · Mouse: look (click to capture) · Wheel: camera distance · 1–4: layers · R: route · H: help · M: Mars atlas · I: telemetry · P: planet names · Esc: pause",
   },
   stormIn: { es: "Tormenta solar · llega en", en: "Solar storm · arrives in" },
   stormActive: { es: "Tormenta solar activa", en: "Solar storm active" },

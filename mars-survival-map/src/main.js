@@ -16,6 +16,8 @@ import { Atlas } from "./ui/atlas.js";
 import { ProfileScreen } from "./ui/profile.js";
 import { loadProfile } from "./engine/physiology.js";
 import { LoadingScreen, PauseMenu } from "./ui/screens.js";
+import { SkyPlanets } from "./engine/planets.js";
+import { Vector3 as THREE_V } from "three";
 
 const $ = (id) => document.getElementById(id);
 const DEBUG = new URLSearchParams(location.search).has("debug");
@@ -46,6 +48,17 @@ async function boot() {
   const openAtlas = (where) => { atlas.open(where); controls.unlock(); };
   const controls = new Controls(canvas);
   const car = buildMarsRover(scene);
+  // planetas en el cielo: posiciones reales de hoy vistas desde Gale (engine/planets.js). P = etiquetas
+  const sky = new SkyPlanets(scene.scene, (p, m) => `${t(p.name)}${p.id === "earth" ? " + " + t({ es: "Luna", en: "Moon" }) : ""}  ${m.toFixed(1).replace(".", getLang() === "es" ? "," : ".")}`);
+  const skyTau = () => 0.6 + 4 * (scene.storm || 0);           // opacidad tipica del polvo en Gale ~0,5-0,8
+  // leyenda de la portada: que planetas hay hoy en el cielo de Gale
+  const skyCaption = () => {
+    const eph = sky.ephemeris(), lang = getLang();
+    const vis = eph.planets.filter((p) => ["venus", "earth", "jupiter", "saturn", "mercury"].includes(p.id) && p.mag < 5.5 && p.elong > 12);
+    const name = (p) => `<b>${t(p.name)}</b> (m ${p.mag.toFixed(1).replace(".", lang === "es" ? "," : ".")}, ${Math.round(p.elong)}° ${t({ es: "del Sol", en: "from the Sun" })}, ${t(p.evening ? { es: "al anochecer", en: "at dusk" } : { es: "al amanecer", en: "at dawn" })})`;
+    $("skyCaption").innerHTML = `<div class="ttl">${t({ es: "Cielo real de hoy desde Gale", en: "Today's real sky from Gale" })}</div>${vis.map(name).join(" · ")}. ${t({ es: "Neptuno no se ve sin telescopio. Pulsa P en la EVA para ocultar las etiquetas.", en: "Neptune needs a telescope. Press P during the EVA to hide the labels." })}`;
+  };
+  const updateSky = (hour) => sky.update(scene.camera, hour, scene.skyMat.uniforms.uDay.value, skyTau(), innerHeight);
   let wasDriving = false, walkDist = controls.dist;
 
   // ---- marcadores y estructuras ------------------------------------------------
@@ -68,8 +81,9 @@ async function boot() {
   };
 
   // ---- idioma y pantallas ----------------------------------------------------------
-  const toggleLang = () => { setLang(getLang() === "es" ? "en" : "es"); hud.applyLang(); atlas.applyLang(); if (game.s.phase === "briefing") showBriefing(); };
+  const toggleLang = () => { setLang(getLang() === "es" ? "en" : "es"); hud.applyLang(); atlas.applyLang(); skyCaption(); if (game.s.phase === "briefing") showBriefing(); };
   hud.applyLang();
+  skyCaption();
   // la carga se desvanece sobre la portada
   show("scrTitle");
   $("scrLoading").classList.add("out");
@@ -221,6 +235,7 @@ async function boot() {
     if (k === "h") show("scrGuide", $("scrGuide").hidden);
     if (k === "m") openAtlas("eva");
     if (k === "i") $("telem").hidden = !$("telem").hidden;
+    if (k === "p") sky.labelsOn = !sky.labelsOn;
     if (DEBUG) {
       if (k === "t") game.triggerStorm();
       if (k === "n") { const o = game.target; game.s.x = o.world.x + 25; game.s.z = o.world.z + 25; game.s.y = null; }
@@ -232,6 +247,7 @@ async function boot() {
   // ---- bucle ------------------------------------------------------------------------
   let last = performance.now(), acc = 0, lastRoute = -99, frames = 0, fpsT = 0;
   const titleCenter = game.objectives.habitat.world;
+  const TITLE_HOUR = 17.82, titleDir = new THREE_V();
   function frame(nowMs) {
     const dt = Math.min(0.1, (nowMs - last) / 1000);
     last = nowMs;
@@ -239,13 +255,19 @@ async function boot() {
     const s = game.s;
 
     if (s.phase === "title") {
-      // vista lenta del Monte Sharp desde el habitat
+      // portada: crepusculo en Gale con los planetas que se ven HOY desde Marte (la Tierra, Venus, ...)
       const a = now * 0.03;
       const cx = titleCenter.x + Math.sin(a) * 140, cz = titleCenter.z - 60 + Math.cos(a) * 40;
       scene.camera.position.set(cx, scene.heightAt(cx, cz) + 45, cz);
-      scene.camera.lookAt(titleCenter.x + 200, titleCenter.y + 120, titleCenter.z + 2500);
-      scene.setTimeOfDay(9.5);
+      scene.setTimeOfDay(TITLE_HOUR);
+      const e = sky.dirOf("earth", TITLE_HOUR, titleDir);
+      if (e.y > 0.05) {
+        // mirar un poco a la izquierda de la Tierra para que quede a la derecha del titulo
+        const az = Math.atan2(e.x, -e.z) - 0.42, el = Math.min(0.42, Math.max(0.12, Math.asin(e.y) * 0.55));
+        scene.camera.lookAt(cx + Math.sin(az) * Math.cos(el) * 1000, scene.camera.position.y + Math.sin(el) * 1000, cz - Math.cos(az) * Math.cos(el) * 1000);
+      } else scene.camera.lookAt(titleCenter.x + 200, titleCenter.y + 120, titleCenter.z + 2500);
       scene.setFocus(cx, scene.heightAt(cx, cz), cz);
+      updateSky(TITLE_HOUR);
     } else {
       if (s.phase === "playing" && !paused && $("scrGuide").hidden && !atlas.isOpen) {
         game.update(dt, controls.moveVector(), controls.jumpHeld());
@@ -264,6 +286,7 @@ async function boot() {
       controls.updateCamera(scene.camera, { x: s.x, y: y + (s.driving ? 0.6 : 0), z: s.z }, (x, z) => scene.heightAt(x, z));
       hud.camYaw = controls.yaw;
       scene.setTimeOfDay(game.hour);
+      updateSky(game.hour);
       scene.setFocus(s.x, y, s.z);
       // ruta sugerida (A*) recalculada cada 1,5 s
       if (s.routeOn && now - lastRoute > 1.5) {
@@ -287,7 +310,7 @@ async function boot() {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  window.__msm = { game, scene, world, path, controls, atlas, geo, car, astro }; // para depurar desde la consola
+  window.__msm = { game, scene, world, path, controls, atlas, geo, car, astro, sky }; // para depurar desde la consola
 }
 
 boot().catch((e) => {

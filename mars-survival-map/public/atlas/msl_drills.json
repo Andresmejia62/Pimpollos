@@ -1,0 +1,203 @@
+{
+ "source": "Posicion: NASA/JPL MMGIS MSL_waypoints.json (ultima parada en o antes del sol). Nombre y sol: registro de perforaciones de MSL.",
+ "drills": [
+  {
+   "name": "Glen Etive 1",
+   "sol": 2488,
+   "unit": "Glen Torridon · arcillas",
+   "lat": -4.730309,
+   "lon": 137.383541,
+   "elev_m": -4133.4,
+   "waypoint_sol": 2481
+  },
+  {
+   "name": "Hutton",
+   "sol": 2671,
+   "unit": "Glen Torridon",
+   "lat": -4.736585,
+   "lon": 137.380899,
+   "elev_m": -4095.4,
+   "waypoint_sol": 2664
+  },
+  {
+   "name": "Edinburgh",
+   "sol": 2714,
+   "unit": "Pedimento Greenheugh",
+   "lat": -4.737061,
+   "lon": 137.38079,
+   "elev_m": -4088.7,
+   "waypoint_sol": 2702
+  },
+  {
+   "name": "Glasgow",
+   "sol": 2754,
+   "unit": "Glen Torridon",
+   "lat": -4.735237,
+   "lon": 137.381058,
+   "elev_m": -4107.9,
+   "waypoint_sol": 2747
+  },
+  {
+   "name": "Mary Anning",
+   "sol": 2838,
+   "unit": "Glen Torridon",
+   "lat": -4.729307,
+   "lon": 137.391138,
+   "elev_m": -4128.1,
+   "waypoint_sol": 2829
+  },
+  {
+   "name": "Groken",
+   "sol": 2910,
+   "unit": "Glen Torridon",
+   "lat": -4.72932,
+   "lon": 137.391143,
+   "elev_m": -4127.9,
+   "waypoint_sol": 2904
+  },
+  {
+   "name": "Nontron",
+   "sol": 3057,
+   "unit": "Mont Mercou · transición arcillas/sulfatos",
+   "lat": -4.735386,
+   "lon": 137.412544,
+   "elev_m": -4072.9,
+   "waypoint_sol": 3052
+  },
+  {
+   "name": "Bardou",
+   "sol": 3094,
+   "unit": "Mont Mercou",
+   "lat": -4.735728,
+   "lon": 137.412381,
+   "elev_m": -4066.5,
+   "waypoint_sol": 3088
+  },
+  {
+   "name": "Pontours",
+   "sol": 3170,
+   "unit": "Transición",
+   "lat": -4.741925,
+   "lon": 137.403502,
+   "elev_m": -4041.2,
+   "waypoint_sol": 3165
+  },
+  {
+   "name": "Maria Gordon",
+   "sol": 3229,
+   "unit": "Transición",
+   "lat": -4.744041,
+   "lon": 137.396395,
+   "elev_m": -4015.2,
+   "waypoint_sol": 3222
+  },
+  {
+   "name": "Zechstein",
+   "sol": 3289,
+   "unit": "Transición",
+   "lat": -4.746753,
+   "lon": 137.395025,
+   "elev_m": -3991.1,
+   "waypoint_sol": 3286
+  },
+  {
+   "name": "Avanavero",
+   "sol": 3512,
+   "unit": "Marker band",
+   "lat": -4.755617,
+   "lon": 137.396825,
+   "elev_m": -3910,
+   "waypoint_sol": 3509
+  },
+  {
+   "name": "Canaima",
+   "sol": 3612,
+   "unit": "Unidad de sulfatos (1.ª perforación)",
+   "lat": -4.760777,
+   "lon": 137.399277,
+   "elev_m": -3879.8,
+   "waypoint_sol": 3608
+  },
+  {
+   "name": "Tapo Caparo",
+   "sol": 3752,
+   "unit": "Unidad de sulfatos",
+   "lat": -4.7657,
+   "lon": 137.39821,
+   "elev_m": -3853.1,
+   "waypoint_sol": 3749
+  },
+  {
+   "name": "Ubajara",
+   "sol": 3823,
+   "unit": "Unidad de sulfatos",
+   "lat": -4.768075,
+   "lon": 137.398608,
+   "elev_m": -3826.1,
+   "waypoint_sol": 3815
+  },
+  {
+   "name": "Sequoia",
+   "sol": 3982,
+   "unit": "Cresta de Gediz Vallis",
+   "lat": -4.776475,
+   "lon": 137.404552,
+   "elev_m": -3764.3,
+   "waypoint_sol": 3974
+  },
+  {
+   "name": "Mineral King",
+   "sol": 4110,
+   "unit": "Gediz Vallis",
+   "lat": -4.780118,
+   "lon": 137.407354,
+   "elev_m": -3730,
+   "waypoint_sol": 4102
+  },
+  {
+   "name": "Mammoth Lakes 2",
+   "sol": 4218,
+   "unit": "Canal Gediz Vallis",
+   "lat": -4.785719,
+   "lon": 137.40886,
+   "elev_m": -3688.2,
+   "waypoint_sol": 4210
+  },
+  {
+   "name": "Kings Canyon",
+   "sol": 4263,
+   "unit": "Canal Gediz Vallis",
+   "lat": -4.787319,
+   "lon": 137.409128,
+   "elev_m": -3673.3,
+   "waypoint_sol": 4255
+  },
+  {
+   "name": "Altadena",
+   "sol": 4564,
+   "unit": "Unidad de sulfatos superior",
+   "lat": -4.799847,
+   "lon": 137.383541,
+   "elev_m": -3647.2,
+   "waypoint_sol": 4560
+  },
+  {
+   "name": "Valle de la Luna",
+   "sol": 4695,
+   "unit": "Región boxwork",
+   "lat": -4.807839,
+   "lon": 137.381035,
+   "elev_m": -3610.4,
+   "waypoint_sol": 4687
+  },
+  {
+   "name": "Nevado Sajama",
+   "sol": 4718,
+   "unit": "Región boxwork",
+   "lat": -4.808008,
+   "lon": 137.381004,
+   "elev_m": -3607.7,
+   "waypoint_sol": 4711
+  }
+ ]
+}

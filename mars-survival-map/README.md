@@ -45,6 +45,7 @@ Atajos con `?debug=1`: **T** tormenta solar · **N** saltar cerca del objetivo �
 | `src/geo.js` | Lat/lon ↔ mundo, distancias de círculo máximo, presión y agua líquida |
 | `src/engine/marsrover.js` | Rover conducible estilo Curiosity/Perseverance: 6 ruedas, rocker-bogie que sigue el terreno, mástil, brazo y MMRTG |
 | `src/ui/screens.js` | Pantalla de carga (pasos reales de carga, "Marte ahora") y menú de pausa con pestañas |
+| `src/engine/planets.js` | Planetas en el cielo de Gale: posiciones reales de hoy (JPL), magnitud y extinción por polvo; la Tierra con la Luna |
 | `src/marsclock.js` | Marte en tiempo real: Ls, sol de Curiosity, hora local en Gale (Mars24) y distancia Tierra–Marte (JPL) |
 
 El terreno se genera directo del DEM (plan B del documento de estructura), así que el juego no depende de `terrain.glb`. Si M1 entrega `astronaut.glb` en `public/models/`, el juego lo carga solo.
