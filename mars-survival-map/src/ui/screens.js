@@ -86,12 +86,13 @@ export class LoadingScreen {
 }
 
 export class PauseMenu {
-  constructor({ game, geo, world, onResume, onAtlas, onGuide, onLang, onRetry, onMenu }) {
+  constructor({ game, geo, world, onResume, onAtlas, onGuide, onProfile, onLang, onRetry, onMenu }) {
     Object.assign(this, { game, geo, world });
     this.tab = "status";
     $("btnResume").onclick = onResume;
     $("btnPauseAtlas").onclick = onAtlas;
     $("btnPauseGuide").onclick = onGuide;
+    $("btnPauseProfile").onclick = onProfile;
     $("btnPauseLang").onclick = () => { onLang(); this.render(); };
     // acciones que pierden avance: piden un segundo clic
     const twoStep = (id, fn) => {

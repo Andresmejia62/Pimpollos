@@ -56,6 +56,14 @@
 
     <section class="panel tutorial" id="tutorial" hidden></section>
 
+    <section class="panel structcard" id="structCard" hidden aria-live="polite">
+      <div class="lbl"><span id="scType"></span><b id="scDist"></b></div>
+      <div class="t" id="scName"></div>
+      <p class="tx" id="scInfo"></p>
+      <dl id="scFacts"></dl>
+      <div class="src" id="scSrc"></div>
+    </section>
+
     <section class="panel povhud" id="povHud" hidden aria-label="Vista del destino"><div class="lbl" id="povHudLbl"></div><img id="povHudImg" alt=""><div class="cap" id="povHudCap"></div></section>
 
     <nav class="panel layers" id="layerbar" aria-label="Capas de datos">
@@ -243,6 +251,7 @@
         <button class="btn primary" id="btnResume" data-ui="resume"></button>
         <button class="btn" id="btnPauseAtlas" data-ui="atlasOpen"></button>
         <button class="btn" id="btnPauseGuide" data-ui="guide"></button>
+        <button class="btn" id="btnPauseProfile" data-ui="profileEdit"></button>
         <div class="pause-tabs" role="tablist">
           <button role="tab" data-tab="status" aria-selected="true" data-ui="tabStatus"></button>
           <button role="tab" data-tab="body" aria-selected="false" data-ui="tabBody"></button>

@@ -172,12 +172,14 @@ const TERRAIN_FS = /* glsl */ `
   uniform sampler2D uOverlay;
   uniform sampler2D uDetail;
   uniform float uHasHD, uOverlayOn, uUseFlat, uSize, uDelight, uFlatten, uAoFloor, uMeanG;
+  uniform float uHole;           // faldon: no se dibuja dentro del recorte detallado (|x|,|z| < uHole)
   uniform vec4 uBake;            // luz horneada en la ortoimagen: (cx, cz, media nx, media nz)
   varying vec2 vUv;
   varying vec3 vNormalW;
   varying vec3 vPosW;
 ` + SHADE_GLSL + /* glsl */ `
   void main() {
+    if (uHole > 0.0 && max(abs(vPosW.x), abs(vPosW.z)) < uHole) discard;
     float dist = distance(cameraPosition, vPosW);
     float near = 1.0 - smoothstep(25.0, 320.0, dist);
     float mid = 1.0 - smoothstep(250.0, 2600.0, dist);
@@ -626,6 +628,9 @@ export class MarsScene {
       uAlbedo: { value: T.albedo }, uNormalMap: { value: T.normal }, uAO: { value: T.ao },
       uOverlay: { value: T.empty }, uDetail: { value: T.detail },
       uHasHD: { value: this.hasHD }, uSize: { value: this.world.size }, uOverlayOn: { value: 0 }, uUseFlat: { value: flat ? 1 : 0 },
+      // hueco del faldon. Siempre explicito: terreno y faldon comparten programa GLSL y un uniform que un
+      // material no declara conserva el ultimo valor que puso el otro (el terreno se descartaria entero)
+      uHole: { value: 0 },
       uDelight: { value: LOOK.delight }, uFlatten: { value: LOOK.flatten }, uAoFloor: { value: LOOK.aoFloor },
       uBake: { value: B ? new THREE.Vector4(B.cx, B.cz, B.mx, B.mz) : new THREE.Vector4() }, uMeanG: { value: B ? B.mean : 0.5 },
       ...this._shadeUniforms(),
@@ -717,6 +722,8 @@ export class MarsScene {
     }
     geo.computeVertexNormals();
     const u = this._terrainUniforms(true);
+    // dentro del recorte manda siempre el terreno detallado: el faldon (celdas de ~160 m) no puede asomar
+    u.uHole.value = w.half;
     this.apron = new THREE.Mesh(geo, new THREE.ShaderMaterial({ vertexShader: TERRAIN_VS, fragmentShader: TERRAIN_FS, uniforms: u }));
     this.scene.add(this.apron);
   }

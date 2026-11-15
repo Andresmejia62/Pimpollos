@@ -79,6 +79,7 @@ const UI = {
   localTime: { es: "Hora local", en: "Local time" },
   atlas: { es: "Atlas de Marte", en: "Mars atlas" },
   atlasOpen: { es: "Atlas de Marte", en: "Mars atlas" },
+  profileEdit: { es: "Perfil y apariencia", en: "Profile and appearance" },
   goGlobal: { es: "Global", en: "Global" },
   goGale: { es: "Cráter Gale", en: "Gale crater" },
   goEva: { es: "Zona EVA", en: "EVA zone" },

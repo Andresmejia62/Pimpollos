@@ -160,6 +160,16 @@ button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .pov figcaption b { color: var(--hud-text); font-weight: 600; }
 .factcard .pov img { max-height: min(240px, 28vh); }
 /* Vista previa del destino: miniatura discreta pegada al minimapa (el texto completo queda en el title) */
+/* ficha de estructura cercana: encima del panel de mision */
+.structcard { right: calc(var(--u) * 2); bottom: calc(var(--u) * 17.5); width: calc(var(--u) * 26); padding: calc(var(--u) * .8) calc(var(--u) * 1.1); border-color: rgba(255,176,46,.55); animation: slideIn .3s ease-out; }
+.structcard .lbl { display: flex; justify-content: space-between; gap: calc(var(--u) * .5); font-size: calc(var(--u) * .95); letter-spacing: .08em; text-transform: uppercase; color: #ffb02e; font-weight: 700; }
+.structcard .lbl b { color: var(--hud-text); }
+.structcard .t { font-size: calc(var(--u) * 1.45); font-weight: 700; margin: calc(var(--u) * .15) 0 calc(var(--u) * .3); }
+.structcard .tx { font-family: var(--font-text); font-size: calc(var(--u) * .98); line-height: 1.35; color: var(--hud-text-dim); margin: 0 0 calc(var(--u) * .5);
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.structcard dl { display: grid; grid-template-columns: auto 1fr; gap: calc(var(--u) * .1) calc(var(--u) * .8); margin: 0; font-size: calc(var(--u) * .95); font-variant-numeric: tabular-nums; }
+.structcard dt { color: var(--hud-text-dim); } .structcard dd { margin: 0; text-align: right; }
+.structcard .src { margin-top: calc(var(--u) * .4); font-family: var(--font-text); font-size: calc(var(--u) * .8); color: var(--hud-text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .povhud { right: calc(var(--u) * 21.6); top: calc(var(--u) * 2); width: calc(var(--u) * 11); padding: calc(var(--u) * .35); animation: slideIn .3s ease-out; opacity: .92; }
 .povhud .lbl { display: flex; justify-content: space-between; gap: calc(var(--u) * .4); font-size: calc(var(--u) * .85); letter-spacing: .06em; text-transform: uppercase; color: var(--safe); font-weight: 700; margin: 0 calc(var(--u) * .15) calc(var(--u) * .3); white-space: nowrap; }
 .povhud .lbl b { color: var(--hud-text); font-weight: 700; }
@@ -529,3 +539,13 @@ button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .fx-term .ok { color: #ffd34d; text-shadow: 0 0 6px rgba(255,211,77,.6); }
 .fx-bar { margin-top: 4px; letter-spacing: .02em; }
 @media (max-width: 760px) { .fx-term { right: 12px; left: 12px; width: auto; bottom: 120px; } }
+
+/* planificador: fuentes de cada coste */
+.pr-src-h { font: 700 12px var(--font-hud); letter-spacing: .12em; text-transform: uppercase; color: var(--mars-dust); margin: 14px 0 4px; }
+.pr-src td small { display: block; font-size: 11px; color: var(--hud-text-dim); line-height: 1.3; margin-top: 1px; }
+.pr-src td:last-child { text-align: right; white-space: nowrap; padding-left: 10px; }
+
+/* resumen final frente a Curiosity */
+.sum-h { font: 700 13px var(--font-hud); letter-spacing: .12em; text-transform: uppercase; color: var(--mars-dust); margin: 16px 0 4px; }
+.score.sum td:nth-child(2), .score.sum td:nth-child(3) { text-align: right; }
+.score.sum .hd td { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--hud-text-dim); }

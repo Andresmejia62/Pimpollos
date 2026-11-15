@@ -12,7 +12,7 @@ import { AlertSystem } from "./gameplay/alerts.js";
 import { Pathfinder } from "./gameplay/pathfinding.js";
 import { Hud } from "./ui/hud.js";
 import { initAudio, sfx, setWind } from "./audio.js";
-import { GeoFrame } from "./geo.js";
+import { GeoFrame, num } from "./geo.js";
 import { Atlas } from "./ui/atlas.js";
 import { ProfileScreen } from "./ui/profile.js";
 import { loadProfile } from "./engine/physiology.js";
@@ -95,15 +95,19 @@ async function boot() {
 
   // ---- marcadores y estructuras ------------------------------------------------
   const beacons = {};
+  const blockers = [];          // {group, x, z}: lo que la camara no debe atravesar (habitat, refugios, estructuras)
   for (const o of data.objectives.objectives) {
     const { x, z } = o.world;
-    if (o.id === "habitat") buildHabitat(scene, x, z);
-    else if (o.id === "rover") buildRover(scene, x - 5, z + 2);
-    else if (o.type === "shelter") buildShelter(scene, x, z);
+    if (o.id === "habitat") blockers.push({ group: buildHabitat(scene, x, z), x, z });
+    else if (o.id === "rover") blockers.push({ group: buildRover(scene, x - 5, z + 2), x: x - 5, z: z + 2 });
+    else if (o.type === "shelter") blockers.push({ group: buildShelter(scene, x, z), x, z });
     beacons[o.id] = scene.addBeacon(x, z, game.radiusOf(o), o.shelter ? 120 : 380);
   }
   // estructuras del mapa (public/layers/structures.json, generado por data/scripts/build_structures.mjs)
   buildStructures(scene, data.structures);
+  blockers.push(...scene.structures);
+  // solo se prueban las estructuras a menos de 40 m (la camara esta a pocos metros del jugador)
+  const camOccluders = (px, pz) => { const out = []; for (const b of blockers) if (Math.abs(b.x - px) < 40 && Math.abs(b.z - pz) < 40) out.push(b.group); return out; };
   const updateBeacons = () => {
     const tg = game.target;
     for (const [id, b] of Object.entries(beacons)) {
@@ -292,6 +296,36 @@ async function boot() {
     $("cardSol").textContent = objective.msl_sol ? `${ui("curiosityHere")} ${objective.msl_sol}` + (getLang() === "es" && objective.analog ? ` · ${objective.analog}` : "") : "";
     show("scrCard");
   });
+  // Resumen de la EVA frente a Curiosity: misma zona, mismos sitios. La dosis de referencia es la que mide RAD
+  // en superficie (~0,21 mGy/dia, Hassler et al. 2014) durante el mismo tiempo marciano; el recorrido de
+  // referencia es la traza real del rover entre el primer y el ultimo sitio de la campana.
+  const evaSummary = () => {
+    const s = game.s, b = s.bio, lang = getLang(), L2 = (es, en) => t({ es, en });
+    const marsH = (s.realSeconds * game.rules.time.time_scale) / 3600;
+    const radRef = (210 / 24) * marsH;                                  // µGy que habria medido RAD
+    const sols = data.objectives.objectives.map((o) => o.msl_sol).filter(Boolean);
+    const s0 = Math.min(...sols), s1 = Math.max(...sols);
+    let cKm = 0, prev = null;
+    for (const [sol, x, z] of data.traverse.points || []) {
+      if (sol < s0 || sol > s1) { prev = null; continue; }
+      if (prev) cKm += Math.hypot(x - prev[0], z - prev[1]) / 1000;
+      prev = [x, z];
+    }
+    const row = (k, you, ref) => `<tr><td>${k}</td><td>${you}</td><td class="muted">${ref}</td></tr>`;
+    return `<h3 class="sum-h">${L2("Tu EVA frente a Curiosity", "Your EVA vs. Curiosity")}</h3>
+      <table class="score sum">
+        <tr class="hd"><td></td><td>${L2("Tú", "You")}</td><td>Curiosity</td></tr>
+        ${row(L2("Distancia", "Distance"), `${num(s.movedTotal / 1000, 2, lang)} km`, `${num(cKm, 2, lang)} km`)}
+        ${row(L2("Tiempo", "Time"), `${num(marsH, 1, lang)} h ${L2("marcianas", "Mars")}`, `${s1 - s0} ${L2("soles", "sols")} (${s0}–${s1})`)}
+        ${row(L2("Dosis de radiación", "Radiation dose"), `${num(b.doseUgy, 1, lang)} µGy`, `${num(radRef, 1, lang)} µGy · RAD`)}
+        ${row(L2("O₂ respirado", "O₂ breathed"), `${num(b.o2g, 0, lang)} g`, L2("no respira", "doesn't breathe"))}
+        ${row(L2("Energía del cuerpo", "Body energy"), `${num(b.kcal, 0, lang)} kcal`, "—")}
+      </table>
+      <p class="small muted">${L2(
+        `Tu dosis es ${b.doseUgy > radRef ? "mayor" : "menor"} que la de RAD en el mismo tiempo (${num(b.doseUgy / Math.max(radRef, 1e-6) * 100, 0, lang)} %): los refugios y el relieve que tapa el cielo la reducen; las tormentas solares la disparan. Curiosity tardó ${s1 - s0} soles en recorrer estos sitios porque se detiene semanas a perforar y analizar, y se conduce desde la Tierra con 3-22 min de retraso.`,
+        `Your dose is ${b.doseUgy > radRef ? "higher" : "lower"} than RAD's over the same time (${num(b.doseUgy / Math.max(radRef, 1e-6) * 100, 0, lang)}%): shelters and terrain that blocks the sky reduce it; solar storms push it up. Curiosity took ${s1 - s0} sols to cover these sites because it stops for weeks to drill and analyse, and is driven from Earth with a 3-22 min delay.`)}
+        ${L2("Fuentes: MSL RAD (Hassler et al. 2014), traza MSL (JPL MMGIS).", "Sources: MSL RAD (Hassler et al. 2014), MSL traverse (JPL MMGIS).")}</p>`;
+  };
   game.on("end", ({ success, score, cause }) => {
     controls.unlock();
     (success ? sfx.success : sfx.fail)();
@@ -310,6 +344,7 @@ async function boot() {
           <tr><td>${ui("storm")}</td><td>+${score.storm}</td></tr>
           <tr class="total"><td>${ui("total")}</td><td>${score.total}</td></tr>
         </table>
+        ${evaSummary()}
         <div class="btnrow"><button class="btn primary" id="btnAgain">${ui("playAgain")}</button></div>`;
       $("btnAgain").onclick = () => location.reload();
     } else if (game.s.free) {
@@ -364,9 +399,11 @@ async function boot() {
     show("scrTitle", false);
     profile.open();
   };
-  profile.onBack = () => { if (!game.s.free) show("scrTitle"); };
+  let profileMid = false;      // perfil abierto desde la pausa: volver a la partida, no a la portada
+  profile.onBack = () => { if (profileMid) { profileMid = false; return; } if (!game.s.free) show("scrTitle"); };
   profile.onConfirm = (p) => {
     applyProfile(p);
+    if (profileMid) { profileMid = false; return; }   // misma mision, nuevo cuerpo (applyProfile ya lo aplico)
     if (game.s.free) { sim.update(0, true); return; }       // cambio de perfil en plena simulacion
     if (mode === "free") { startFree(); return; }
     game.reset();
@@ -405,6 +442,8 @@ async function boot() {
     onResume: () => setPaused(false),
     onAtlas: () => { setPaused(false); openAtlas("tour"); },
     onGuide: () => show("scrGuide"),
+    // cambiar perfil o apariencia en plena campana: se aplica sin reiniciar la mision
+    onProfile: () => { setPaused(false); profileMid = true; profile.open(); },
     onLang: toggleLang,
     onRetry: () => { setPaused(false); hud.clearDialogs(); game.retry(); },
     onMenu: () => location.reload(),
@@ -513,7 +552,7 @@ async function boot() {
       bl.hidden = !buddyOn;
       bl.classList.toggle("alert", bs.mode === "stuck");
       bl.innerHTML = `<span>EVA-2</span><div class="bar"><i style="width:${Math.max(0, bs.o2)}%"></i></div><em>${Math.round(bs.o2)} % · ${t(buddy.statusText())}${bs.mode === "stuck" ? " · " + Math.round(dB) + " m" : ""}</em>`;
-      controls.updateCamera(scene.camera, { x: s.x, y: y + (s.driving ? 0.6 : 0), z: s.z }, (x, z) => scene.heightAt(x, z));
+      controls.updateCamera(scene.camera, { x: s.x, y: y + (s.driving ? 0.6 : 0), z: s.z }, (x, z) => scene.heightAt(x, z), camOccluders);
       hud.camYaw = controls.yaw;
       scene.setTimeOfDay(game.hour);
       updateSky(game.hour);

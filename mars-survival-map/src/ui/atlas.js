@@ -8,6 +8,7 @@ import { t, getLang } from "../i18n.js";
 import { assetUrl } from "../data.js";
 import { Globe3D } from "./atlas3d.js";
 import { HackFx } from "./hackfx.js";
+import { typeName, typeIcon, pointFacts } from "../structinfo.js";
 import { MARS_GEO, wrapLon, gcDistance, gcBearing, gcInterpolate, pressureAt, columnMass, boilingPointC, fmtLat, fmtLon, fmtDMS, fmtDist, num } from "../geo.js";
 
 const $ = (id) => document.getElementById(id);
@@ -108,7 +109,7 @@ export class Atlas {
     this.game = game; this.world = world; this.geo = geo; this.data = data;
     this.isOpen = false;
     this.mode = "mars";      // tono marciano por defecto
-    this.show = { grid: true, crater: true, volcano: true, region: true, canyon: true, polar: true, lander: true, phenomena: true, msl: true, drills: true, track: true, objectives: true, overlay: true };
+    this.show = { grid: true, crater: true, volcano: true, region: true, canyon: true, polar: true, lander: true, phenomena: true, msl: true, drills: true, track: true, objectives: true, structs: true, overlay: true };
     this.view = { lon: 137.8, lat: -5.0, s: 4 };
     this.measure = null;     // { a: {lat,lon}, b: {lat,lon} }
     this.measuring = false;
@@ -366,6 +367,7 @@ export class Atlas {
     if (it.kind === "phenomenon") return `${t(it.ph.name)} · ${t(it.zone.label)}`;
     if (it.kind === "drill") return `${it.d.name} · sol ${it.d.sol}`;
     if (it.kind === "objective") return t(it.o.name);
+    if (it.kind === "struct") return `${typeIcon(it.e)} ${t(it.e.name)}`;
     if (it.kind === "pin") return it.pin.name;
     if (it.kind === "player") return t(L("Tu posición", "Your position"));
     return "";
@@ -396,6 +398,10 @@ export class Atlas {
     for (const f of this.feat.features) out.push({ name: t(f.name), lat: f.lat, lon: f.lon, sel: { f }, km: f.d_km || 60 });
     for (const d of this.drills) out.push({ name: `${d.name} (sol ${d.sol})`, lat: d.lat, lon: d.lon, sel: { kind: "drill", d }, km: 0.4 });
     for (const o of this.data.objectives.objectives) out.push({ name: t(o.name), lat: o.latlon[0], lon: o.latlon[1], sel: { kind: "objective", o }, km: 0.6 });
+    for (const e of (this.data.structures && this.data.structures.structures) || []) {
+      const ll = this.geo.toLatLon(e.x, e.z);
+      out.push({ name: t(e.name), lat: ll.lat, lon: ll.lon, sel: { kind: "struct", e, ll }, km: 0.3 });
+    }
     for (const pin of this.pins) out.push({ name: pin.name, lat: pin.lat, lon: pin.lon, sel: { kind: "pin", pin }, km: 2 });
     return out;
   }
@@ -572,10 +578,10 @@ export class Atlas {
     const me = this.playerLL(), b = this.geo.bounds;
     const evaLL = [(b.north_lat + b.south_lat) / 2, (b.west_lon_east + b.east_lon_east) / 2];
     const legs = [
-      ["global", 450, 250, { name: "Marte", lat: 8, lon: me.lon, src: "MOLA 8 px/° (~7,4 km)" }],
-      ["gale", 1200, 300, { name: "Cráter Gale", lat: -5.2, lon: 137.6, src: "MOLA 64 px/° + HRSC" }],
-      ["eva", 1000, 280, { name: "Zona EVA", lat: evaLL[0], lon: evaLL[1], src: "DTM HiRISE + CTX 6 m/px" }],
-      ["me", 800, 0, { name: this.game.bio?.p?.name || "EVA-1", lat: me.lat, lon: me.lon, src: "telemetría del traje" }],
+      ["global", 450, 250, { name: t(L("Marte", "Mars")), lat: 8, lon: me.lon, src: "MOLA 8 px/° (~7.4 km)" }],
+      ["gale", 1200, 300, { name: t(L("Cráter Gale", "Gale crater")), lat: -5.2, lon: 137.6, src: "MOLA 64 px/° + HRSC" }],
+      ["eva", 1000, 280, { name: t(L("Zona EVA", "EVA zone")), lat: evaLL[0], lon: evaLL[1], src: "DTM HiRISE + CTX 6 m/px" }],
+      ["me", 800, 0, { name: this.game.bio?.p?.name || "EVA-1", lat: me.lat, lon: me.lon, src: t(L("telemetría del traje", "suit telemetry")) }],
     ];
     fx.start();
     const g3 = this.on3d && this.g3;
@@ -590,14 +596,14 @@ export class Atlas {
       fx.leg({ ...info, dur });
       if (g3 && where === "gale") {
         const G = this.rGale;
-        setTimeout(() => fx.line(`cargando MOLA 64 px/° · ${G.w}×${G.h}`, "dim"), 360);
+        setTimeout(() => fx.line(`${t(L("cargando", "loading"))} MOLA 64 px/° · ${G.w}×${G.h}`, "dim"), 360);
       }
       if (g3 && where === "eva") {
         if (this.rRegion) {
           const R = this.rRegion;
-          setTimeout(() => fx.line(`cargando HRSC 200 m + THEMIS 100 m`, "dim"), 360);
+          setTimeout(() => fx.line(`${t(L("cargando", "loading"))} HRSC 200 m + THEMIS 100 m`, "dim"), 360);
         }
-        setTimeout(() => { if (id === this._tourId) { fx.line("cargando DTM HiRISE+CTX 6 m/px", "dim"); } }, dur * 0.4);
+        setTimeout(() => { if (id === this._tourId) { fx.line(`${t(L("cargando", "loading"))} DTM HiRISE+CTX 6 m/px`, "dim"); } }, dur * 0.4);
       }
       // espera vigilando: si el usuario toma el control a mitad del tramo, la capa se quita al instante
       const fly = this._fly, end = performance.now() + dur + pause;
@@ -719,6 +725,7 @@ export class Atlas {
     this._features();
     if (this.show.msl && v.s > 150) this._mslTraverse();
     if (this.show.drills && v.s > 2500) this._drills();
+    if (this.show.structs && v.s > 2500) this._structs();
     if (this.show.objectives && v.s > 1500) this._objectives();
     if (this.show.track) this._track();
     this._pins();
@@ -903,6 +910,26 @@ export class Atlas {
       ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, 7); ctx.fill(); ctx.stroke();
       this.hits.push({ x: p.x, y: p.y, r: 8, item: { kind: "drill", d } });
       if (this.view.s > 9000) this._label(`${d.name} · sol ${d.sol}`, p.x + 6, p.y - 5, "#fff", false, 12);
+    }
+  }
+
+  // Estructuras del mapa (public/layers/structures.json): rombo ambar con el icono de su tipo
+  _structs() {
+    const list = (this.data.structures && this.data.structures.structures) || [];
+    const ctx = this.ctx, v = this.view;
+    for (const e of list) {
+      const ll = this.geo.toLatLon(e.x, e.z), p = this.project(ll.lat, ll.lon);
+      if (p.x < -20 || p.y < -20 || p.x > this.W + 20 || p.y > this.H + 20) continue;
+      const sel = this.selected && this.selected.kind === "struct" && this.selected.e === e;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(Math.PI / 4);
+      ctx.fillStyle = sel ? "#ffb02e" : "rgba(20,14,8,.85)"; ctx.strokeStyle = "#ffb02e"; ctx.lineWidth = 1.6;
+      ctx.fillRect(-6.5, -6.5, 13, 13); ctx.strokeRect(-6.5, -6.5, 13, 13);
+      ctx.restore();
+      ctx.fillStyle = sel ? "#120e10" : "#ffb02e"; ctx.font = "700 9px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(typeIcon(e), p.x, p.y + 0.5);
+      ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+      this.hits.push({ x: p.x, y: p.y, r: 10, item: { kind: "struct", e, ll } });
+      if (v.s > 9000) this._label(t(e.name), p.x + 11, p.y + 4, "#ffcf7a", false, 12);
     }
   }
 
@@ -1095,6 +1122,14 @@ export class Atlas {
         <table class="kv"><tr><td>${t(L("Elevación medida por el rover", "Elevation measured by the rover"))}</td><td>${num(d.elev_m, 1, lang)} m</td></tr></table>${this._pointBlock(d.lat, d.lon)}`;
       return;
     }
+    if (sel.kind === "struct") {
+      const e = sel.e;
+      box.innerHTML = `<div class="eyebrow" style="color:#ffb02e">${typeIcon(e)} ${typeName(e)}</div><h2>${t(e.name)}</h2>
+        <p class="fact">${t(e.info)}</p>
+        <table class="kv">${pointFacts(e).map(([k, v, src]) => `<tr><td>${k}</td><td>${v} <span class="muted">· ${src}</span></td></tr>`).join("")}</table>
+        <p class="small muted">${t(L("Fuente", "Source"))}: ${e.source || "NASA"}</p>${this._pointBlock(sel.ll.lat, sel.ll.lon)}`;
+      return;
+    }
     if (sel.kind === "objective") {
       const o = sel.o;
       box.innerHTML = `<div class="eyebrow ok">${t(L("Objetivo de la misión", "Mission objective"))}</div><h2>${t(o.name)}</h2>
@@ -1171,6 +1206,7 @@ export class Atlas {
       ${tog("msl", t(L("Traza de Curiosity (2012-hoy)", "Curiosity traverse (2012-now)")), "#ffd250")}
       ${tog("drills", t(L("Perforaciones de Curiosity", "Curiosity drill holes")), "#ffffff")}
       ${tog("objectives", t(L("Objetivos y refugios", "Objectives and shelters")), "#3DDC97")}
+      ${tog("structs", t(L("Estructuras de la base y ciencia", "Base and science structures")), "#ffb02e")}
       ${tog("track", t(L("Tu traza (tracking)", "Your track")), "#7FD1FF")}
       ${tog("overlay", t(L("Capa activa del HUD (1-4)", "Active HUD layer (1-4)")), "#FF4D4D")}
       ${tog("grid", t(L("Retícula lat/lon", "Lat/lon grid")), "#888")}

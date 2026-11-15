@@ -274,10 +274,35 @@ export class Planner {
         ${row(L("Pendiente máx. · T mínima", "Max slope · min T"), `${num(e.maxSlope, 1, lang)}° · ${num(e.coldMin, 0, lang)} °C`)}
         ${row(L("Terreno difícil", "Hard terrain"), `${t(L("rocas", "rocks"))} ${num(e.rockyM, 0, lang)} m · ${t(L("dunas", "dunes"))} ${num(e.duneM, 0, lang)} m · ${t(L("resbaladizo", "slippery"))} ${num(e.slipM, 0, lang)} m`)}
         ${row(L("Dosis de radiación", "Radiation dose"), `${num(e.dose, 1, lang)} µGy`)}
-      </table>`;
+      </table>
+      ${this._sources(r, e, lang)}`;
     $("planUse").disabled = !this.free && e.verdict === "blocked";
     this.draw();
     this._profile(r);
+  }
+
+  // De donde sale cada coste: que dato de NASA lo mide y cuanto de esta ruta pasa por el
+  _sources(r, e, lang) {
+    const pf = this.game.rules.pathfinding || {}, m = (v) => `${num(v, 0, lang)} m`;
+    const rows = [
+      [L("Pendiente", "Slope"), `${t(L("máx.", "max"))} ${num(e.maxSlope, 1, lang)}° · ${t(L("intransitable", "impassable"))} ${m(e.blockedM)}`,
+        L("DTM HiRISE (1 m) + CTX (20 m), alineado con las alturas de Curiosity", "HiRISE (1 m) + CTX (20 m) DTMs, aligned to Curiosity's elevations")],
+      [L("Rocas y bloques", "Rocks and boulders"), m(e.rockyM),
+        L("Rugosidad del DTM HiRISE a 3 m (>0,6 m rocoso, >0,9 m campo de bloques)", "HiRISE DTM roughness at 3 m (>0.6 m rocky, >0.9 m boulder field)")],
+      [L("Radiación", "Radiation"), `${num(e.radMean, 2, lang)} µGy/h · ${num(e.dose, 1, lang)} µGy`,
+        L("MSL RAD (Curiosity) escalado con el cielo visible del DTM", "MSL RAD (Curiosity) scaled by sky view from the DTM")],
+      [L("Frío", "Cold"), `${t(L("mín.", "min"))} ${num(e.coldMin, 0, lang)} °C`,
+        L("Inercia térmica THEMIS (Odyssey) + ciclo diario de REMS", "THEMIS thermal inertia (Odyssey) + REMS daily cycle")],
+      [L("Minerales", "Minerals"), `${t(L("arcillas", "clays"))} ${m(e.classM[1])} · ${t(L("sulfatos", "sulfates"))} ${m(e.classM[2])} · ${t(L("dunas", "dunes"))} ${m(e.classM[4])}`,
+        L("MRO CRISM (D2300, SINDEX2), umbrales validados con Curiosity (~96 %)", "MRO CRISM (D2300, SINDEX2), thresholds validated against Curiosity (~96%)")],
+      [L("Gasto del cuerpo", "Body cost"), `${num(e.kcal, 0, lang)} kcal`,
+        L("Pandolf et al. 1977 a 0,379 g con tu perfil, traje y carga", "Pandolf et al. 1977 at 0.379 g with your profile, suit and load")],
+    ];
+    const astar = r.kind === "safe"
+      ? `<p class="small muted">${t(L("La ruta segura minimiza", "The safe route minimizes"))}: 1 + ${pf.w_slope}·(${t(L("pendiente", "slope"))}/25)² + ${pf.w_rocks}·${t(L("rocas", "rocks"))} + ${pf.w_radiation}·${t(L("radiación", "radiation"))} + ${pf.w_cold}·${t(L("frío", "cold"))} (rules.json).</p>`
+      : "";
+    return `<h4 class="pr-src-h">${t(L("De dónde sale cada coste", "Where each cost comes from"))}</h4>
+      <table class="kv pr-src">${rows.map(([k, v, src]) => `<tr><td>${t(k)}<small>${t(src)}</small></td><td>${v}</td></tr>`).join("")}</table>${astar}`;
   }
 
   _profile(r) {

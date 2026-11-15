@@ -1,5 +1,6 @@
 import { t, ui, getLang } from "../i18n.js";
 import { assetUrl } from "../data.js";
+import { typeName, typeIcon, pointFacts } from "../structinfo.js";
 import { gcDistance, gcBearing, pressureAt, fmtLat, fmtLon, fmtDist as fmtD, num } from "../geo.js";
 
 // Factor de calidad medio de la radiacion en la superficie (RAD: 0,64 mSv/dia / 0,21 mGy/dia; Hassler et al. 2014)
@@ -74,6 +75,8 @@ export class Hud {
 
     // vista del destino (foto real de Curiosity) al acercarse
     this._povHud(tg, d);
+    // ficha de la estructura mas cercana (datos reales de NASA en su punto)
+    this._structCard();
 
     // tutorial
     const tut = this.game.tutorialText();
@@ -174,6 +177,27 @@ export class Hud {
     pct.classList.toggle("low", low && !crit);
     pct.classList.toggle("crit", crit);
     pct.textContent = Math.round(Math.max(0, v)) + "%";
+  }
+
+  _structCard() {
+    const box = $("structCard"), s = this.game.s;
+    const list = (this.data.structures && this.data.structures.structures) || [];
+    let best = null, bd = 28;
+    if (s.phase === "playing") for (const e of list) {
+      const d = Math.hypot(e.x - s.x, e.z - s.z);
+      if (d < bd) { bd = d; best = e; }
+    }
+    if (box.hidden !== !best) box.hidden = !best;
+    if (!best) return;
+    if (box.dataset.id !== best.id || box.dataset.lang !== getLang()) {
+      box.dataset.id = best.id; box.dataset.lang = getLang();
+      $("scType").textContent = `${typeIcon(best)} ${typeName(best)}`;
+      $("scName").textContent = t(best.name);
+      $("scInfo").textContent = t(best.info);
+      $("scFacts").innerHTML = pointFacts(best).map(([k, v, src]) => `<dt>${k}</dt><dd title="${src}">${v}</dd>`).join("");
+      $("scSrc").textContent = `${t({ es: "Fuente", en: "Source" })}: ${best.source || "NASA"}`;
+    }
+    $("scDist").textContent = fmtDist(bd);
   }
 
   _povHud(tg, d) {

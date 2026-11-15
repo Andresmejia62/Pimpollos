@@ -52,6 +52,9 @@ export class SimPanel {
     $("simClear").onclick = () => g.clearFreeTarget();
     $("simGoto").onchange = (e) => { if (e.target.value) H.gotoSite(e.target.value); e.target.value = ""; e.target.blur(); };
     $("simHour").oninput = (e) => { g.setHour(+e.target.value); this._hour(true); };
+    // mientras se arrastra no se reescribe el valor (en macOS el control no toma el foco al arrastrarlo)
+    $("simHour").onpointerdown = () => { this._dragHour = true; };
+    $("simHour").onpointerup = $("simHour").onpointercancel = $("simHour").onchange = () => { this._dragHour = false; };
     $("simHour").onchange = (e) => e.target.blur();
     $("simStorm").onclick = () => { const sp = g.s.spe; sp && sp.phase !== "ended" ? g.endStorm() : g.triggerStorm(); this.update(0, true); };
     $("simRefill").onclick = () => H.refill();
@@ -72,7 +75,7 @@ export class SimPanel {
   _hour(fromSlider = false) {
     const h = ((this.game.hour % 24) + 24) % 24;
     $("simHourV").textContent = hhmm(h);
-    if (!fromSlider && document.activeElement !== $("simHour")) $("simHour").value = String(Math.round(h * 4) / 4);
+    if (!fromSlider && !this._dragHour && document.activeElement !== $("simHour")) $("simHour").value = String(Math.round(h * 4) / 4);
   }
 
   _log() {

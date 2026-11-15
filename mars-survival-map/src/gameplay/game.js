@@ -59,7 +59,7 @@ export class Game {
     this.s = {
       x: start.world.x + 18, z: start.world.z + 14, heading: Math.PI,
       oxygen: R.oxygen.start, energy: R.energy.start, integrity: R.integrity.start,
-      gameSeconds: 0, realSeconds: 0,
+      gameSeconds: 0, realSeconds: 0, clockOffset: 0,   // clockOffset: ajuste manual de la hora (s), no cuenta como EVA
       missionIndex: 0, phase: "title",
       scanProgress: 0, scanned: false, moving: false, speed: 0, movedTotal: 0,
       blockedAhead: false, inShelter: null,
@@ -90,7 +90,7 @@ export class Game {
     if (s.free) return this.objectives.custom || null;
     return this.objectives[this.mission.objective_id];
   }
-  get hour() { return this.rules.time.start_local_time_h + this.s.gameSeconds / 3600; }
+  get hour() { return this.rules.time.start_local_time_h + (this.s.gameSeconds + (this.s.clockOffset || 0)) / 3600; }
 
   nearestShelter(from = { x: this.s.x, z: this.s.z }) {
     let best = null, bd = Infinity;
@@ -190,12 +190,10 @@ export class Game {
   }
 
   // Cambia la hora solar local (0-24 h) dentro del sol actual
+  // Mueve solo el reloj solar (hacia delante o hacia atras) sin cambiar de sol ni la duracion de la EVA
   setHour(h) {
-    const start = this.rules.time.start_local_time_h;
-    const day = Math.floor(this.hour / 24);
-    let gs = (day * 24 + h - start) * 3600;
-    if (gs < 0) gs += 86400;                       // antes de la hora de inicio: se pasa al sol siguiente
-    this.s.gameSeconds = gs;
+    const cur = this.hour, day = Math.floor(cur / 24);
+    this.s.clockOffset = (this.s.clockOffset || 0) + (day * 24 + h - cur) * 3600;
   }
 
   endStorm() {

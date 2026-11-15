@@ -23,7 +23,8 @@ export function estimateRoute(game, pts, { start = game.s, refills = [] } = {}) 
   const path = densify(pts);
   let o2 = start.oxygen, en = start.energy, integ = start.integrity, fatigue = start.bio?.fatigue || 0;
   let tReal = 0, dist = 0, kcal = 0, dose = 0, up = 0, down = 0, maxSlope = 0, minO2 = o2;
-  let blockedM = 0, rockyM = 0, slipM = 0, duneM = 0, coldMin = Infinity;
+  let blockedM = 0, rockyM = 0, slipM = 0, duneM = 0, coldMin = Infinity, radInt = 0;
+  const classM = [0, 0, 0, 0, 0];             // metros sobre cada clase mineral de CRISM (0 sin firma .. 4 dunas)
   const profile = [[0, W.demHeight(path[0][0], path[0][1]) + W.yRef]];
   const hour0 = game.hour;
   for (let i = 1; i < path.length; i++) {
@@ -36,7 +37,9 @@ export function estimateRoute(game, pts, { start = game.s, refills = [] } = {}) 
     maxSlope = Math.max(maxSlope, slope);
     if (h1 > h0) up += h1 - h0; else down += h0 - h1;
     if (W.blockedAt(mx, mz)) blockedM += d;
-    let eta = TERRAIN_ETA[W.spectral(mx, mz)] ?? 1.2;
+    const cls = W.spectral(mx, mz);
+    classM[cls] = (classM[cls] || 0) + d;
+    let eta = TERRAIN_ETA[cls] ?? 1.2;
     if (eta >= 2) duneM += d;
     const rc = W.rockClass ? W.rockClass(mx, mz) : 0;
     if (rc && H.boulders) { eta = Math.max(eta, rc === 2 ? H.boulders.eta_field : H.boulders.eta_rocky); rockyM += d; }
@@ -55,6 +58,7 @@ export function estimateRoute(game, pts, { start = game.s, refills = [] } = {}) 
     const cold = Rs.energy.cold.extra_per_deg * Math.max(0, Rs.energy.cold.comfort_c - temp) * (bio.bsa / REF.bsa) * clamp(Math.sqrt(REF_FLAT_W / M), 0.7, 1.3);
     en = Math.max(0, en - Rs.energy.base_drain_per_s * (0.85 + 0.15 * (M / REF_FLAT_W)) * (1 + cold) * dt);
     const rad = W.radiation(mx, mz);
+    radInt += rad * d;
     integ -= Rs.integrity.radiation.k_per_ugy_h * rad * dt;
     dose += (rad * dtg) / 3600;
     if (slope > Rs.integrity.slip.from_deg && slope <= Rs.integrity.slip.to_deg) { integ -= Rs.integrity.slip.drain_per_s * dt; slipM += d; }
@@ -75,7 +79,7 @@ export function estimateRoute(game, pts, { start = game.s, refills = [] } = {}) 
   return {
     dist, realMin: tReal / 60, marsH, arrivalHour: hour0 + marsH, kcal, dose,
     o2End: o2, minO2, energyEnd: en, integrityEnd: integ, fatigueEnd: fatigue,
-    up, down, maxSlope, blockedM, rockyM, slipM, duneM, coldMin,
+    up, down, maxSlope, blockedM, rockyM, slipM, duneM, coldMin, classM, radMean: dist > 0 ? radInt / dist : 0,
     verdict: blockedM >= 1 ? "blocked" : !ok ? "fail" : risky ? "risky" : "ok",
     profile,
   };

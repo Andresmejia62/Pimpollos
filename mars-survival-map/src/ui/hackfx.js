@@ -1,6 +1,9 @@
 // Terminal del recorrido de entrada del atlas: lineas que se escriben solas y una barra de progreso por
 // tramo. Solo decoracion: no bloquea el raton y se quita al instante si el usuario toma el control.
+import { t } from "../i18n.js";
+
 const $ = (id) => document.getElementById(id);
+const L = (es, en) => ({ es, en });
 
 export class HackFx {
   constructor() {
@@ -27,7 +30,7 @@ export class HackFx {
     this.bar.textContent = "";
     this.el.hidden = false;
     this.el.classList.remove("out");
-    this.line("MARS-NAV v4.2 // enlace MRO", "dim");
+    this.line(t(L("MARS-NAV v4.2 // enlace MRO", "MARS-NAV v4.2 // MRO link")), "dim");
   }
 
   // Escribe una linea caracter a caracter
@@ -50,22 +53,22 @@ export class HackFx {
 
   // Un tramo del recorrido: objetivo, coordenadas, fuente de datos y barra de progreso del vuelo
   leg({ name, lat, lon, src, dur }) {
-    this.line(`fijando objetivo: ${name}`);
+    this.line(`${t(L("fijando objetivo", "acquiring target"))}: ${name}`);
     this._after(120, () => this.line(`lat ${lat.toFixed(4)}  lon ${lon.toFixed(4)}`, "dim"));
-    this._after(240, () => this.line(`fuente: ${src}`, "dim"));
+    this._after(240, () => this.line(`${t(L("fuente", "source"))}: ${src}`, "dim"));
     const t0 = performance.now(), run = this.run, N = 14;
     const fill = () => {
       if (run !== this.run) return;
       const k = Math.min(1, (performance.now() - t0) / dur), n = Math.round(k * N);
       this.bar.textContent = `[${"█".repeat(n)}${"░".repeat(N - n)}] ${String(Math.round(k * 100)).padStart(3)}%`;
       if (k < 1) this._after(40, fill);
-      else this.line("objetivo fijado", "ok");
+      else this.line(t(L("objetivo fijado", "target locked")), "ok");
     };
     fill();
   }
 
   finish() {
-    this._after(250, () => this.line("ENLACE ESTABLE // manual", "ok"));
+    this._after(250, () => this.line(t(L("ENLACE ESTABLE // manual", "LINK STABLE // manual")), "ok"));
     this._after(1100, () => this.el.classList.add("out"));
     this._after(1500, () => { this.run++; this._clear(); this.el.hidden = true; });
   }

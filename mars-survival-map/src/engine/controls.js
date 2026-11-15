@@ -1,3 +1,4 @@
+import { Raycaster, Vector3 } from "three";
 // Entrada de teclado/raton y camara en tercera persona.
 export class Controls {
   constructor(canvas) {
@@ -72,12 +73,30 @@ export class Controls {
 
   jumpHeld() { return this.keys.has(" "); }
 
-  // Coloca la camara detras del jugador sin atravesar el terreno
-  updateCamera(camera, target, groundAt) {
+  // Coloca la camara detras del jugador sin atravesar el terreno ni las estructuras.
+  // occluders(x, z) -> grupos 3D cercanos: si alguno se interpone entre la cabeza y la camara (un techo, una
+  // pared), la camara se acerca hasta justo delante del obstaculo. La distancia se suaviza al alejarse.
+  updateCamera(camera, target, groundAt, occluders = null) {
     const cp = Math.cos(this.pitch);
     const dx = Math.sin(this.yaw) * cp, dz = Math.cos(this.yaw) * cp, dy = -Math.sin(this.pitch);
     const head = { x: target.x, y: target.y + 1.7, z: target.z };
-    let cx = head.x + dx * this.dist, cy = head.y + dy * this.dist + 0.6, cz = head.z + dz * this.dist;
+    let dist = this.dist;
+    const near = occluders ? occluders(target.x, target.z) : null;
+    if (near && near.length) {
+      const ray = (this._ray ||= new Raycaster());
+      const o = (this._o ||= new Vector3()), d = (this._d ||= new Vector3());
+      o.set(head.x, head.y + 0.3, head.z);
+      d.set(dx * this.dist, dy * this.dist + 0.3, dz * this.dist);
+      const full = d.length();
+      ray.set(o, d.normalize());
+      ray.far = full;
+      const hit = ray.intersectObjects(near, true).find((h) => h.object.visible && !h.object.userData.noShadow && !h.object.material.transparent);
+      if (hit) dist = Math.max(0.6, (hit.distance - 0.35) * (this.dist / full));
+    }
+    // acercarse de golpe (para no ver a traves), alejarse poco a poco (para que no salte)
+    this._camDist = this._camDist == null || dist < this._camDist ? dist : this._camDist + (dist - this._camDist) * 0.08;
+    dist = this._camDist;
+    let cx = head.x + dx * dist, cy = head.y + dy * dist + 0.6 * Math.min(1, dist / 3), cz = head.z + dz * dist;
     const g = groundAt(cx, cz) + 1.2;
     if (cy < g) cy = g;
     camera.position.set(cx, cy, cz);
