@@ -44,7 +44,8 @@ export class Hud {
 
   applyLang() {
     document.querySelectorAll("[data-ui]").forEach((el) => { el.textContent = ui(el.dataset.ui); });
-    $("campaignName").textContent = t(this.data.missions.campaign.title);
+    // portada: el eslogan de la marca ocupa el sitio del nombre de la campana (no se traduce)
+    $("campaignName").textContent = "Mind your step";
     const names = t({ es: "N NE E SE S SO O NO", en: "N NE E SE S SW W NW" }).split(" ");
     this.ticks.forEach((el, i) => { el.textContent = names[i]; });
     this.setLayer(this.game.s.layer);

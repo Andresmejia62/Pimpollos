@@ -1344,7 +1344,7 @@ export class Atlas {
       const ll = this.geo.toLatLon(q[1], q[2]), h = (h0 + q[0] / 3600) % 24;
       rows.push([q[0], `${String(Math.floor(h)).padStart(2, "0")}:${String(Math.floor((h % 1) * 60)).padStart(2, "0")}`, ll.lat.toFixed(6), ll.lon.toFixed(6), q[3], q[1], q[2], q[4], q[5]].join(","));
     }
-    const blob = new Blob([`# Mars Survival Map - traza EVA (${this.game.bio.p.name}). Planetocentrico, lon Este, elevacion sobre el areoide MOLA.\n` + rows.join("\n")], { type: "text/csv" });
+    const blob = new Blob([`# Marsift Survival Map - traza EVA (${this.game.bio.p.name}). Planetocentrico, lon Este, elevacion sobre el areoide MOLA.\n` + rows.join("\n")], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = "traza_eva_marte.csv"; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);

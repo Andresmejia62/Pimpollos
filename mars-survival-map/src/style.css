@@ -284,6 +284,12 @@ button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .title-screen { background: linear-gradient(90deg, rgba(10,8,12,.86) 0%, rgba(10,8,12,.4) 55%, transparent 80%); place-items: center start; padding-left: max(6vw, 16px); }
 .title-wrap { max-width: 640px; }
 .title { font: 700 clamp(48px, 7.5vw, 104px) var(--font-hud); line-height: .92; letter-spacing: .03em; margin: 10px 0 14px; text-shadow: 0 4px 30px rgba(0,0,0,.6); }
+/* marca Marsift (como el banner): letras anchas en dorado, "SURVIVAL MAP" y el eslogan espaciados debajo */
+.title .brand { display: block; font: 800 clamp(40px, 6.6vw, 96px) "Orbitron", var(--font-hud); letter-spacing: .05em; line-height: 1.05;
+  background: linear-gradient(180deg, #ffe28a 0%, #f2b53a 45%, #c98a1c 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 4px 24px rgba(0,0,0,.6)); text-shadow: none; }
+.title .brand-sub { display: block; font: 700 clamp(22px, 3vw, 40px) var(--font-hud); letter-spacing: .32em; color: #f2c25a; margin-top: .25em; }
+.brand-slogan { font: 600 clamp(14px, 1.4vw, 19px) var(--font-hud); letter-spacing: .42em; text-transform: uppercase; color: #e9b54a; margin: -4px 0 22px; }
 .subtitle { font-size: clamp(16px, 1.6vw, 20px); margin: 0 0 26px; max-width: 46ch; }
 .controls-line { font-size: 13px; color: var(--hud-text-dim); margin-top: 22px; max-width: 70ch; line-height: 1.5; }
 .sky-caption { position: fixed; right: max(3vw, 16px); bottom: 44px; max-width: 360px; font-size: 12.5px; line-height: 1.45; color: var(--hud-text-dim); text-align: right; text-shadow: 0 1px 3px #000; }

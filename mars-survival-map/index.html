@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Mars Survival Map</title>
+  <title>Marsift Survival Map</title>
   <meta name="description" content="Simulador web 3D de supervivencia en el Monte Sharp (cráter Gale) con datos reales de NASA.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Orbitron:wght@800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./src/style.css">
 </head>
 <body>
@@ -102,7 +102,7 @@
         <div class="globe-lbl">4,59° S · 137,44° E<br><b>CRÁTER GALE</b></div>
       </div>
       <div class="load-panel">
-        <div class="eyebrow">NASA Space Apps · Mars Survival Map</div>
+        <div class="eyebrow">NASA Space Apps · Marsift Survival Map</div>
         <h1 class="load-title">EVA-1<span>Aeolis Mons · cráter Gale</span></h1>
         <div class="load-pct"><b id="loadPct">0</b><span>%</span><em class="muted" id="loadText">Cargando…</em></div>
         <div class="loadbar"><i id="loadBar"></i></div>
@@ -115,8 +115,10 @@
 
   <div class="screen title-screen" id="scrTitle" hidden>
     <div class="title-wrap">
-      <div class="eyebrow">NASA Space Apps · <span id="campaignName"></span></div>
-      <h1 class="title">MARS<br>SURVIVAL MAP</h1>
+      <div class="eyebrow">NASA Space Apps</div>
+      <!-- marca como en la portada (Marsift-logos/Marsift-banner-YouTube.png): MARSIFT en dorado y el eslogan -->
+      <h1 class="title"><span class="brand">MARSIFT</span><span class="brand-sub">SURVIVAL MAP</span></h1>
+      <div class="brand-slogan" id="campaignName">Mind your step</div>
       <p class="subtitle" data-ui="tagline"></p>
       <!-- dos acciones principales, cada una con su descripcion; lo secundario va debajo, mas pequeno -->
       <div class="menu-main">
