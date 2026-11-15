@@ -68,9 +68,9 @@ export class Hud {
     const m = this.game.mission;
     const tg = this.game.target;
     const d = tg ? this.game.distTo(tg) : 0;
-    $("missionLbl").textContent = `${ui("mission")} ${m.order}/${this.game.missions.length}`;
+    $("missionLbl").textContent = m.free ? ui("freeHint") : `${ui("mission")} ${m.order}/${this.game.missions.length}`;
     $("missionTitle").textContent = t(m.title);
-    $("missionObj").textContent = `${t(tg.name)} · ${fmtDist(d)}`;
+    $("missionObj").textContent = tg ? `${t(tg.name)} · ${fmtDist(d)}${m.free && s.scanned && tg.id === "custom" ? " ✓" : ""}` : ui("freeNoTarget");
 
     // vista del destino (foto real de Curiosity) al acercarse
     this._povHud(tg, d);
@@ -218,6 +218,7 @@ export class Hud {
       return d;
     };
     this.ticks.forEach((el) => place(el, +el.dataset.az));
+    $("compassTgt").hidden = !tg;
     if (tg) {
       const s = this.game.s;
       const az = ((Math.atan2(tg.world.x - s.x, -(tg.world.z - s.z)) * 180) / Math.PI + 360) % 360;
@@ -360,6 +361,14 @@ class Minimap {
         ctx.strokeRect(px - 7, pz - 7, 14, 14);
         if (isT) { ctx.beginPath(); ctx.arc(px, pz, 14, 0, Math.PI * 2); ctx.stroke(); }
       }
+    }
+    // destino propio del modo libre (rombo verde)
+    const cu = this.game.objectives.custom;
+    if (cu) {
+      const [px, pz] = this.toPx(cu.world.x, cu.world.z), isT = target && target.id === "custom";
+      ctx.strokeStyle = "#3DDC97"; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(px, pz - 12); ctx.lineTo(px + 12, pz); ctx.lineTo(px, pz + 12); ctx.lineTo(px - 12, pz); ctx.closePath(); ctx.stroke();
+      if (isT) { ctx.beginPath(); ctx.arc(px, pz, 4, 0, Math.PI * 2); ctx.fillStyle = "#3DDC97"; ctx.fill(); }
     }
     // Rover aparcado (rombo naranja)
     if (s.car && !s.driving) {

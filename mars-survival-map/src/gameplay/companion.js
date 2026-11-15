@@ -89,7 +89,7 @@ export class Companion {
 
     // ---- segunda tarea: medir junto al objetivo mientras tu escaneas (sigue aunque la mision avance) ----
     const storm = s.spe && s.spe.phase !== "ended";
-    if (!b.taskObj && !storm && obj.type === "science" && !b.tasksDone[obj.id] && g.distTo(obj) < 70) b.taskObj = obj.id;
+    if (!b.taskObj && !storm && obj && obj.type === "science" && !b.tasksDone[obj.id] && g.distTo(obj) < 70) b.taskObj = obj.id;
     if (b.taskObj && !storm) {
       const o = g.objectives[b.taskObj];
       const tx = o.world.x + 9, tz = o.world.z - 7;

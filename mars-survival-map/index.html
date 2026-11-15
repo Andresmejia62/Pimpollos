@@ -43,6 +43,8 @@
       <div class="cap"><span id="mapScale">6,1 km</span><span class="trav">━ Curiosity</span><span><kbd>M</kbd> <span data-ui="atlas"></span></span></div>
     </section>
 
+    <section class="panel sim" id="simPanel" hidden aria-label="Simulación"></section>
+
     <section class="panel legend" id="legend" hidden></section>
 
     <section class="panel mission">
@@ -106,10 +108,12 @@
       <p class="subtitle" data-ui="tagline"></p>
       <div class="btnrow">
         <button class="btn primary" id="btnStart" data-ui="start"></button>
+        <button class="btn" id="btnFree" data-ui="freeMode"></button>
         <button class="btn" id="btnAtlas" data-ui="atlasOpen"></button>
         <button class="btn" id="btnGuide" data-ui="guide"></button>
         <button class="btn" id="btnLang">ES · EN</button>
       </div>
+      <p class="modes-line" data-ui="modesLine"></p>
       <p class="controls-line" data-ui="controlsList"></p>
     </div>
     <div class="sky-caption" id="skyCaption"></div>
@@ -179,8 +183,8 @@
   <div class="screen dim" id="scrPlan" hidden>
     <div class="card plan">
       <header class="plan-head">
-        <div><div class="eyebrow" data-ui="planEyebrow"></div><h2 id="planTitle"></h2></div>
-        <div class="btnrow"><select id="planLayer" aria-label="Capa"></select><button class="btn sm" id="planClear" data-ui="planClear"></button><button class="btn sm" id="planBack" data-ui="back"></button><button class="btn sm primary" id="planUse" data-ui="planUse"></button></div>
+        <div><div class="eyebrow" id="planEyebrow" data-ui="planEyebrow"></div><h2 id="planTitle"></h2></div>
+        <div class="btnrow"><div class="seg" id="planPick" hidden><button data-pick="goal" data-ui="pickGoal"></button><button data-pick="start" data-ui="pickStart"></button><button data-pick="way" data-ui="pickWay"></button></div><select id="planLayer" aria-label="Capa"></select><button class="btn sm" id="planClear" data-ui="planClear"></button><button class="btn sm" id="planBack" data-ui="back"></button><button class="btn sm primary" id="planUse" data-ui="planUse"></button></div>
       </header>
       <div class="plan-grid">
         <div class="plan-map"><canvas id="planMap" aria-label="Mapa de planificación"></canvas><div class="plan-hint small" id="planHint"></div></div>

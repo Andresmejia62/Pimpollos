@@ -18,6 +18,13 @@ export const t = (obj) => (obj == null ? "" : typeof obj === "string" ? obj : ob
 const UI = {
   start: { es: "Comenzar EVA", en: "Start EVA" },
   guide: { es: "Cómo leer las capas", en: "How to read the layers" },
+  freeMode: { es: "Modo libre", en: "Free mode" },
+  modesLine: { es: "Comenzar EVA = modo juego: campaña de 5 misiones con objetivos científicos. Modo libre = simulación: tú defines el destino, la salida, la hora y las condiciones.", en: "Start EVA = game mode: a 5-mission campaign with science targets. Free mode = simulation: you set the destination, the start point, the time and the conditions." },
+  pickGoal: { es: "Destino", en: "Destination" },
+  pickStart: { es: "Salida", en: "Start" },
+  pickWay: { es: "Punto de paso", en: "Waypoint" },
+  freeNoTarget: { es: "Sin destino · G para definirlo", en: "No destination · G to set one" },
+  freeHint: { es: "G destino · O panel de simulación", en: "G destination · O simulation panel" },
   tagline: { es: "Camina por donde va Curiosity. Lee los datos de NASA. Vuelve con vida.", en: "Walk where Curiosity goes. Read NASA's data. Come back alive." },
   credits: { es: "Datos: NASA/JPL-Caltech (Curiosity: traza, RAD, REMS) · MRO HiRISE, CTX y CRISM · Mars Odyssey THEMIS · USGS Astrogeology", en: "Data: NASA/JPL-Caltech (Curiosity: traverse, RAD, REMS) · MRO HiRISE, CTX and CRISM · Mars Odyssey THEMIS · USGS Astrogeology" },
   loading: { es: "Cargando datos de Marte…", en: "Loading Mars data…" },

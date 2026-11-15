@@ -137,9 +137,9 @@ export class PauseMenu {
     }
     const sh = g.nearestShelter();
     const shD = gcDistance(ll.lat, ll.lon, sh.latlon[0], sh.latlon[1]);
-    return `<div class="eyebrow">${ui("mission")} ${m.order} ${ui("of")} ${g.missions.length}</div>
+    return `<div class="eyebrow">${m.free ? ui("freeMode") : `${ui("mission")} ${m.order} ${ui("of")} ${g.missions.length}`}</div>
       <h2>${t(m.title)}</h2>
-      <ol class="mdots">${dots}</ol>
+      ${m.free ? `<p class="muted small">${ui("freeHint")} · ${t(L("mediciones", "readings"))}: ${s.freeDone}</p>` : `<ol class="mdots">${dots}</ol>`}
       <div class="pbars">${this._bar("O₂", s.oxygen, "var(--o2)")}${this._bar(t(L("Energía", "Power")), s.energy, "var(--energy)")}${this._bar(t(L("Integridad", "Integrity")), s.integrity, "var(--integrity)")}</div>
       <table class="kv">
         ${tgRow}

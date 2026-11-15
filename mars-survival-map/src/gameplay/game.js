@@ -26,6 +26,8 @@ export class Game {
     this.dialogs = Object.fromEntries(data.dialogs.dialogs.map((d) => [d.id, d]));
     this.facts = Object.fromEntries(data.facts.facts.map((f) => [f.id, f]));
     this.listeners = {};
+    // modo libre: una "mision" sin guion cuyo objetivo lo define el usuario (setFreeTarget)
+    this._free = { id: "free", order: 0, free: true, title: { es: "Modo libre · simulación", en: "Free mode · simulation" }, objective_id: null, action: "scan", points: 0 };
     this.setProfile(DEFAULT_PROFILE);
     this.reset();
   }
@@ -73,14 +75,19 @@ export class Game {
       // fisiologia y telemetria acumulada de la EVA
       bio: { M: this.bio ? this.bio.metabolic(0) : 150, grade: 0, eta: 1.2, fatigue: 0, kcal: 0, o2g: 0, co2g: 0, waterg: 0, doseUgy: 0, hr: 70, vReal: 0 },
       track: [],
+      // modo libre (simulacion): sin campana; sim = recursos que no se gastan; freeN/freeDone = destinos definidos/medidos
+      free: false, sim: { lockO2: false, lockEnergy: false, lockIntegrity: false }, freeN: 0, freeDone: 0,
     };
     this.checkpoint = null;
+    delete this.objectives.custom;
+    this._free.objective_id = null;
   }
 
-  get mission() { return this.missions[this.s.missionIndex]; }
+  get mission() { return this.s.free ? this._free : this.missions[this.s.missionIndex]; }
   get target() {
     const s = this.s;
     if (s.spe && s.spe.phase !== "ended") return this.nearestShelter();
+    if (s.free) return this.objectives.custom || null;
     return this.objectives[this.mission.objective_id];
   }
   get hour() { return this.rules.time.start_local_time_h + this.s.gameSeconds / 3600; }
@@ -125,6 +132,86 @@ export class Game {
     return true;
   }
 
+  // ---- modo libre (simulacion) ----------------------------------------------------
+  // Sin objetivo predefinido: el usuario elige destino, punto de salida, hora, tormentas y que recursos se gastan.
+  startFree() {
+    this.reset();
+    const s = this.s;
+    s.free = true;
+    s.phase = "playing";
+    this.checkpoint = JSON.parse(JSON.stringify(s));
+    this.emit("free", true);
+  }
+
+  // Destino propio en (x, z) del mundo. latlon = [lat, lonEste] (lo calcula quien llama con GeoFrame)
+  setFreeTarget(x, z, latlon, name = null) {
+    const s = this.s;
+    if (!s.free) return null;
+    s.freeN += 1;
+    const y = this.groundAt(x, z);
+    const o = {
+      id: "custom", type: "custom", radius_m: 15, n: s.freeN,
+      name: name || { es: `Destino ${s.freeN}`, en: `Destination ${s.freeN}` },
+      world: { x, y, z }, latlon, elevation_m: y + this.world.yRef,
+    };
+    this.objectives.custom = o;
+    this._free.objective_id = "custom";
+    s.scanProgress = 0; s.scanned = false; s.plan = null;
+    this.emit("freeTarget", o);
+    return o;
+  }
+
+  clearFreeTarget() {
+    const s = this.s;
+    if (!s.free) return;
+    delete this.objectives.custom;
+    this._free.objective_id = null;
+    s.scanProgress = 0; s.scanned = false; s.plan = null;
+    this.emit("freeTarget", null);
+  }
+
+  // Coloca al astronauta (y al rover, si va a bordo) en otro punto del mapa
+  teleport(x, z) {
+    const s = this.s;
+    s.x = x; s.z = z; s.y = null;
+    s.vx = s.vy = s.vz = 0;
+    s.scanProgress = 0;
+    if (s.driving) { s.car.x = x; s.car.z = z; }
+  }
+
+  // Lleva el rover junto al astronauta (modo libre)
+  summonVehicle() {
+    const s = this.s;
+    if (s.driving) return;
+    for (const [dx, dz] of [[5, 3], [-5, 3], [5, -3], [-5, -3], [0, 6], [0, -6]]) {
+      if (!this.world.blockedAt(s.x + dx, s.z + dz)) { s.car = { x: s.x + dx, z: s.z + dz, heading: s.heading }; return; }
+    }
+    s.car = { x: s.x + 4, z: s.z, heading: s.heading };
+  }
+
+  // Cambia la hora solar local (0-24 h) dentro del sol actual
+  setHour(h) {
+    const start = this.rules.time.start_local_time_h;
+    const day = Math.floor(this.hour / 24);
+    let gs = (day * 24 + h - start) * 3600;
+    if (gs < 0) gs += 86400;                       // antes de la hora de inicio: se pasa al sol siguiente
+    this.s.gameSeconds = gs;
+  }
+
+  endStorm() {
+    const s = this.s;
+    if (!s.spe || s.spe.phase === "ended") return;
+    s.spe.phase = "ended";
+    this.emit("spe", s.spe);
+  }
+
+  // Pone a cero la traza y los contadores de la EVA sin mover al astronauta
+  resetCounters() {
+    const s = this.s, b = s.bio;
+    s.track = []; s.movedTotal = 0; s.realSeconds = 0;
+    b.kcal = b.o2g = b.co2g = b.waterg = b.doseUgy = 0; b.fatigue = 0;
+  }
+
   // ---- flujo de misiones ---------------------------------------------------------
   startMission(i) {
     const s = this.s;
@@ -153,6 +240,13 @@ export class Game {
 
   retry() {
     if (!this.checkpoint) return;
+    if (this.s.free) {
+      // modo libre: vuelve al inicio de la simulacion y conserva el destino definido
+      this.s = JSON.parse(JSON.stringify(this.checkpoint));
+      this._applyLoad();
+      this.emit("free", true);
+      return;
+    }
     this.s = JSON.parse(JSON.stringify(this.checkpoint));
     this.s.phase = "briefing";
     if (this.s.cargo) this._applyLoad();
@@ -226,6 +320,7 @@ export class Game {
     const R = this.rules.resources, H = this.rules.hazards, W = this.world;
     s.realSeconds += dt;
     s.gameSeconds += dt * this.rules.time.time_scale;
+    const o2Before = s.oxygen, enBefore = s.energy, inBefore = s.integrity;
 
     // Movimiento: en pasos cortos para que las colisiones no se salten obstaculos a pocos FPS
     s.blockedAhead = false;
@@ -298,6 +393,12 @@ export class Game {
     }
     s.energy = Math.max(0, s.energy);
     s.oxygen = Math.min(100, s.oxygen);
+    // modo libre: recursos "congelados" (la fisiologia y la dosis se siguen calculando y registrando)
+    if (s.free) {
+      if (s.sim.lockO2) s.oxygen = Math.max(s.oxygen, o2Before);
+      if (s.sim.lockEnergy) s.energy = Math.max(s.energy, enBefore);
+      if (s.sim.lockIntegrity) s.integrity = Math.max(s.integrity, inBefore);
+    }
 
     // Tormenta solar
     if (s.spe && s.spe.phase !== "ended") {
@@ -313,6 +414,7 @@ export class Game {
           sp.phase = "ended";
           s.stormBonus = sp.sheltered >= 0.5 * E.duration_s;
           this.emit("spe", sp);
+          if (s.free) return;                     // en modo libre la tormenta no cierra ninguna mision
           if (s.integrity > 0 && s.oxygen > 0) this._completeMission();
           return;
         }
@@ -325,9 +427,9 @@ export class Game {
 
     // Objetivo de la mision
     const m = this.mission;
-    const obj = this.objectives[m.objective_id];
-    const d = this.distTo(obj);
-    if (!s.scanned && !(s.spe && s.spe.phase !== "ended")) {
+    const obj = m.objective_id ? this.objectives[m.objective_id] : null;
+    const d = obj ? this.distTo(obj) : Infinity;
+    if (obj && !s.scanned && !(s.spe && s.spe.phase !== "ended")) {
       if (m.action === "reach") {
         if (d < this.radiusOf(obj)) { s.scanned = true; this._completeMission(); return; }
       } else if (d < this.radiusOf(obj)) {
@@ -338,8 +440,14 @@ export class Game {
           s.energy = Math.max(0, s.energy - R.energy.scanner_cost);
           s.cargo.carried += 1;          // muestra recogida: se suma a la carga
           this._applyLoad();
-          s.phase = "card";
-          this.emit("scanComplete", { mission: m, objective: obj, fact: this.facts[m.fact_id] });
+          if (s.free) {
+            // modo libre: se mide el punto y la simulacion sigue; el usuario decide el siguiente destino
+            s.freeDone += 1;
+            this.emit("freeScan", { objective: obj });
+          } else {
+            s.phase = "card";
+            this.emit("scanComplete", { mission: m, objective: obj, fact: this.facts[m.fact_id] });
+          }
         }
       } else if (s.scanProgress > 0) {
         s.scanProgress = 0;

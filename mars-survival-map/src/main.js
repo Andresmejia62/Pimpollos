@@ -18,6 +18,7 @@ import { loadProfile } from "./engine/physiology.js";
 import { LoadingScreen, PauseMenu } from "./ui/screens.js";
 import { SkyPlanets } from "./engine/planets.js";
 import { Planner } from "./ui/planner.js";
+import { SimPanel } from "./ui/sim.js";
 import { Companion } from "./gameplay/companion.js";
 import { IntroCinematic } from "./ui/intro.js";
 import { loadSpaceWeather, REFERENCE_EVENT, LEVEL_TEXT, LEVEL_COLOR } from "./spaceweather.js";
@@ -98,6 +99,7 @@ async function boot() {
     const tg = game.target;
     for (const [id, b] of Object.entries(beacons)) {
       const o = game.objectives[id];
+      if (!o) { scene.setBeacon(b, { visible: false, target: false, shelter: false }); continue; }
       const isT = tg && id === tg.id;
       const done = o.type === "science" && game.missions.findIndex((m) => m.objective_id === id) < game.s.missionIndex;
       scene.setBeacon(b, { visible: !!(isT || o.shelter || (!done && o.type === "science")), target: !!isT, shelter: !!o.shelter });
@@ -105,7 +107,7 @@ async function boot() {
   };
 
   // ---- idioma y pantallas ----------------------------------------------------------
-  const toggleLang = () => { setLang(getLang() === "es" ? "en" : "es"); hud.applyLang(); atlas.applyLang(); skyCaption(); if (game.s.phase === "briefing") showBriefing(); };
+  const toggleLang = () => { setLang(getLang() === "es" ? "en" : "es"); hud.applyLang(); atlas.applyLang(); skyCaption(); if (game.s.phase === "briefing") showBriefing(); if (game.s.free) sim.render(); };
   hud.applyLang();
   skyCaption();
   // la carga se desvanece sobre la portada
@@ -181,6 +183,76 @@ async function boot() {
     hud.showAlert({ id: "a_buddy_abort", severity: "caution", text: { es: "EVA-2 se quedó sin margen de O₂ y aborta hacia el rover. Sigues tú.", en: "EVA-2 ran out of O₂ margin and is aborting to the rover. You carry on." } });
   });
   buddy.on("rejoined", () => say({ es: "Recargué en el rover. Vuelvo contigo.", en: "Recharged at the rover. Back with you." }, 4));
+  // ---- modo libre (simulacion) ---------------------------------------------------------
+  // Sin campana: el usuario define destino, salida, hora, tormentas y que recursos se gastan (ui/sim.js).
+  let mode = "game", buddyOn = true, softUnlock = false;
+  // soltar el raton para usar un panel sin que se abra el menu de pausa
+  const freeMouse = () => { if (controls.locked) { softUnlock = true; controls.unlock(); } };
+  const refill = () => { const s = game.s; s.oxygen = s.energy = s.integrity = 100; s.bio.fatigue = 0; };
+  const toggleStorm = () => { const sp = game.s.spe; sp && sp.phase !== "ended" ? game.endStorm() : game.triggerStorm(); };
+  const openFreePlanner = () => {
+    if (!game.s.free || game.s.phase !== "playing") return;
+    freeMouse();
+    planner.open((pts, kind, sel) => {
+      if (sel.start) { game.teleport(sel.start[0], sel.start[1]); buddy.snapTo(game.s); }
+      const cur = game.objectives.custom;
+      if (sel.goal && !(cur && cur.world.x === sel.goal[0] && cur.world.z === sel.goal[1])) {
+        const ll = geo.toLatLon(sel.goal[0], sel.goal[1]);
+        game.setFreeTarget(sel.goal[0], sel.goal[1], [ll.lat, ll.lon]);
+      }
+      if (pts && game.target) usePlan(pts, kind);
+      else if (game.target) { game.s.plan = null; game.setRoute(true); }
+    }, { free: true });
+  };
+  const sim = new SimPanel(game, {
+    pickTarget: openFreePlanner,
+    gotoSite: (id) => { const o = game.objectives[id]; if (o) { game.teleport(o.world.x + 18, o.world.z + 14); buddy.snapTo(game.s); lastRoute = -99; } },
+    profile: () => { freeMouse(); profile.open(); },
+    exportCsv: () => atlas.exportCSV(),
+    buddy: (on) => { buddyOn = on; hud.minimap.buddy = on ? buddy.st : null; },
+    refill,
+  });
+  const startFree = () => {
+    game.startFree();
+    controls.enabled = true;
+    show("hud");
+    sim.reset();
+    buddyOn = true; hud.minimap.buddy = buddy.st;
+    $("telem").hidden = true;            // el panel de simulacion ocupa su sitio; I la vuelve a mostrar al lado
+    sim.show(true);
+    hud.dialogQueue.push({ speaker: "suit", duration_s: 9, text: {
+      es: "Modo libre: no hay misión. Pulsa G para definir tu destino y tu ruta en el mapa, y O para abrir o cerrar el panel de simulación.",
+      en: "Free mode: there is no mission. Press G to set your destination and route on the map, and O to open or close the simulation panel." } });
+    openFreePlanner();
+  };
+  game.on("free", () => {
+    hud.clearAlerts(); hud.clearDialogs();
+    show("scrBriefing", false); show("scrCard", false); show("scrEnd", false);
+    buddy.reset();
+    if (beacons.custom && !game.objectives.custom) { scene.setBeacon(beacons.custom, { visible: false, target: false, shelter: false }); delete beacons.custom; }
+    scene.setOverlay(null); hud.setLayer(null); hud.setRoute(false);
+    updateBeacons();
+    lastRoute = -99;
+  });
+  game.on("freeTarget", (o) => {
+    if (beacons.custom) { scene.setBeacon(beacons.custom, { visible: false, target: false, shelter: false }); delete beacons.custom; }
+    if (o) beacons.custom = scene.addBeacon(o.world.x, o.world.z, game.radiusOf(o), 380);
+    else { hud.minimap.setRoute(null); if (game.s.routeOn) game.setRoute(false); }
+    updateBeacons();
+    lastRoute = -99;
+    sim.update(0, true);
+  });
+  game.on("freeScan", ({ objective }) => {
+    sfx.success();
+    const s = game.s, r = buddy._reading(s.x, s.z), dec = getLang() === "es" ? "," : ".";
+    const f = (v, d = 0) => v.toFixed(d).replace(".", dec);
+    sim.addReading({ n: objective.n, elev: objective.elevation_m, ...r });
+    hud.showAlert({ id: "a_free_scan", severity: "info", text: {
+      es: `${objective.name.es} medido: ${f(objective.elevation_m)} m · pendiente ${f(r.slope)}° · suelo ${f(r.temp)} °C · ${f(r.dose, 2)} µGy/h · ${r.mineral.es.toLowerCase()}. Muestra de 1,8 kg recogida.`,
+      en: `${objective.name.en} measured: ${f(objective.elevation_m)} m · slope ${f(r.slope)}° · ground ${f(r.temp)} °C · ${f(r.dose, 2)} µGy/h · ${r.mineral.en.toLowerCase()}. 1.8 kg sample collected.` } });
+    sim.update(0, true);
+  });
+
   game.on("layer", (l) => { scene.setOverlay(l); hud.setLayer(l); });
   game.on("route", (on) => { scene.setRouteVisible(on); hud.setRoute(on); lastRoute = -99; });
   game.on("suggestLayer", (l) => { if (!game.s.layer && game.s.missionIndex > 0) game.setLayer(l); });
@@ -229,6 +301,18 @@ async function boot() {
         </table>
         <div class="btnrow"><button class="btn primary" id="btnAgain">${ui("playAgain")}</button></div>`;
       $("btnAgain").onclick = () => location.reload();
+    } else if (game.s.free) {
+      // modo libre: el fallo es un resultado de la simulacion; se puede seguir desde el mismo punto
+      const s = scr[cause];
+      card.style.borderColor = "var(--danger)";
+      card.innerHTML = `
+        <div class="eyebrow" style="color:var(--danger)"><svg><use href="#i-octagon"/></svg>${t({ es: "Simulación · límite alcanzado", en: "Simulation · limit reached" })}</div>
+        <h2>${t(s.title)}</h2>
+        <p class="body">${t(s.body)}</p>
+        <div class="btnrow"><button class="btn primary" id="btnFreeGo">${t({ es: "Recargar y seguir aquí", en: "Refill and continue here" })}</button><button class="btn" id="btnRetry">${t({ es: "Reiniciar simulación", en: "Restart simulation" })}</button><button class="btn" id="btnMenu">${ui("menu")}</button></div>`;
+      $("btnFreeGo").onclick = () => { show("scrEnd", false); refill(); game.s.failCause = null; game.s.phase = "playing"; canvas.focus(); };
+      $("btnRetry").onclick = () => { show("scrEnd", false); game.retry(); };
+      $("btnMenu").onclick = () => location.reload();
     } else {
       const s = scr[cause];
       card.style.borderColor = "var(--danger)";
@@ -255,14 +339,25 @@ async function boot() {
   // Comenzar: primero el perfil fisico del astronauta, luego la primera mision
   // Comenzar EVA: cinematica de llegada (cohete -> entrada atmosferica -> impacto en Gale) y luego el perfil
   const intro = new IntroCinematic({ ms: scene, site: game.objectives.habitat.world, geo, getMarsRaster: () => atlas.rGlobal || null });
+  // Comenzar EVA = modo juego (campana de 5 misiones)
   $("btnStart").onclick = () => {
     initAudio();
+    mode = "game";
     show("scrTitle", false);
     intro.play(() => profile.open());
   };
-  profile.onBack = () => show("scrTitle");
+  // Modo libre = simulacion sin objetivo predefinido (sin cinematica: directo al perfil y al mapa)
+  $("btnFree").onclick = () => {
+    initAudio();
+    mode = "free";
+    show("scrTitle", false);
+    profile.open();
+  };
+  profile.onBack = () => { if (!game.s.free) show("scrTitle"); };
   profile.onConfirm = (p) => {
     applyProfile(p);
+    if (game.s.free) { sim.update(0, true); return; }       // cambio de perfil en plena simulacion
+    if (mode === "free") { startFree(); return; }
     game.reset();
     controls.enabled = true;
     game.startMission(0);
@@ -271,7 +366,7 @@ async function boot() {
   $("minimap").onclick = () => openAtlas("eva");
   window.addEventListener("keydown", (e) => { if (e.key === "Escape" && atlas.isOpen && game.s.phase !== "playing") atlas.close(); });
   $("btnPlan").onclick = () => { show("scrBriefing", false); planner.open(usePlan); };
-  planner.onClose = () => showBriefing();
+  planner.onClose = () => { if (game.s.phase === "briefing") showBriefing(); else canvas.focus(); };
   $("btnBegin").onclick = () => {
     show("scrBriefing", false);
     game.beginMission();
@@ -298,11 +393,14 @@ async function boot() {
 
   let wasLocked = false;
   controls.on("lock", (locked) => {
-    if (wasLocked && !locked && game.s.phase === "playing" && !atlas.isOpen) setPaused(true);
+    if (wasLocked && !locked && game.s.phase === "playing" && !atlas.isOpen && !softUnlock) setPaused(true);
+    softUnlock = false;
     wasLocked = locked;
   });
   controls.on("key", (k, e) => {
     if (atlas.isOpen) { if (k === "escape" || k === "m") atlas.close(); return; }
+    if (!$("scrPlan").hidden) { if (k === "escape") planner.close(); return; }
+    if (!$("scrProfile").hidden) return;
     if (game.s.phase !== "playing") return;
     if (k === "escape") { setPaused(!paused); return; }
     if (paused) return;
@@ -314,11 +412,17 @@ async function boot() {
     if (k === "m") openAtlas("eva");
     if (k === "i") $("telem").hidden = !$("telem").hidden;
     if (k === "p") sky.labelsOn = !sky.labelsOn;
-    if (DEBUG) {
+    if (game.s.free) {
+      // herramientas del modo libre
+      if (k === "g") openFreePlanner();
+      if (k === "o") { sim.toggle(); if (sim.isOpen) freeMouse(); }
+      if (k === "t") toggleStorm();
+      if (k === "k") refill();
+    } else if (DEBUG) {
       if (k === "t") game.triggerStorm();
-      if (k === "n") { const o = game.target; game.s.x = o.world.x + 25; game.s.z = o.world.z + 25; game.s.y = null; }
       if (k === "k") { game.s.oxygen = 100; game.s.energy = 100; game.s.integrity = 100; }
     }
+    if (DEBUG && k === "n" && game.target) { const o = game.target; game.s.x = o.world.x + 25; game.s.z = o.world.z + 25; game.s.y = null; }
   });
   if (DEBUG) show("fps");
 
@@ -351,7 +455,9 @@ async function boot() {
       scene.setFocus(cx, scene.heightAt(cx, cz), cz);
       updateSky(TITLE_HOUR);
     } else {
-      if (s.phase === "playing" && !paused && $("scrGuide").hidden && !atlas.isOpen) {
+      // la simulacion se detiene mientras hay una pantalla encima (pausa, guia, atlas, planificacion, perfil)
+      const running = s.phase === "playing" && !paused && $("scrGuide").hidden && !atlas.isOpen && $("scrPlan").hidden && $("scrProfile").hidden;
+      if (running) {
         game.update(dt, controls.moveVector(), controls.jumpHeld());
         acc += dt;
         if (acc > 0.25) { acc = 0; alerts.check(now); }
@@ -366,14 +472,15 @@ async function boot() {
       }
       astro.update(dt, s.driving ? 0 : s.speed, s.x, y, s.z, s.heading, s.air);
       // EVA-2
-      if (s.phase === "playing" && !paused && $("scrGuide").hidden && !atlas.isOpen) buddy.update(dt, controls.keys.has("f"));
+      if (s.phase === "playing" && !paused && $("scrGuide").hidden && !atlas.isOpen && $("scrPlan").hidden && $("scrProfile").hidden && buddyOn) buddy.update(dt, controls.keys.has("f"));
       const bs = buddy.st;
-      buddyAstro.root.visible = !bs.riding;
+      buddyAstro.root.visible = buddyOn && !bs.riding;
       buddyAstro.update(dt, bs.mode === "stuck" ? 0 : bs.speed, bs.x, scene.heightAt(bs.x, bs.z), bs.z, bs.heading, 0);
       const dB = Math.hypot(bs.x - s.x, bs.z - s.z);
-      $("buddyPrompt").hidden = !(bs.mode === "stuck" && dB < 4.5 && s.phase === "playing");
+      $("buddyPrompt").hidden = !(buddyOn && bs.mode === "stuck" && dB < 4.5 && s.phase === "playing");
       if (!$("buddyPrompt").hidden) { $("buddyPromptText").textContent = t({ es: "Mantén F para ayudar a EVA-2", en: "Hold F to help EVA-2" }); $("buddyAssist").style.width = (100 * bs.assist / 3) + "%"; }
       const bl = $("buddyLine");
+      bl.hidden = !buddyOn;
       bl.classList.toggle("alert", bs.mode === "stuck");
       bl.innerHTML = `<span>EVA-2</span><div class="bar"><i style="width:${Math.max(0, bs.o2)}%"></i></div><em>${Math.round(bs.o2)} % · ${t(buddy.statusText())}${bs.mode === "stuck" ? " · " + Math.round(dB) + " m" : ""}</em>`;
       controls.updateCamera(scene.camera, { x: s.x, y: y + (s.driving ? 0.6 : 0), z: s.z }, (x, z) => scene.heightAt(x, z));
@@ -395,7 +502,9 @@ async function boot() {
         } else if (tg) r = path.find(s.x, s.z, tg.world.x, tg.world.z);
         if (r) { scene.setRoute(r); hud.minimap.setRoute(r); }
       }
-      scene.setRouteVisible(s.routeOn);
+      scene.setRouteVisible(s.routeOn && !!game.target);
+      if (s.free) { if (!game.target && hud.minimap.route) hud.minimap.setRoute(null); sim.update(now); }
+      else if (!$("simPanel").hidden) $("simPanel").hidden = true;
       updateBeacons();
       hud.setLockHint(controls.locked || s.phase !== "playing" ? "" : ui("clickToLook"));
       hud.update(now);
@@ -410,7 +519,7 @@ async function boot() {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  window.__msm = { game, scene, world, path, controls, atlas, geo, car, astro, sky, buddy, planner, intro }; // para depurar desde la consola
+  window.__msm = { game, scene, world, path, controls, atlas, geo, car, astro, sky, buddy, planner, intro, sim }; // para depurar desde la consola
 }
 
 boot().catch((e) => {

@@ -615,7 +615,9 @@ export class Atlas {
 
   _objectives() {
     const ctx = this.ctx, tg = this.game.target;
-    for (const o of this.data.objectives.objectives) {
+    // objetivos de la campana + el destino propio del modo libre, si existe
+    const cu = this.game.objectives.custom;
+    for (const o of cu ? [...this.data.objectives.objectives, cu] : this.data.objectives.objectives) {
       const p = this.project(o.latlon[0], o.latlon[1]);
       const isT = tg && tg.id === o.id;
       ctx.lineWidth = 2.5; ctx.strokeStyle = isT ? "#3DDC97" : o.type === "science" ? "#fff" : "#3DDC97";

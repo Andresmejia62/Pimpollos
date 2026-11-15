@@ -1,5 +1,5 @@
 // Vista de planificacion antes de salir: comparar rutas, ver su perfil de elevacion y estimar el consumo.
-import { t, getLang } from "../i18n.js";
+import { t, ui, getLang } from "../i18n.js";
 import { assetUrl } from "../data.js";
 import { estimateRoute } from "../gameplay/planner.js";
 import { fmtDist, num } from "../geo.js";
@@ -38,19 +38,31 @@ export class Planner {
     $("planBack").onclick = () => this.close();
     $("planUse").onclick = () => {
       const r = this.routes[this.sel];
-      if (r && r.est.verdict !== "blocked") this.onUse && this.onUse(r.pts, this.sel);
+      if (this.free) {
+        // modo libre: se aplica el destino y la salida elegidos; la ruta solo si se puede caminar
+        const pts = r && r.est.verdict !== "blocked" ? r.pts : null;
+        if (this.goal || this.startMoved) this.onUse && this.onUse(pts, this.sel, { goal: this.goal, start: this.startMoved ? this.start : null });
+      } else if (r && r.est.verdict !== "blocked") this.onUse && this.onUse(r.pts, this.sel);
       this.close();
     };
+    document.querySelectorAll("#planPick [data-pick]").forEach((b) => { b.onclick = () => { this.pick = b.dataset.pick; this.render(); }; });
     window.addEventListener("resize", () => { if (!$("scrPlan").hidden) this.render(); });
   }
 
-  open(onUse) {
+  // free = modo libre: no hay destino fijo; el clic en el mapa define el destino, la salida o un punto de paso
+  open(onUse, { free = false } = {}) {
     this.onUse = onUse;
-    const g = this.game, tg = g.target;
+    this.free = free;
+    const g = this.game, tg = free ? g.objectives.custom || null : g.target;
     this.start = [g.s.x, g.s.z];
-    this.goal = [tg.world.x, tg.world.z];
+    this.startMoved = false;
+    this.goal = tg ? [tg.world.x, tg.world.z] : null;
+    this.pick = this.goal ? "way" : "goal";
     this.waypoints = [];
-    $("planTitle").textContent = `${t(L("Hacia", "To"))} ${t(tg.name)}`;
+    $("planPick").hidden = !free;
+    $("planEyebrow").textContent = free ? t(L("Modo libre · define destino, salida y ruta", "Free mode · set destination, start and route")) : ui("planEyebrow");
+    $("planUse").textContent = free ? t(L("Aplicar", "Apply")) : ui("planUse");
+    $("planTitle").textContent = tg ? `${t(L("Hacia", "To"))} ${t(tg.name)}` : t(L("Elige tu destino en el mapa", "Pick your destination on the map"));
     $("planLayer").innerHTML = [["slope", L("Pendiente y rocas", "Slope and rocks")], ["radiation", L("Radiación", "Radiation")], ["thermal", L("Temperatura", "Temperature")], ["spectral", L("Minerales", "Minerals")], ["", L("Solo imagen CTX", "CTX image only")]]
       .map(([k, n]) => `<option value="${k}" ${k === this.layer ? "selected" : ""}>${t(n)}</option>`).join("");
     $("scrPlan").hidden = false;
@@ -86,6 +98,7 @@ export class Planner {
   _compute() {
     const g = this.game, S = this.start, G = this.goal;
     this.routes = {};
+    if (!G) return;
     this.routes.safe = this._make("safe", this._astar([S, G]));
     this.routes.direct = this._make("direct", [S, G]);
     // mejor refugio intermedio (que no sea donde ya estas)
@@ -101,23 +114,27 @@ export class Planner {
     }
     if (best) this.routes.shelter = best;
     this._custom();
-    if (!this.routes[this.sel]) this.sel = "safe";
   }
   _custom() {
-    this.routes.custom = this.waypoints.length ? this._make("custom", this._astar([this.start, ...this.waypoints, this.goal])) : null;
+    this.routes.custom = this.goal && this.waypoints.length ? this._make("custom", this._astar([this.start, ...this.waypoints, this.goal])) : null;
     if (this.waypoints.length && this.routes.custom) this.sel = "custom";
-    if (!this.routes[this.sel]) this.sel = "safe";
+    // si la ruta elegida no existe (p. ej. un destino al que A* no llega), se toma la primera disponible
+    if (!this.routes[this.sel]) this.sel = ["safe", "shelter", "direct", "custom"].find((k) => this.routes[k]) || "safe";
   }
 
   // ---- mapa ---------------------------------------------------------------------
   _view() {
     let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
     const add = (x, z) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); };
-    add(...this.start); add(...this.goal);
+    add(...this.start); if (this.goal) add(...this.goal);
     for (const r of Object.values(this.routes)) if (r) for (const [x, z] of r.pts) add(x, z);
     this.waypoints.forEach(([x, z]) => add(x, z));
-    const W = this.world, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-    const span = Math.min(W.size, Math.max(400, Math.max(x1 - x0, z1 - z0) * 1.18));
+    const W = this.world;
+    let cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    // modo libre: siempre todo el mapa, para poder elegir cualquier punto
+    const wide = this.free;
+    const span = wide ? W.size : Math.min(W.size, Math.max(400, Math.max(x1 - x0, z1 - z0) * 1.18));
+    if (wide) { cx = 0; cz = 0; }
     const r = this.cv.getBoundingClientRect();
     const asp = r.width / r.height;
     const sw = asp >= 1 ? span * asp : span, sh = asp >= 1 ? span : span / asp;
@@ -158,10 +175,14 @@ export class Planner {
       if (px < -20 || py < -20 || px > v.W + 20 || py > v.H + 20) continue;
       ctx.lineWidth = 3; ctx.strokeStyle = o.shelter ? "#3DDC97" : "#fff";
       if (o.shelter) ctx.strokeRect(px - 7, py - 7, 14, 14); else { ctx.beginPath(); ctx.arc(px, py, 7, 0, 7); ctx.stroke(); }
-      this._label(t(o.name), px + 11, py + 4, o.id === this.game.target.id ? "#3DDC97" : "#fff");
+      const tgt = this.game.target;
+      this._label(t(o.name), px + 11, py + 4, tgt && o.id === tgt.id ? "#3DDC97" : "#fff");
     }
-    const [gx, gy] = this.toPx(...this.goal);
-    ctx.strokeStyle = "#3DDC97"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(gx, gy, 13, 0, 7); ctx.stroke();
+    if (this.goal) {
+      const [gx, gy] = this.toPx(...this.goal);
+      ctx.strokeStyle = "#3DDC97"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(gx, gy, 13, 0, 7); ctx.stroke();
+      if (this.free) this._label(t(L("Destino", "Destination")), gx + 16, gy - 10, "#3DDC97");
+    }
     this.waypoints.forEach(([x, z], i) => {
       const [px, py] = this.toPx(x, z);
       ctx.fillStyle = "#FFC23D"; ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(px, py, 9, 0, 7); ctx.fill(); ctx.stroke();
@@ -185,9 +206,21 @@ export class Planner {
   }
   _click(e) {
     const r = this.cv.getBoundingClientRect(), [x, z] = this.toWorld(e.clientX - r.left, e.clientY - r.top);
+    const h = this.world.half - 12;
+    if (Math.abs(x) > h || Math.abs(z) > h) return;
     if (this.world.blockedAt(x, z)) { $("planHint").textContent = t(L("Ese punto está en una pendiente de más de 25°: elige otro.", "That point is on a slope over 25°: pick another.")); return; }
-    this.waypoints.push([x, z]);
-    this._custom();
+    if (this.free && (this.pick === "goal" || !this.goal)) {
+      // destino nuevo: se recalculan todas las rutas y los siguientes clics son puntos de paso
+      this.goal = [x, z]; this.waypoints = []; this.sel = "safe"; this.pick = "way";
+      $("planTitle").textContent = t(L("Hacia tu destino", "To your destination"));
+      this._compute();
+    } else if (this.free && this.pick === "start") {
+      this.start = [x, z]; this.startMoved = true; this.pick = "way";
+      this._compute();
+    } else {
+      this.waypoints.push([x, z]);
+      this._custom();
+    }
     this.render();
   }
 
@@ -195,6 +228,24 @@ export class Planner {
   render() {
     const lang = getLang();
     $("planHint").textContent = t(L("Clic en el mapa = punto de paso para «Tu ruta» · las estimaciones usan tu perfil físico y tu carga", "Click the map = waypoint for “Your route” · estimates use your physical profile and load"));
+    if (this.free) {
+      document.querySelectorAll("#planPick [data-pick]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.pick === this.pick)));
+      $("planHint").textContent = t({
+        goal: L("Clic en el mapa = tu destino (cualquier punto transitable del recorte de 6,1 km)", "Click the map = your destination (any walkable point of the 6.1 km crop)"),
+        start: L("Clic en el mapa = punto de salida: el astronauta se coloca ahí al aplicar", "Click the map = start point: the astronaut is placed there when you apply"),
+        way: L("Clic en el mapa = punto de paso para «Tu ruta» · las estimaciones usan tu perfil físico y tu carga", "Click the map = waypoint for “Your route” · estimates use your physical profile and load"),
+      }[this.pick]);
+    }
+    if (!this.goal || !this.routes[this.sel]) {
+      // modo libre sin destino (o sin ninguna ruta posible): solo el mapa y las instrucciones
+      $("planRoutes").innerHTML = `<div class="pr-card empty"><span class="sw" style="background:#3DDC97"></span><div><b>${t(this.goal ? L("No hay ruta hasta ese punto", "No route to that point") : L("Sin destino todavía", "No destination yet"))}</b>
+        <p>${t(this.goal ? L("Elige otro destino u otra salida.", "Pick another destination or start point.") : L("Haz clic en el mapa para definirlo. Después verás la ruta segura (A*), la línea recta, la escala en un refugio y tu propia ruta, con su consumo estimado.", "Click the map to set it. You will then see the safe route (A*), the straight line, the shelter stop and your own route, with their estimated cost."))}</p></div></div>`;
+      $("planDetail").innerHTML = "";
+      $("planUse").disabled = !(this.free && (this.goal || this.startMoved));
+      this.draw();
+      const pc = this.pcv; pc.getContext("2d").clearRect(0, 0, pc.width, pc.height);
+      return;
+    }
     $("planRoutes").innerHTML = Object.keys(KINDS).map((k) => {
       const r = this.routes[k], K = KINDS[k];
       if (!r) return k === "custom" ? `<div class="pr-card empty"><span class="sw" style="background:${K.color}"></span><div><b>${t(K.name)}</b><p>${t(K.desc)}</p></div></div>` : "";
@@ -224,7 +275,7 @@ export class Planner {
         ${row(L("Terreno difícil", "Hard terrain"), `${t(L("rocas", "rocks"))} ${num(e.rockyM, 0, lang)} m · ${t(L("dunas", "dunes"))} ${num(e.duneM, 0, lang)} m · ${t(L("resbaladizo", "slippery"))} ${num(e.slipM, 0, lang)} m`)}
         ${row(L("Dosis de radiación", "Radiation dose"), `${num(e.dose, 1, lang)} µGy`)}
       </table>`;
-    $("planUse").disabled = e.verdict === "blocked";
+    $("planUse").disabled = !this.free && e.verdict === "blocked";
     this.draw();
     this._profile(r);
   }

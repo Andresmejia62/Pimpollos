@@ -24,6 +24,10 @@ npm run build      # genera dist/ para GitHub Pages o Netlify
 ```
 Controles: **W A S D** caminar · **ratón** mirar (clic para capturar o arrastrar) · **rueda** distancia de cámara · **1–4** capas · **R** ruta A* · **H** guía de capas · **M** atlas de Marte · **I** telemetría · **Esc** pausa.
 
+**Dos modos** en la portada:
+- **Comenzar EVA (modo juego):** la campaña de 5 misiones con sus objetivos científicos, la tormenta solar y el puntaje.
+- **Modo libre (simulación):** sin objetivo predefinido. Con **G** defines en el mapa tu destino, tu punto de salida y puntos de paso, y comparas las rutas y su consumo; al llegar se mide el punto (elevación, pendiente, temperatura, dosis y mineral). Con **O** se abre el panel de simulación: hora local, tormenta solar (**T**), recarga (**K**), teletransporte a cualquier sitio, qué recursos se gastan (O₂, batería, traje), EVA-2, rover, perfil, contadores y traza CSV. Código: `src/ui/sim.js` y `Game.startFree()` en `src/gameplay/game.js`.
+
 Antes de la primera misión se elige el **perfil fisiológico** del astronauta (masa, estatura, edad, sexo, VO₂max, traje): cambia la velocidad, el oxígeno, la batería y la fatiga (`docs/fisiologia.md`). El **atlas** (tecla M) es un mapa de todo Marte con elevación real MOLA, cráteres, misiones, fenómenos naturales con medidas de protección, la traza de Curiosity y tu propia traza exportable (`docs/atlas.md`).
 Atajos con `?debug=1`: **T** tormenta solar · **N** saltar cerca del objetivo · **K** recargar recursos.
 
