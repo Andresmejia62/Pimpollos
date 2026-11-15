@@ -4,6 +4,8 @@
 import { t, getLang } from "../i18n.js";
 import { Physiology, REF, REF_FLAT_W, SUITS, PRESETS, LIMITS, NASA_HEIGHT, loadProfile, saveProfile, sanitize } from "../engine/physiology.js";
 import { num } from "../geo.js";
+import * as THREE from "three";
+import { Astronaut, LOOK_OPTIONS } from "../engine/astronaut.js";
 
 const $ = (id) => document.getElementById(id);
 const L = (es, en) => ({ es, en });
@@ -23,16 +25,115 @@ const PRESET_NAMES = {
   apollo: L("Estilo Apollo (traje A7LB)", "Apollo-style (A7LB suit)"),
 };
 
+const LOOK_LABELS = {
+  suit: L("Color del traje", "Suit color"), accent: L("Franjas de misión", "Mission stripes"),
+  visor: L("Visera", "Visor"), skin: L("Tono de piel", "Skin tone"),
+  lamps: L("Lámparas del casco", "Helmet lamps"), antenna: L("Antena", "Antenna"), crest: L("Cresta del casco", "Helmet crest"),
+};
+
 export class ProfileScreen {
   constructor(o2CapacityG) {
     this.capG = o2CapacityG;
     this.p = loadProfile();
     this.onConfirm = null;
-    $("btnProfileGo").onclick = () => { saveProfile(this.p); $("scrProfile").hidden = true; this.onConfirm && this.onConfirm(this.p); };
-    $("btnProfileBack").onclick = () => { $("scrProfile").hidden = true; this.onBack && this.onBack(); };
+    $("btnProfileGo").onclick = () => { saveProfile(this.p); this._close(); this.onConfirm && this.onConfirm(this.p); };
+    $("btnProfileBack").onclick = () => { this._close(); this.onBack && this.onBack(); };
   }
 
-  open() { $("scrProfile").hidden = false; this.render(); }
+  open() { $("scrProfile").hidden = false; this.render(); this._startPreview(); }
+  _close() { $("scrProfile").hidden = true; this._stopPreview(); }
+
+  // ---- apariencia ------------------------------------------------------------------------
+  _lookHtml() {
+    const l = this.p.look, O = LOOK_OPTIONS;
+    const sw = (k, withName = true) => `<div class="pf-row"><span>${t(LOOK_LABELS[k])}</span><div class="swatches">${Object.entries(O[k]).map(([id, o]) =>
+      `<button type="button" class="sw${o.clear ? " clear" : ""}" data-look="${k}" data-v="${id}" aria-pressed="${l[k] === id}" style="--c:${o.hex}" title="${withName && o.name ? t(o.name) : ""}" aria-label="${withName && o.name ? t(o.name) : id}"></button>`).join("")}</div></div>`;
+    const tg = (k) => `<label class="tog"><input type="checkbox" data-flag="${k}" ${l[k] ? "checked" : ""}> ${t(LOOK_LABELS[k])}</label>`;
+    return `<div class="pf-look">
+      <div class="kv-h">${t(L("Apariencia", "Appearance"))}</div>
+      <div class="pf-look-grid">
+        <canvas id="pfAvatar" aria-label="${t(L("Vista previa del astronauta", "Astronaut preview"))}"></canvas>
+        <div>
+          ${sw("suit")}${sw("accent")}${sw("visor")}
+          ${O.visor[l.visor].clear ? sw("skin", false) : ""}
+          <div class="pf-row"><span>${t(L("Accesorios", "Accessories"))}</span><div class="togs">${tg("lamps")}${tg("antenna")}${tg("crest")}</div></div>
+          <p class="small muted">${t(L("Arrastra la vista previa para girarla. La apariencia no cambia la fisiología.", "Drag the preview to rotate it. Appearance does not change physiology."))}</p>
+        </div>
+      </div></div>`;
+  }
+
+  _bindLook() {
+    const f = $("pfForm");
+    f.querySelectorAll("[data-look]").forEach((b) => {
+      b.onclick = () => {
+        const k = b.dataset.look, wasClear = LOOK_OPTIONS.visor[this.p.look.visor].clear;
+        this.p.look = { ...this.p.look, [k]: b.dataset.v };
+        if (k === "visor" && !!LOOK_OPTIONS.visor[b.dataset.v].clear !== !!wasClear) { this.render(); this._startPreview(); return; }
+        f.querySelectorAll(`[data-look="${k}"]`).forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+        this._applyPreview();
+      };
+    });
+    f.querySelectorAll("[data-flag]").forEach((c) => { c.onchange = () => { this.p.look = { ...this.p.look, [c.dataset.flag]: c.checked }; this._applyPreview(); }; });
+  }
+
+  _startPreview() {
+    const cv = $("pfAvatar");
+    if (!cv) return;
+    if (!this.pv) {
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.15;
+      const scene = new THREE.Scene();
+      scene.add(new THREE.HemisphereLight("#ffe7d1", "#5a3020", 1.4));
+      const sun = new THREE.DirectionalLight("#fff1dc", 2.6); sun.position.set(-2, 4, -3); scene.add(sun);
+      const rim = new THREE.DirectionalLight("#ff9a5c", 1.2); rim.position.set(3, 2, 3); scene.add(rim);
+      const ground = new THREE.Mesh(new THREE.CircleGeometry(1.1, 40), new THREE.MeshStandardMaterial({ color: "#8a5536", roughness: 1 }));
+      ground.rotation.x = -Math.PI / 2; scene.add(ground);
+      const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 50);
+      camera.position.set(0, 1.25, -4.4); camera.lookAt(0, 0.95, 0);
+      const astro = new Astronaut(scene);
+      this.pv = { renderer, scene, camera, astro, yaw: -0.5, drag: null, t: performance.now() };
+    }
+    const pv = this.pv;
+    // el canvas se recrea en cada render(): se reemplaza por el del renderer
+    pv.renderer.domElement.id = "pfAvatar";
+    pv.renderer.domElement.className = cv.className;
+    cv.replaceWith(pv.renderer.domElement);
+    const el = pv.renderer.domElement;
+    el.onpointerdown = (e) => { pv.drag = e.clientX; el.setPointerCapture(e.pointerId); };
+    el.onpointermove = (e) => { if (pv.drag != null) { pv.yaw += (e.clientX - pv.drag) * 0.012; pv.drag = e.clientX; } };
+    el.onpointerup = el.onpointercancel = () => { pv.drag = null; };
+    this._applyPreview();
+    if (!pv.raf) {
+      const loop = (now) => {
+        pv.raf = requestAnimationFrame(loop);
+        const dt = Math.min(0.05, (now - pv.t) / 1000); pv.t = now;
+        const r = el.getBoundingClientRect();
+        if (!r.width) return;
+        const w = Math.round(r.width), h = Math.round(r.height);
+        if (el.width !== Math.round(w * pv.renderer.getPixelRatio()) || el.height !== Math.round(h * pv.renderer.getPixelRatio())) {
+          pv.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+          pv.renderer.setSize(w, h, false); pv.camera.aspect = w / h; pv.camera.updateProjectionMatrix();
+        }
+        if (pv.drag == null) pv.yaw += dt * 0.3;
+        pv.astro.update(dt, 0, 0, 0, 0, pv.yaw, 0);
+        pv.renderer.render(pv.scene, pv.camera);
+      };
+      pv.raf = requestAnimationFrame(loop);
+    }
+  }
+
+  _applyPreview() {
+    if (!this.pv) return;
+    this.pv.astro.setLook(this.p.look);
+    this.pv.astro.setBuild(this.p.mass, this.p.height);
+    // encuadre: la camara sigue la estatura para que el astronauta quepa siempre
+    const k = this.p.height / 175;
+    this.pv.camera.position.set(0, 1.25 * k, -4.4 * k); this.pv.camera.lookAt(0, 0.95 * k, 0);
+  }
+
+  _stopPreview() { if (this.pv && this.pv.raf) { cancelAnimationFrame(this.pv.raf); this.pv.raf = 0; } }
 
   render() {
     const p = this.p;
@@ -45,18 +146,21 @@ export class ProfileScreen {
       ${FIELDS.map(row).join("")}
       <div class="pf-row"><span>${t(L("Sexo (metabolismo basal)", "Sex (basal metabolism)"))}</span>
         <div class="seg"><button type="button" data-sex="f" aria-pressed="${p.sex === "f"}">${t(L("Femenino", "Female"))}</button><button type="button" data-sex="m" aria-pressed="${p.sex === "m"}">${t(L("Masculino", "Male"))}</button></div></div>
-      <label class="pf-row"><span>${t(L("Traje", "Suit"))}</span><select id="pfSuit">${Object.entries(SUITS).map(([k, s]) => `<option value="${k}" ${k === p.suit ? "selected" : ""}>${t(s.name)}</option>`).join("")}</select></label>`;
+      <label class="pf-row"><span>${t(L("Traje", "Suit"))}</span><select id="pfSuit">${Object.entries(SUITS).map(([k, s]) => `<option value="${k}" ${k === p.suit ? "selected" : ""}>${t(s.name)}</option>`).join("")}</select></label>
+      ${this._lookHtml()}`;
     const f = $("pfForm");
     f.querySelectorAll("input[data-k]").forEach((inp) => {
       inp.oninput = () => {
         this.p = sanitize({ ...this.p, [inp.dataset.k]: +inp.value });
         f.querySelectorAll(`input[data-k="${inp.dataset.k}"]`).forEach((o) => { if (o !== inp) o.value = this.p[inp.dataset.k]; });
         this._out();
+        if (inp.dataset.k === "mass" || inp.dataset.k === "height") this._applyPreview();
       };
     });
     $("pfName").oninput = (e) => { this.p.name = e.target.value || "EVA-1"; };
     $("pfSuit").onchange = (e) => { this.p.suit = e.target.value; this._out(); };
-    $("pfPreset").onchange = (e) => { if (PRESETS[e.target.value]) { this.p = { ...PRESETS[e.target.value], name: this.p.name }; this.render(); } };
+    $("pfPreset").onchange = (e) => { if (PRESETS[e.target.value]) { this.p = { ...PRESETS[e.target.value], name: this.p.name, look: this.p.look }; this.render(); this._startPreview(); } };
+    this._bindLook();
     f.querySelectorAll("[data-sex]").forEach((b) => { b.onclick = () => { this.p.sex = b.dataset.sex; f.querySelectorAll("[data-sex]").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); this._out(); }; });
     this._out();
   }

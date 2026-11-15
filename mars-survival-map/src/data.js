@@ -24,6 +24,7 @@ export async function loadAll(onProgress = () => {}) {
     ["dialogs", () => getJSON("story/dialogs.json")],
     ["alerts", () => getJSON("story/alerts.json")],
     ["facts", () => getJSON("story/facts.json")],
+    ["structures", () => getJSON("layers/structures.json").catch(() => ({ structures: [] }))],
     ["pov", () => getJSON("pov/pov.json").catch(() => ({ images: {} }))],
     ["dem", () => getBinary("layers/dem.bin")],
     ["grid", () => getBinary("layers/grid.bin")],

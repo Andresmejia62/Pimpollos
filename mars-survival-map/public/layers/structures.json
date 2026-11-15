@@ -824,6 +824,212 @@
    "msl_sol": 4936,
    "heading_rad": -2.878,
    "source": "Traza MSL (JPL MMGIS): posición y rumbo reales"
+  },
+  {
+   "id": "fission_1",
+   "type": "fission",
+   "x": -945,
+   "z": -2913,
+   "elevation_m": -4215.6,
+   "at_point": {
+    "slope_deg": 4.5,
+    "radiation_ugy_h": 8.31,
+    "temperature_c": -21.1,
+    "spectral_class": 0
+   },
+   "name": {
+    "es": "Reactor de fisión de superficie",
+    "en": "Fission surface power reactor"
+   },
+   "info": {
+    "es": "Como el proyecto Fission Surface Power de NASA (heredero de Kilopower, probado en 2018): da energía día y noche y durante las tormentas de polvo, cuando los paneles solares fallan. Se coloca a cientos de metros del hábitat y detrás de una loma para que el propio terreno frene la radiación.",
+    "en": "Like NASA's Fission Surface Power project (successor to Kilopower, tested in 2018): it gives power day and night and through dust storms, when solar panels fail. It sits hundreds of metres from the habitat, behind a ridge, so the terrain itself blocks the radiation."
+   },
+   "source": "NASA Fission Surface Power / KRUSTY; DTM HiRISE + CTX (línea de visión)"
+  },
+  {
+   "id": "dish_aeolis",
+   "type": "comm_dish",
+   "x": -751,
+   "z": -2299,
+   "elevation_m": -4131.1,
+   "at_point": {
+    "slope_deg": 5.4,
+    "radiation_ugy_h": 8.45,
+    "temperature_c": -27.1,
+    "spectral_class": 0
+   },
+   "name": {
+    "es": "Antena de espacio profundo",
+    "en": "Deep-space antenna"
+   },
+   "info": {
+    "es": "Enlace directo con la Tierra. Una señal tarda de 3 a 22 minutos en llegar según dónde estén los dos planetas: por eso nadie puede conducir desde la Tierra en tiempo real.",
+    "en": "Direct link to Earth. A signal takes 3 to 22 minutes to arrive depending on where both planets are: that is why nobody can drive from Earth in real time."
+   },
+   "source": "NASA Deep Space Network"
+  },
+  {
+   "id": "inflatable_aeolis",
+   "type": "inflatable",
+   "x": -765,
+   "z": -2553,
+   "elevation_m": -4157.4,
+   "at_point": {
+    "slope_deg": 2.1,
+    "radiation_ugy_h": 8.41,
+    "temperature_c": -23.2,
+    "spectral_class": 4
+   },
+   "name": {
+    "es": "Módulo inflable (dormitorios)",
+    "en": "Inflatable module (crew quarters)"
+   },
+   "info": {
+    "es": "Viaja plegado y se infla al llegar, como BEAM, que lleva en la ISS desde 2016. Los sacos de regolito de los costados añaden blindaje contra la radiación sin traer masa desde la Tierra.",
+    "en": "It travels folded and inflates on arrival, like BEAM, on the ISS since 2016. The regolith bags along its sides add radiation shielding without bringing mass from Earth."
+   },
+   "source": "NASA/Bigelow BEAM (ISS)"
+  },
+  {
+   "id": "workshop_aeolis",
+   "type": "workshop",
+   "x": -797,
+   "z": -2447,
+   "elevation_m": -4147.9,
+   "at_point": {
+    "slope_deg": 5.2,
+    "radiation_ugy_h": 8.43,
+    "temperature_c": -22.5,
+    "spectral_class": 0
+   },
+   "name": {
+    "es": "Taller de vehículos",
+    "en": "Vehicle workshop"
+   },
+   "info": {
+    "es": "El polvo y las rocas afiladas desgastan todo: las ruedas de aluminio de Curiosity tienen agujeros desde 2013. Aquí se reparan los rovers sin tener que meterlos en el hábitat.",
+    "en": "Dust and sharp rocks wear everything down: Curiosity's aluminium wheels have had holes since 2013. Rovers are repaired here without bringing them into the habitat."
+   },
+   "source": "NASA/JPL (desgaste de ruedas de Curiosity)"
+  },
+  {
+   "id": "heli_aeolis",
+   "type": "heli_pad",
+   "x": -829,
+   "z": -2479,
+   "elevation_m": -4152.8,
+   "at_point": {
+    "slope_deg": 2.6,
+    "radiation_ugy_h": 8.43,
+    "temperature_c": -23.2,
+    "spectral_class": 0
+   },
+   "name": {
+    "es": "Helipuerto de exploración",
+    "en": "Scout helipad"
+   },
+   "info": {
+    "es": "Un dron como Ingenuity, que hizo 72 vuelos en Marte entre 2021 y 2024. El aire es 100 veces menos denso que en la Tierra: sus palas de 1,2 m giraban a unas 2400 rpm para sostener 1,8 kg.",
+    "en": "A drone like Ingenuity, which made 72 flights on Mars between 2021 and 2024. The air is 100 times thinner than Earth's: its 1.2 m blades spun at about 2,400 rpm to lift 1.8 kg."
+   },
+   "source": "NASA/JPL Ingenuity Mars Helicopter"
+  },
+  {
+   "id": "heli_boxwork",
+   "type": "heli_pad",
+   "x": -799,
+   "z": 2339,
+   "elevation_m": -3602.7,
+   "at_point": {
+    "slope_deg": 1.2,
+    "radiation_ugy_h": 8.78,
+    "temperature_c": -21.8,
+    "spectral_class": 0
+   },
+   "name": {
+    "es": "Helipuerto avanzado",
+    "en": "Forward helipad"
+   },
+   "info": {
+    "es": "Desde aquí el dron explora las crestas del boxwork, donde el rover no puede entrar. Ingenuity hizo de explorador para Perseverance: le buscaba rutas y rocas interesantes.",
+    "en": "From here the drone scouts the boxwork ridges, where the rover cannot go. Ingenuity scouted for Perseverance, finding routes and interesting rocks."
+   },
+   "source": "NASA/JPL Ingenuity Mars Helicopter"
+  },
+  {
+   "id": "water_clay",
+   "type": "water_extractor",
+   "x": -919,
+   "z": -2070,
+   "elevation_m": -4117.5,
+   "at_point": {
+    "slope_deg": 1.2,
+    "radiation_ugy_h": 8.43,
+    "temperature_c": -24.2,
+    "spectral_class": 1
+   },
+   "name": {
+    "es": "Extractor de agua (arcillas)",
+    "en": "Water extractor (clays)"
+   },
+   "info": {
+    "es": "CRISM ve aquí arcillas: minerales formados en agua que todavía guardan unos pocos % de agua en su estructura. Al calentarlas, sale como vapor y se condensa.",
+    "en": "CRISM sees clays here: minerals formed in water that still hold a few % of water in their structure. Heated, it comes out as vapour and is condensed."
+   },
+   "mineral": {
+    "es": "Arcillas (filosilicatos)",
+    "en": "Clays (phyllosilicates)"
+   },
+   "source": "MRO CRISM (minerales hidratados)"
+  },
+  {
+   "id": "water_sulfate",
+   "type": "water_extractor",
+   "x": 208,
+   "z": -306,
+   "elevation_m": -3851.2,
+   "at_point": {
+    "slope_deg": 0.9,
+    "radiation_ugy_h": 8.51,
+    "temperature_c": -21.8,
+    "spectral_class": 2
+   },
+   "name": {
+    "es": "Extractor de agua (sulfatos)",
+    "en": "Water extractor (sulfates)"
+   },
+   "info": {
+    "es": "CRISM ve aquí sulfatos hidratados. El yeso es un 21 % agua en masa: es de las mejores minas de agua de Marte lejos de los polos.",
+    "en": "CRISM sees hydrated sulfates here. Gypsum is 21% water by mass: one of the best water sources on Mars away from the poles."
+   },
+   "mineral": {
+    "es": "Sulfatos",
+    "en": "Sulfates"
+   },
+   "source": "MRO CRISM (minerales hidratados)"
+  },
+  {
+   "id": "cache_1",
+   "type": "sample_cache",
+   "x": 771,
+   "z": 969,
+   "elevation_m": -3688,
+   "at_point": {
+    "slope_deg": 6.8,
+    "radiation_ugy_h": 8.57,
+    "temperature_c": -25.6,
+    "spectral_class": 2
+   },
+   "name": {
+    "es": "Depósito de tubos de muestras",
+    "en": "Sample tube depot"
+   },
+   "info": {
+    "es": "Diez tubos sellados en el suelo, como el depósito Three Forks que Perseverance dejó en el cráter Jezero en 2022-2023 para una futura misión de retorno. Cerca de aquí Curiosity encontró en 2024 cristales de azufre puro.",
+    "en": "Ten sealed tubes on the ground, like the Three Forks depot Perseverance left in Jezero crater in 2022-23 for a future return mission. Near here, in 2024, Curiosity found crystals of pure sulfur."
+   },
+   "source": "NASA/JPL Mars 2020 (Three Forks); MSL (azufre en Gediz Vallis)"
   }
  ],
  "track_posts": {

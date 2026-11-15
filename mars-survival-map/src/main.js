@@ -5,6 +5,7 @@ import { MarsScene } from "./engine/scene.js";
 import { Astronaut } from "./engine/astronaut.js";
 import { buildHabitat, buildRover, buildShelter } from "./engine/props.js";
 import { buildMarsRover } from "./engine/marsrover.js";
+import { buildStructures } from "./engine/structures.js";
 import { Controls } from "./engine/controls.js";
 import { Game } from "./gameplay/game.js";
 import { AlertSystem } from "./gameplay/alerts.js";
@@ -42,14 +43,16 @@ async function boot() {
   const buddyAstro = new Astronaut(scene.scene, { accent: "#2f7de1" });   // EVA-2: franjas azules
   buddyAstro.root.visible = false;
   astro.tryLoadModel();
-  const game = new Game(data, world, (x, z) => scene.heightAt(x, z), scene.colliders);
+  const game = new Game(data, world, (x, z) => scene.heightAt(x, z), scene.colliders, scene.dynamics);
   const path = new Pathfinder(world);
   const alerts = new AlertSystem(data.alerts, game);
   const geo = new GeoFrame(data.region);
   const hud = new Hud(game, world, data, geo);
   const atlas = new Atlas({ game, world, geo, data });
   atlas.onClose = () => canvas.focus();
-  const applyProfile = (p) => { game.setProfile(p); astro.root.scale.setScalar(p.height / 175); };
+  const applyProfile = (p) => { game.setProfile(p); astro.setLook(p.look); astro.setBuild(p.mass, p.height);
+    // EVA-2 siempre se distingue del jugador: si eliges franjas azules, las suyas pasan a naranja
+    buddyAstro.opts.accent = p.look.accent === "blue" ? "#d4541c" : "#2f7de1"; buddyAstro.setLook({}); };
   applyProfile(loadProfile());
   const profile = new ProfileScreen(game.o2CapacityG);
   const openAtlas = (where) => { atlas.open(where); controls.unlock(); };
@@ -95,6 +98,8 @@ async function boot() {
     else if (o.type === "shelter") buildShelter(scene, x, z);
     beacons[o.id] = scene.addBeacon(x, z, game.radiusOf(o), o.shelter ? 120 : 380);
   }
+  // estructuras del mapa (public/layers/structures.json, generado por data/scripts/build_structures.mjs)
+  buildStructures(scene, data.structures);
   const updateBeacons = () => {
     const tg = game.target;
     for (const [id, b] of Object.entries(beacons)) {
@@ -159,7 +164,9 @@ async function boot() {
   game.on("mission", () => { hud.clearAlerts(); updateBeacons(); showBriefing(); buddy.snapTo(game.s); });
 
   // ---- EVA-2 -------------------------------------------------------------------------
-  const buddy = new Companion(game, world, path, (x, z) => scene.heightAt(x, z));
+  // EVA-2 pisa el terreno y, como el jugador, las plataformas bajas que se suben sin saltar
+  const buddyGround = (x, z) => { const b = scene.heightAt(x, z); return scene.colliders.groundOn(x, z, b, 0.35, b, false); };
+  const buddy = new Companion(game, world, path, buddyGround);
   hud.minimap.buddy = buddy.st;
   data.dialogs.speakers.buddy = { name: { es: "EVA-2 · Compañero", en: "EVA-2 · Partner" }, icon: "helmet", color: "#5aa9ff" };
   const say = (text, dur = 7) => hud.dialogQueue.push({ speaker: "buddy", duration_s: dur, text });
@@ -475,7 +482,7 @@ async function boot() {
       if (s.phase === "playing" && !paused && $("scrGuide").hidden && !atlas.isOpen && $("scrPlan").hidden && $("scrProfile").hidden && buddyOn) buddy.update(dt, controls.keys.has("f"));
       const bs = buddy.st;
       buddyAstro.root.visible = buddyOn && !bs.riding;
-      buddyAstro.update(dt, bs.mode === "stuck" ? 0 : bs.speed, bs.x, scene.heightAt(bs.x, bs.z), bs.z, bs.heading, 0);
+      buddyAstro.update(dt, bs.mode === "stuck" ? 0 : bs.speed, bs.x, buddyGround(bs.x, bs.z), bs.z, bs.heading, 0);
       const dB = Math.hypot(bs.x - s.x, bs.z - s.z);
       $("buddyPrompt").hidden = !(buddyOn && bs.mode === "stuck" && dB < 4.5 && s.phase === "playing");
       if (!$("buddyPrompt").hidden) { $("buddyPromptText").textContent = t({ es: "Mantén F para ayudar a EVA-2", en: "Hold F to help EVA-2" }); $("buddyAssist").style.width = (100 * bs.assist / 3) + "%"; }

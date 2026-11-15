@@ -23,6 +23,13 @@ const M = {
   blinkBlue: glow("#7fd1ff", 2),
   blinkGreen: glow("#3ddc97", 2),
   blinkAmber: glow("#ffb02e", 2),
+  warn: std("#e6b422", 0.6),                                                             // franjas de aviso
+  radiator: std("#d9dde3", 0.35, 0.55),
+  bag: std("#a9876a", 1),                                                                 // sacos de regolito
+  membrane: std("#efe9dc", 0.92),                                                         // tela del modulo inflable
+  carbon: std("#2a2b2f", 0.5, 0.3),
+  water: glow("#5ab8ff", 1.2),
+  hot: glow("#ff7a2e", 1.6),
 };
 
 // numero pseudoaleatorio estable por estructura (0..1)
@@ -54,6 +61,7 @@ function site(ms, e, yaw = 0) {
 
 function finish(ms, e, g) {
   castAll(g);
+  g.traverse((o) => { if (o.userData.noShadow) o.castShadow = false; });   // suelos pegados al terreno
   ms.scene.add(g);
   ms.structures.push({ group: g, x: e.x, z: e.z });
   return g;
@@ -315,6 +323,309 @@ function buildSeismic(ms, e, rnd) {
   return finish(ms, e, g);
 }
 
+
+
+// ---- suelos sobre pendiente ----------------------------------------------------------------------
+// Suelo que se adapta al terreno (se camina sobre el: el jugador pisa la altura del terreno, asi que no se
+// hunde). shape: "rect" (hx, hz) o "disc" (r) o "ring" (r0, r1). Se dibuja 4 cm por encima del suelo.
+function drape(ms, sv, geo, mat, lift = 0.04) {
+  const pos = geo.attributes.position, { g, y0, col } = sv;
+  for (let i = 0; i < pos.count; i++) {
+    const lx = pos.getX(i), lz = pos.getZ(i);
+    pos.setY(i, ms.heightAt(col.wx(lx, lz), col.wz(lx, lz)) - y0 + lift);
+  }
+  geo.computeVertexNormals();
+  // copia del material con desplazamiento de profundidad: no parpadea contra el terreno de lejos
+  const key = "_drape" + lift;
+  mat[key] ||= Object.assign(mat.clone(), { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const m = new THREE.Mesh(geo, mat[key]);
+  m.receiveShadow = true;
+  m.userData.noShadow = true;
+  g.add(m);
+  return m;
+}
+const flatGeo = (geo) => geo.rotateX(-Math.PI / 2);
+const rectFloor = (ms, sv, hx, hz, mat, lx = 0, lz = 0, lift) => drape(ms, sv, flatGeo(new THREE.PlaneGeometry(hx * 2, hz * 2, Math.ceil(hx * 2), Math.ceil(hz * 2))).translate(lx, 0, lz), mat, lift);
+const discFloor = (ms, sv, r, mat, lift) => drape(ms, sv, flatGeo(new THREE.CircleGeometry(r, 40, 0, Math.PI * 2)), mat, lift);
+const ringFloor = (ms, sv, r0, r1, mat, lift) => drape(ms, sv, flatGeo(new THREE.RingGeometry(r0, r1, 48, 1)), mat, lift);
+// CircleGeometry solo tiene vertices en el centro y el borde: se subdivide en anillos para seguir el terreno
+function discFloorFine(ms, sv, r, mat, lift) {
+  const geo = new THREE.RingGeometry(0.001, r, 40, Math.ceil(r));
+  return drape(ms, sv, flatGeo(geo), mat, lift);
+}
+// Losa nivelada para maquinaria: la cara de arriba queda sobre el punto mas alto de la huella y los
+// costados bajan hasta el mas bajo (no flota ni queda enterrada). Devuelve la altura de la cara superior.
+function levelSlab(sv, hx, hz, mat, lift = 0.12, round = false) {
+  const { g, gy } = sv;
+  let hi = -Infinity, lo = Infinity;
+  for (let j = -4; j <= 4; j++) for (let i = -4; i <= 4; i++) {
+    const lx = (i / 4) * hx, lz = (j / 4) * hz;
+    if (round && lx * lx + lz * lz > hx * hx * 1.02) continue;
+    const h = gy(lx, lz);
+    hi = Math.max(hi, h); lo = Math.min(lo, h);
+  }
+  const top = hi + lift, bot = lo - 0.5;
+  g.add(round ? cyl(hx, hx + 0.15, top - bot, mat, 0, (top + bot) / 2, 0, 32) : box(hx * 2, top - bot, hz * 2, mat, 0, (top + bot) / 2, 0));
+  return top;
+}
+
+// ---- estructuras nuevas ------------------------------------------------------------------------------
+// Reactor de fision de superficie (proyecto Fission Surface Power de NASA, heredero de Kilopower/KRUSTY)
+function buildFission(ms, e, rnd) {
+  const sv = site(ms, e, rnd() * 6.28), { g, y0, gy, col } = sv;
+  discFloorFine(ms, sv, 3.3, MAT.base, 0.05);                                             // zapata pegada al terreno
+  // el nucleo arranca en el punto mas bajo de su base y todo lo de encima se mide desde el mas alto
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < 12; i++) { const h = gy(Math.cos(i * 0.524) * 1.0, Math.sin(i * 0.524) * 1.0); lo = Math.min(lo, h); hi = Math.max(hi, h); }
+  const up = new THREE.Group();
+  up.position.y = hi;
+  g.add(cyl(1.0, 1.0, hi - lo + 0.5, MAT.dark, 0, (hi + lo) / 2 - 0.25, 0, 20), up);
+  up.add(cyl(0.9, 1.0, 2.6, MAT.dark, 0, 1.3, 0, 20), cyl(0.95, 0.95, 0.25, M.warn, 0, 1.9, 0, 20)); // nucleo y blindaje
+  up.add(cyl(0.35, 0.35, 3.4, M.alu, 0, 4.2, 0, 12));                                     // mastil de conversion (Stirling)
+  // radiadores en paraguas: ocho paneles que disipan el calor sobrante al cielo
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2, panel = new THREE.Group();
+    panel.position.set(0, 5.7, 0);
+    panel.rotation.y = -a;
+    const pl = box(3.6, 0.05, 1.1, M.radiator, 1.95, 0, 0);
+    pl.rotation.z = -0.62;
+    panel.add(pl);
+    up.add(panel);
+  }
+  up.add(ball(0.18, M.blinkRed, 0, 6.6, 0, 8));
+  col.circle(0, 0, 1.05);
+  // cerca de balizas de aviso a 9 m
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2, lx = Math.cos(a) * 9, lz = Math.sin(a) * 9;
+    const yy = ms.heightAt(col.wx(lx, lz), col.wz(lx, lz)) - y0;
+    g.add(cyl(0.05, 0.05, 1.4, M.warn, lx, yy + 0.7, lz, 6), ball(0.08, M.blinkAmber, lx, yy + 1.45, lz, 6));
+    col.circle(lx, lz, 0.08);
+  }
+  // cable enterrado hacia la base: una zanja marcada
+  rectFloor(ms, sv, 0.18, 7, M.tailings, 0, 10.3, 0.04);
+  return finish(ms, e, g);
+}
+
+// Antena de espacio profundo: enlace directo con la Tierra (de 3 a 22 minutos-luz segun la epoca)
+function buildCommDish(ms, e, rnd) {
+  const sv = site(ms, e, rnd() * 6.28), { y0, col } = sv;
+  const top = levelSlab(sv, 2.6, 2.6, MAT.base, 0.1, true);
+  const g = new THREE.Group();
+  g.position.y = top - 0.4;
+  sv.g.add(g);
+  g.add(cyl(0.9, 1.2, 2.4, M.white, 0, 1.6, 0, 18));
+  const cy = sv.gy(3.6, 0) - g.position.y;
+  const az = new THREE.Group();                        // azimut (gira despacio siguiendo a la Tierra)
+  az.position.y = 2.8;
+  az.add(box(2.2, 0.4, 1.0, M.white, 0, 0.2, 0));
+  for (const sx of [-1, 1]) az.add(box(0.25, 2.2, 0.6, M.white, sx * 0.95, 1.3, 0));
+  const el = new THREE.Group();                        // elevacion
+  el.position.y = 2.3;
+  el.rotation.x = -0.75;
+  const R = 3.2;
+  const bowl = new THREE.Mesh(new THREE.SphereGeometry(R * 1.6, 32, 8, 0, Math.PI * 2, 0, 0.66), std("#e9e6df", 0.5, 0.25, { side: THREE.DoubleSide }));
+  bowl.rotation.x = Math.PI;
+  bowl.position.y = R * 1.6 - 0.1;
+  el.add(bowl);
+  // cubo trasero y eje de elevacion: unen el plato a la horquilla
+  el.add(cyl(0.75, 0.5, 1.1, M.white, 0, 0.35, 0, 16), cyl(1.6, 0.8, 0.5, M.alu, 0, 0.95, 0, 20));
+  az.add(cyl(0.18, 0.18, 2.2, M.alu, 0, 2.3, 0, 10).rotateZ(Math.PI / 2));
+  for (let i = 0; i < 4; i++) {
+    const a = i * Math.PI / 2 + Math.PI / 4;
+    el.add(strut(Math.cos(a) * 2.4, 0.9, Math.sin(a) * 2.4, 0, 3.4, 0, 0.04, M.alu));
+  }
+  el.add(cyl(0.22, 0.3, 0.6, M.black, 0, 3.5, 0, 12), ball(0.1, M.blinkBlue, 0, 3.85, 0, 8));
+  az.add(el);
+  g.add(az);
+  g.add(box(1.6, 1.8, 1.2, MAT.hull2, 3.6, cy + 0.5, 0), box(1.64, 0.15, 1.24, MAT.accent, 3.6, cy + 1.2, 0));
+  col.circle(0, 0, 1.3);
+  col.circle(0, 0, 2.6, y0 + top);
+  col.box(3.6, 0, 0.8, 0.6, y0 + g.position.y + cy + 1.4);
+  const ph = rnd() * 6.28;
+  ms.addAnimated((t) => { if (sv.g.visible) { az.rotation.y = ph + Math.sin(t * 0.03) * 0.8; el.rotation.x = -0.75 + Math.sin(t * 0.021) * 0.15; } });
+  return finish(ms, e, sv.g);
+}
+
+// Modulo habitable inflable (como BEAM, en la ISS desde 2016) cubierto con sacos de regolito
+function buildInflatable(ms, e, rnd) {
+  const sv = site(ms, e, rnd() * 6.28), { col } = sv;
+  const top = levelSlab(sv, 5, 2.8, MAT.base, 0.12);
+  const g = new THREE.Group();          // todo el modulo descansa sobre la losa nivelada
+  g.position.y = top - 0.15;
+  sv.g.add(g);
+  const shell = at(new THREE.Mesh(new THREE.CapsuleGeometry(2.3, 5.2, 8, 24), M.membrane), 0, 2.45, 0);
+  shell.rotation.z = Math.PI / 2;
+  shell.scale.set(1, 1, 0.92);
+  g.add(shell);
+  for (let i = 0; i < 6; i++) {
+    const rib = at(new THREE.Mesh(new THREE.TorusGeometry(2.32, 0.06, 6, 28), MAT.hull2), -2.5 + i, 2.45, 0);
+    rib.rotation.y = Math.PI / 2;
+    rib.scale.set(0.92, 1, 1);
+    g.add(rib);
+  }
+  // ventanas y escotilla
+  for (const lx of [-1.5, 1.5]) g.add(box(0.7, 0.45, 0.06, MAT.window, lx, 2.9, 2.14));
+  g.add(cyl(1.05, 1.05, 1.2, MAT.hull, 4.9, 2.0, 0, 18).rotateZ(Math.PI / 2), cyl(0.75, 0.75, 0.1, MAT.dark, 5.52, 2.0, 0, 18).rotateZ(Math.PI / 2), box(0.05, 0.12, 0.6, M.blinkGreen, 5.56, 2.95, 0));
+  // sacos de regolito apilados contra los costados (escudo contra la radiacion)
+  const bagGeo = new THREE.CapsuleGeometry(0.28, 0.5, 3, 8).rotateZ(Math.PI / 2);
+  for (const sz of [-1, 1]) for (let row = 0; row < 3; row++) for (let i = 0; i < 9 - row; i++) {
+    const b = at(new THREE.Mesh(bagGeo, M.bag), -3.6 + i * 0.95 + row * 0.47, 0.42 + row * 0.5, sz * (2.55 - row * 0.12));
+    b.rotation.y = (rnd() - 0.5) * 0.25;
+    g.add(b);
+  }
+  g.add(cyl(0.04, 0.05, 3, M.alu, -4.2, 5.4, 0, 6), ball(0.1, M.blinkRed, -4.2, 6.95, 0, 8));
+  col.box(0, 0, 4.7, 2.85);
+  col.box(4.9, 0, 0.65, 1.05);
+  return finish(ms, e, sv.g);
+}
+
+// Taller-garaje de vehiculos: arco abierto por delante (se puede entrar), banco y ruedas de repuesto
+function buildWorkshop(ms, e, rnd) {
+  const sv = site(ms, e, rnd() * 6.28), { g, y0, gy, col } = sv;
+  const L = 9, R = 3.6;
+  // suelo de hormigon pegado al terreno (dentro se camina) y marcas de aparcamiento
+  rectFloor(ms, sv, R + 0.3, L / 2 + 0.3, MAT.base, 0, 0, 0.05);
+  for (const sx of [-1, 1]) rectFloor(ms, sv, 0.07, 2, M.warn, sx * 1.6, 1.8, 0.08);
+  // el arco arranca en el punto mas bajo de su huella: asi toca el suelo por todos lados
+  let lo = Infinity;
+  for (let j = -4; j <= 4; j++) for (const sx of [-1, 1]) lo = Math.min(lo, gy(sx * R, (j / 4) * (L / 2)));
+  for (let i = -4; i <= 4; i++) lo = Math.min(lo, gy((i / 4) * R, -L / 2));
+  const arch = at(new THREE.Mesh(new THREE.CylinderGeometry(R, R, L, 28, 1, true, Math.PI / 2, Math.PI), std("#d8d2c6", 0.85, 0, { side: THREE.DoubleSide })), 0, lo, 0);
+  arch.rotation.x = Math.PI / 2;      // eje a lo largo de z, media cana hacia arriba
+  g.add(arch);
+  for (let i = 0; i <= 4; i++) g.add(at(new THREE.Mesh(new THREE.TorusGeometry(R + 0.04, 0.07, 6, 24, Math.PI), M.alu), 0, lo, -L / 2 + (i * L) / 4));
+  // pared trasera (con faldon hacia abajo para cerrar el hueco con el terreno)
+  g.add(at(new THREE.Mesh(new THREE.CircleGeometry(R, 28, 0, Math.PI), std("#cfc9bd", 0.85, 0, { side: THREE.DoubleSide })), 0, lo, -L / 2), box(2 * R, 1.2, 0.05, MAT.hull2, 0, lo - 0.6, -L / 2));
+  // interior: banco, herramientas colgadas, luz calida; cada cosa apoyada en su punto del suelo
+  const bz = -L / 2 + 0.8, by = Math.max(gy(-2.6, bz), gy(0.2, bz));
+  g.add(box(3.2, 0.9 + by - gy(-1.2, bz) + 0.3, 0.9, MAT.dark, -1.2, (by + 0.9 + gy(-1.2, bz) - 0.3) / 2, bz), box(3.2, 0.06, 0.95, M.alu, -1.2, by + 0.92, bz));
+  for (let i = 0; i < 5; i++) g.add(box(0.06, 0.45, 0.04, M.alu, -2.4 + i * 0.5, lo + 2.0, -L / 2 + 0.05));
+  g.add(box(4, 0.08, 0.3, MAT.window, 0, lo + R - 0.25, 0));
+  const wh = makeWheel(0.42, 0.34, MAT.metal).root;
+  wh.position.set(2.4, gy(2.4, -L / 2 + 1.2) + 0.2, -L / 2 + 1.2);
+  wh.rotation.z = Math.PI / 2;
+  g.add(wh);
+  const wh2 = makeWheel(0.42, 0.34, MAT.metal).root;
+  wh2.position.set(2.5, gy(2.5, -L / 2 + 2.6) + 0.44, -L / 2 + 2.6);
+  wh2.rotation.x = Math.PI / 2;
+  g.add(wh2);
+  // colisiones: costados y fondo; por delante queda abierto
+  const top = y0 + lo + R + 0.1;
+  col.box(-R + 0.15, 0, 0.3, L / 2, top);
+  col.box(R - 0.15, 0, 0.3, L / 2, top);
+  col.box(0, -L / 2 + 0.1, R, 0.2, top);
+  col.box(-1.2, bz, 1.6, 0.45, y0 + by + 0.95);
+  for (let i = 0; i < 2; i++) spawnBody(ms, "crate", col.wx(-R - 1.5, -2 + i * 2.2), col.wz(-R - 1.5, -2 + i * 2.2), rnd);
+  return finish(ms, e, g);
+}
+
+// Helipuerto con un dron tipo Ingenuity: aire 100 veces menos denso, por eso las palas giran a ~2400 rpm
+function buildHeliPad(ms, e, rnd) {
+  const sv = site(ms, e, rnd() * 6.28), { g, y0, gy, col } = sv;
+  // plataforma pegada al terreno: se camina por encima sin hundirse
+  discFloorFine(ms, sv, 3.1, MAT.base, 0.05);
+  discFloorFine(ms, sv, 2.9, M.black, 0.07);
+  ringFloor(ms, sv, 2.32, 2.48, M.warn, 0.09);
+  rectFloor(ms, sv, 0.12, 0.8, M.white, -0.45, 0, 0.09);
+  rectFloor(ms, sv, 0.12, 0.8, M.white, 0.45, 0, 0.09);
+  rectFloor(ms, sv, 0.33, 0.11, M.white, 0, 0, 0.1);
+  for (let i = 0; i < 4; i++) { const lx = Math.cos(i * 1.571) * 2.75, lz = Math.sin(i * 1.571) * 2.75; g.add(ball(0.09, M.blinkGreen, lx, gy(lx, lz) + 0.12, lz, 6)); }
+  // dron (escalado x2 para que se vea: el real mide 49 cm de alto y 1,2 m de rotor)
+  const drone = new THREE.Group();
+  const k = 2;
+  drone.add(box(0.2 * k, 0.14 * k, 0.2 * k, M.foil, 0, 0.3 * k, 0));
+  for (let i = 0; i < 4; i++) {
+    const a = i * Math.PI / 2 + Math.PI / 4;
+    drone.add(strut(Math.cos(a) * 0.07 * k, 0.24 * k, Math.sin(a) * 0.07 * k, Math.cos(a) * 0.22 * k, 0.0, Math.sin(a) * 0.22 * k, 0.008 * k, M.carbon));
+  }
+  drone.add(cyl(0.012 * k, 0.012 * k, 0.34 * k, M.alu, 0, 0.53 * k, 0, 6));
+  const sol = box(0.18 * k, 0.01 * k, 0.12 * k, MAT.solar, 0, 0.71 * k, 0);
+  const rotors = [];
+  for (const [yy, dir] of [[0.5, 1], [0.6, -1]]) {
+    const r = new THREE.Group();
+    r.position.y = yy * k;
+    r.add(box(1.2 * k, 0.006 * k, 0.07 * k, M.carbon, 0, 0, 0));
+    r.userData.dir = dir;
+    rotors.push(r);
+    drone.add(r);
+  }
+  drone.add(sol);
+  const padY = gy(0, 0) + 0.1;
+  drone.position.y = padY;
+  g.add(drone);
+  const cy = gy(3.9, 0);
+  g.add(box(1.2, 1.3, 0.9, MAT.hull2, 3.9, cy + 0.25, 0), ball(0.08, M.blinkAmber, 3.9, cy + 1.0, 0, 6));
+  col.box(3.9, 0, 0.6, 0.45, y0 + cy + 0.9);
+  // ciclo: reposo, despegue, vuelo estacionario con paseo, aterrizaje
+  const ph = rnd() * 60;
+  ms.addAnimated((t, dt) => {
+    if (!g.visible) return;
+    const c = (t + ph) % 60;
+    const flying = c > 20 && c < 52;
+    const lift = c < 20 ? 0 : c < 24 ? (c - 20) / 4 : c < 48 ? 1 : c < 52 ? (52 - c) / 4 : 0;
+    const spin = c > 17 && c < 55;
+    for (const r of rotors) r.rotation.y += (spin ? 40 : 0) * r.userData.dir * Math.min(dt, 0.05);
+    const h = lift * lift * (3 - 2 * lift) * 9;
+    const wander = flying ? Math.min(1, (c - 22) / 6) * Math.min(1, (50 - c) / 4) : 0;
+    drone.position.set(Math.sin(t * 0.21) * 7 * Math.max(0, wander), padY + h, Math.cos(t * 0.17) * 5 * Math.max(0, wander));
+    drone.rotation.y = t * 0.1;
+  });
+  return finish(ms, e, g);
+}
+
+// Extractor de agua: calienta minerales hidratados (arcillas o sulfatos detectados por CRISM)
+function buildWaterExtractor(ms, e, rnd) {
+  const sv = site(ms, e, rnd() * 6.28), { y0, col } = sv;
+  const top = levelSlab(sv, 3, 2.5, MAT.base, 0.1);
+  const g = new THREE.Group();          // maquinaria sobre la losa nivelada
+  g.position.y = top - 0.15;
+  sv.g.add(g);
+  const gy = (lx, lz) => sv.gy(lx, lz) - g.position.y;
+  // tolva donde se vierte el regolito excavado
+  g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(1.2, 0.45, 1.4, 4, 1, true), std("#9da2ab", 0.5, 0.5, { side: THREE.DoubleSide })), -1.6, 2.6, -0.8).rotateY(Math.PI / 4));
+  for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) g.add(strut(-1.6 + sx * 0.6, 0.15, -0.8 + sz * 0.6, -1.6 + sx * 0.45, 1.95, -0.8 + sz * 0.45, 0.05, M.alu));
+  // horno rotatorio (aqui sale el agua como vapor) y condensador
+  const kiln = cyl(0.55, 0.55, 3.2, MAT.metal, 0.4, 1.1, 0.4, 16);
+  kiln.rotation.z = Math.PI / 2 - 0.12;
+  g.add(kiln, cyl(0.58, 0.58, 0.2, M.hot, -0.6, 1.2, 0.4, 16).rotateZ(Math.PI / 2 - 0.12));
+  g.add(box(1.1, 1.6, 1.1, MAT.hull2, 2.3, 0.95, 0.4), cyl(0.06, 0.06, 1.4, M.alu, 2.3, 2.4, 0.4, 6));
+  // depositos de agua con indicador azul
+  for (let i = 0; i < 2; i++) {
+    g.add(cyl(0.6, 0.6, 1.8, M.white, 1.0 + i * 1.4, 1.05, -1.6, 16), cyl(0.62, 0.62, 0.2, M.water, 1.0 + i * 1.4, 1.2, -1.6, 16));
+    col.circle(1.0 + i * 1.4, -1.6, 0.62);
+  }
+  // pila de regolito excavado y una pala abandonada
+  const pile = at(new THREE.Mesh(new THREE.ConeGeometry(1.6, 1.0, 10), M.rock), -3.9, gy(-3.9, 1.6) + 0.45, 1.6);
+  g.add(pile, box(0.1, 0.04, 1.1, M.alu, -2.8, gy(-2.8, 2.6) + 0.08, 2.6));
+  g.add(cyl(0.03, 0.04, 3.2, M.alu, 2.8, 1.6, -0.6, 6), ball(0.1, M.blinkBlue, 2.8, 3.25, -0.6, 8));
+  col.box(0, 0, 3, 2.5, y0 + top);
+  col.circle(-1.6, -0.8, 0.9);
+  col.box(0.4, 0.4, 1.6, 0.6, y0 + top + 1.55);
+  col.box(2.3, 0.4, 0.55, 0.55);
+  col.circle(-3.9, 1.6, 1.1, y0 + sv.gy(-3.9, 1.6) + 0.9);
+  spawnBody(ms, "barrel", col.wx(3.6, 2.2), col.wz(3.6, 2.2), rnd);
+  return finish(ms, e, sv.g);
+}
+
+// Deposito de tubos de muestras, como el que Perseverance dejo en Three Forks (Jezero) para traerlos a la Tierra
+function buildSampleCache(ms, e, rnd) {
+  const { g, col } = site(ms, e, rnd() * 6.28);
+  const tube = new THREE.CylinderGeometry(0.035, 0.035, 0.42, 10).rotateZ(Math.PI / 2);
+  for (let i = 0; i < 10; i++) {
+    const lx = (i % 5 - 2) * 2.2 + (rnd() - 0.5) * 0.5, lz = (i < 5 ? -1 : 1) * 1.6 + (rnd() - 0.5) * 0.5;
+    const yy = ms.heightAt(col.wx(lx, lz), col.wz(lx, lz)) - g.position.y;
+    const t = at(new THREE.Mesh(tube, i % 3 ? M.white : M.alu), lx, yy + 0.04, lz);
+    t.rotation.y = rnd() * 6.28;
+    g.add(t, cyl(0.18, 0.18, 0.01, M.tailings, lx, yy + 0.005, lz, 10));
+    // banderin al lado de cada tubo (cada uno guarda un trozo distinto de roca)
+    g.add(cyl(0.012, 0.012, 0.7, M.alu, lx + 0.35, yy + 0.35, lz, 4), box(0.2, 0.12, 0.01, i % 2 ? MAT.accent : M.warn, lx + 0.46, yy + 0.64, lz));
+  }
+  // caja de documentacion y baliza
+  g.add(box(0.6, 0.4, 0.4, MAT.hull2, 6.2, 0.2, 0), cyl(0.03, 0.03, 2.4, M.alu, 6.2, 1.2, 0.4, 6), ball(0.09, M.blinkBlue, 6.2, 2.45, 0.4, 8));
+  col.box(6.2, 0, 0.3, 0.2, g.position.y + 0.4);
+  return finish(ms, e, g);
+}
+
 // ---- Curiosity: 3 m de largo, 2,7 de ancho, mastil a 2,2 m; seis ruedas con balancin ---------------------
 function buildCuriosity(ms, e) {
   const g = new THREE.Group();
@@ -379,6 +690,8 @@ const BUILDERS = {
   landing_pad: buildLandingPad, solar_farm: buildSolarFarm, isru: buildIsru, greenhouse: buildGreenhouse,
   drill_site: buildDrillSite, relay: buildRelay, depot: buildDepot, weather: buildWeather, seismic: buildSeismic,
   curiosity: buildCuriosity,
+  fission: buildFission, comm_dish: buildCommDish, inflatable: buildInflatable, workshop: buildWorkshop,
+  heli_pad: buildHeliPad, water_extractor: buildWaterExtractor, sample_cache: buildSampleCache,
 };
 
 // Construye todo lo que describe structures.json. Devuelve la lista de puntos de interes para el HUD.

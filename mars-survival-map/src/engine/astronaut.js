@@ -4,6 +4,43 @@ import { assetUrl } from "../data.js";
 
 const lerp = (a, b, k) => a + (b - a) * k;
 
+// Opciones de personalizacion del traje (pantalla de perfil). Solo cambian el aspecto, no la fisiologia.
+const L = (es, en) => ({ es, en });
+export const LOOK_OPTIONS = {
+  suit: {
+    white: { hex: "#efebe3", name: L("Blanco EVA", "EVA white") },
+    ivory: { hex: "#e4d6bd", name: L("Marfil", "Ivory") },
+    gray: { hex: "#a9adb5", name: L("Gris lunar", "Lunar gray") },
+    sand: { hex: "#c99a6e", name: L("Arena marciana", "Mars sand") },
+    graphite: { hex: "#45484f", name: L("Grafito", "Graphite") },
+  },
+  accent: {
+    orange: { hex: "#d4541c", name: L("Naranja de mision", "Mission orange") },
+    blue: { hex: "#2f7de1", name: L("Azul", "Blue") },
+    red: { hex: "#c8242e", name: L("Rojo", "Red") },
+    green: { hex: "#2e9e5a", name: L("Verde", "Green") },
+    yellow: { hex: "#e6b422", name: L("Amarillo", "Yellow") },
+    purple: { hex: "#7a4bd1", name: L("Violeta", "Violet") },
+  },
+  visor: {
+    gold: { hex: "#e0a437", emissive: "#6b3d06", name: L("Dorada (filtro solar)", "Gold (sun filter)") },
+    silver: { hex: "#c9d2dc", emissive: "#3a4450", name: L("Plateada", "Silver") },
+    blue: { hex: "#4f86c9", emissive: "#0f2b4f", name: L("Azul", "Blue") },
+    amber: { hex: "#c8662a", emissive: "#4a1a05", name: L("Ambar", "Amber") },
+    clear: { hex: "#cfe6ff", emissive: "#000000", clear: true, name: L("Transparente (se ve la cara)", "Clear (face visible)") },
+  },
+  skin: {
+    s1: { hex: "#f1d0b5" }, s2: { hex: "#e0ac85" }, s3: { hex: "#c68a5e" },
+    s4: { hex: "#9a6440" }, s5: { hex: "#6b4128" }, s6: { hex: "#45291a" },
+  },
+};
+export const DEFAULT_LOOK = { suit: "white", accent: "orange", visor: "gold", skin: "s3", lamps: true, antenna: true, crest: true };
+export function sanitizeLook(l = {}) {
+  const pick = (k) => (LOOK_OPTIONS[k][l[k]] ? l[k] : DEFAULT_LOOK[k]);
+  const flag = (k) => (typeof l[k] === "boolean" ? l[k] : DEFAULT_LOOK[k]);
+  return { suit: pick("suit"), accent: pick("accent"), visor: pick("visor"), skin: pick("skin"), lamps: flag("lamps"), antenna: flag("antenna"), crest: flag("crest") };
+}
+
 // Astronauta. Usa public/models/astronaut.glb de M1 si existe; si no, un traje EVA articulado hecho con primitivas.
 // El modelo mira hacia -Z (igual que el rumbo del juego) y mide ~1,9 m con los pies en y = 0.
 export class Astronaut {
@@ -127,7 +164,28 @@ export class Astronaut {
     const beamL = mesh(beamGeo, M.lamp, -0.27, 0.07, -0.087), beamR = mesh(beamGeo, M.lamp, 0.27, 0.07, -0.087);
     beamL.rotation.y = beamR.rotation.y = Math.PI;
     const camPod = mesh(new THREE.BoxGeometry(0.06, 0.05, 0.08), M.dark, 0.2, 0.2, -0.08);
-    head.add(shell, rim, visor, crest, lampL, lampR, beamL, beamR, camPod);
+    // cara (solo se ve con la visera transparente)
+    const face = new THREE.Group();
+    M.skin = std("#c68a5e", 0.7);
+    const skull = mesh(new THREE.SphereGeometry(0.17, 20, 16), M.skin, 0, -0.01, -0.02);
+    skull.scale.set(0.92, 1.08, 1);
+    const eyeGeo = new THREE.SphereGeometry(0.018, 8, 6);
+    const eyeL = mesh(eyeGeo, M.dark, -0.055, 0.02, -0.175), eyeR = mesh(eyeGeo, M.dark, 0.055, 0.02, -0.175);
+    const nose = mesh(new THREE.SphereGeometry(0.022, 8, 6), M.skin, 0, -0.02, -0.185);
+    const cap = mesh(new THREE.SphereGeometry(0.178, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.3), std("#2a2c31", 0.95), 0, 0.0, 0.03);
+    // carcasa con ventana: sustituye a la esfera completa cuando la visera es transparente
+    const T0 = Math.PI * 0.26, TL = Math.PI * 0.4, P0 = Math.PI * 1.5 - W / 2;
+    const shellOpen = new THREE.Group();
+    shellOpen.add(
+      mesh(new THREE.SphereGeometry(0.265, 28, 20, P0 + W, Math.PI * 2 - W), M.suit),
+      mesh(new THREE.SphereGeometry(0.265, 12, 6, P0, W, 0, T0), M.suit),
+      mesh(new THREE.SphereGeometry(0.265, 12, 10, P0, W, T0 + TL, Math.PI - T0 - TL), M.suit));
+    shellOpen.scale.set(1, 1.02, 1.04);
+    shellOpen.visible = false;
+    head.add(shellOpen);
+    face.add(skull, eyeL, eyeR, nose, cap);
+    face.visible = false;
+    head.add(shell, rim, visor, crest, lampL, lampR, beamL, beamR, camPod, face);
     torso.add(head);
 
     // ---- brazos: hombro -> codo -> guante ----------------------------------------------------
@@ -185,9 +243,40 @@ export class Astronaut {
 
     g.add(torso);
     g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-    this.parts = { torso, head, pack, armL, armR, legL, legR, mastTip };
+    this.parts = { torso, head, pack, armL, armR, legL, legR, mastTip, mast, face, shell, shellOpen, rim, crest, lamps: [lampL, lampR, beamL, beamR] };
+    this.M = M;
     this.body = g;
     this.root.add(g);
+  }
+
+  // Aplica la apariencia elegida en el perfil (colores del traje, visera, cara y accesorios)
+  setLook(look) {
+    const l = sanitizeLook(look), O = LOOK_OPTIONS, M = this.M, p = this.parts;
+    this.look = l;
+    if (!M || !p) return;
+    M.suit.color.set(O.suit[l.suit].hex);
+    M.accent.color.set(this.opts.accent || O.accent[l.accent].hex);
+    const v = O.visor[l.visor];
+    M.visor.color.set(v.hex);
+    M.visor.emissive.set(v.emissive);
+    M.visor.transparent = !!v.clear;
+    M.visor.opacity = v.clear ? 0.28 : 1;
+    M.visor.depthWrite = !v.clear;
+    M.visor.needsUpdate = true;
+    M.skin.color.set(O.skin[l.skin].hex);
+    p.face.visible = p.shellOpen.visible = !!v.clear;
+    p.shell.visible = p.rim.visible = !v.clear;
+    p.lamps.forEach((m) => (m.visible = l.lamps));
+    p.mast.visible = p.mastTip.visible = l.antenna;
+    p.crest.visible = l.crest;
+  }
+
+  // Complexion segun el perfil fisico: hombros y cintura algo mas anchos con mas IMC
+  setBuild(mass, height) {
+    const bmi = mass / (height / 100) ** 2;
+    const w = Math.min(1.12, Math.max(0.9, Math.sqrt(bmi / 24.5)));
+    this.root.scale.setScalar(height / 175);
+    if (this.body) this.body.scale.set(w, 1, Math.sqrt(w));
   }
 
   // speed en m/s del mundo; el paso es un "salto" de baja gravedad (38 % de la terrestre)

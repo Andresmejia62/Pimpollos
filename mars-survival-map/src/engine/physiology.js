@@ -1,3 +1,4 @@
+import { DEFAULT_LOOK, sanitizeLook } from "./astronaut.js";
 // Fisiologia del astronauta: perfil fisico -> gasto metabolico, oxigeno, calor, ritmo cardiaco y fatiga en Marte.
 //
 // Modelo (documentado en docs/fisiologia.md):
@@ -39,7 +40,7 @@ export const SAMPLE_KG = 1.8;                                          // muestr
 // Rango antropometrico de seleccion de astronautas de NASA (157,5-190,5 cm)
 export const NASA_HEIGHT = [157.5, 190.5];
 export const LIMITS = { mass: [45, 120], height: [150, 200], age: [25, 60], vo2max: [25, 65] };
-export const DEFAULT_PROFILE = { name: "EVA-1", mass: 75, height: 175, age: 38, sex: "m", vo2max: 45, suit: "mars" };
+export const DEFAULT_PROFILE = { name: "EVA-1", mass: 75, height: 175, age: 38, sex: "m", vo2max: 45, suit: "mars", look: { ...DEFAULT_LOOK } };
 export const PRESETS = {
   ref: { ...DEFAULT_PROFILE },
   small: { name: "EVA-1", mass: 56, height: 160, age: 34, sex: "f", vo2max: 44, suit: "mars" },
@@ -65,6 +66,7 @@ export function sanitize(p) {
     name: String(p.name || "EVA-1").slice(0, 16),
     mass: c(p.mass, LIMITS.mass, 75), height: c(p.height, LIMITS.height, 175), age: c(p.age, LIMITS.age, 38),
     sex: p.sex === "f" ? "f" : "m", vo2max: c(p.vo2max, LIMITS.vo2max, 45), suit: SUITS[p.suit] ? p.suit : "mars",
+    look: sanitizeLook(p.look),
   };
 }
 

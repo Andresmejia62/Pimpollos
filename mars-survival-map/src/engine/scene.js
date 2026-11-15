@@ -659,12 +659,23 @@ export class MarsScene {
     const geo = new THREE.PlaneGeometry(R, R, S, S);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
-    const lim = w.half - 4, mola = this.mola;
+    const lim = w.half - 4, mola = this.mola, cell = R / S;
+    // Dentro del recorte y junto a su borde el faldon debe quedar SIEMPRE bajo el terreno detallado. Con
+    // celdas de ~160 m, interpolar la altura del DEM en los vertices lo hacia asomar en valles y hondonadas
+    // (tapaba las ruedas del rover y los pies). Cada vertice toma el minimo del DEM en una celda a su alrededor.
+    const minNear = (cx, cz) => {
+      let m = Infinity;
+      for (let j = -6; j <= 6; j++) for (let k = -6; k <= 6; k++) {
+        const sx = Math.max(-lim, Math.min(lim, cx + (k / 6) * cell)), sz = Math.max(-lim, Math.min(lim, cz + (j / 6) * cell));
+        m = Math.min(m, w.demHeight(sx, sz));
+      }
+      return m;
+    };
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i), z = pos.getZ(i);
       const cx = Math.max(-lim, Math.min(lim, x)), cz = Math.max(-lim, Math.min(lim, z));
       const out = Math.hypot(x - cx, z - cz);
-      const edge = w.demHeight(cx, cz) - 3;
+      const edge = out === 0 ? minNear(cx, cz) - 6 : w.demHeight(cx, cz) - 3;
       if (mola) {
         // del borde del recorte (DEM HiRISE + CTX) al relieve real MOLA en 2,6 km, ya con la curvatura de Marte
         const t = Math.min(1, out / 2600), k = t * t * (3 - 2 * t);

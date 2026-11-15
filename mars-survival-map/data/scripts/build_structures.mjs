@@ -242,6 +242,72 @@ add("seismic", findSite(sulf.x, sulf.z, 70, 240, 5, 6, (x, z, d, ms) => ms * 40 
   });
 }
 
+
+// ---- 4b. Infraestructura nueva -------------------------------------------------------------------
+// Reactor de fision: lejos del habitat y, a poder ser, detras de una loma (el terreno hace de escudo).
+// Oculto = cuanto tapa el relieve la linea de vision entre el habitat (2 m) y el reactor (6 m).
+function occlusion(ax, az, bx, bz) {
+  const ha = height(ax, az) + 2, hb = height(bx, bz) + 6, n = 60;
+  let m = -Infinity;
+  for (let i = 1; i < n; i++) {
+    const t = i / n;
+    m = Math.max(m, height(ax + (bx - ax) * t, az + (bz - az) * t) - (ha + (hb - ha) * t));
+  }
+  return m;
+}
+add("fission", findSite(hab.x, hab.z, 380, 900, 9, 9, (x, z, d, ms) => -Math.min(occlusion(hab.x, hab.z, x, z), 15) * 40 + d * 0.05 + ms * 5), 9, {
+  id: "fission_1", name: { es: "Reactor de fisión de superficie", en: "Fission surface power reactor" },
+  info: { es: "Como el proyecto Fission Surface Power de NASA (heredero de Kilopower, probado en 2018): da energía día y noche y durante las tormentas de polvo, cuando los paneles solares fallan. Se coloca a cientos de metros del hábitat y detrás de una loma para que el propio terreno frene la radiación.", en: "Like NASA's Fission Surface Power project (successor to Kilopower, tested in 2018): it gives power day and night and through dust storms, when solar panels fail. It sits hundreds of metres from the habitat, behind a ridge, so the terrain itself blocks the radiation." },
+  source: "NASA Fission Surface Power / KRUSTY; DTM HiRISE + CTX (línea de visión)",
+});
+add("comm_dish", findSite(hab.x, hab.z, 50, 220, 5, 8, (x, z, d) => -height(x, z) * 2 + d * 0.1), 5, {
+  id: "dish_aeolis", name: { es: "Antena de espacio profundo", en: "Deep-space antenna" },
+  info: { es: "Enlace directo con la Tierra. Una señal tarda de 3 a 22 minutos en llegar según dónde estén los dos planetas: por eso nadie puede conducir desde la Tierra en tiempo real.", en: "Direct link to Earth. A signal takes 3 to 22 minutes to arrive depending on where both planets are: that is why nobody can drive from Earth in real time." },
+  source: "NASA Deep Space Network",
+});
+add("inflatable", findSite(hab.x, hab.z, 30, 120, 7, 8, (x, z, d, ms) => ms * 10 + d), 7, {
+  id: "inflatable_aeolis", name: { es: "Módulo inflable (dormitorios)", en: "Inflatable module (crew quarters)" },
+  info: { es: "Viaja plegado y se infla al llegar, como BEAM, que lleva en la ISS desde 2016. Los sacos de regolito de los costados añaden blindaje contra la radiación sin traer masa desde la Tierra.", en: "It travels folded and inflates on arrival, like BEAM, on the ISS since 2016. The regolith bags along its sides add radiation shielding without bringing mass from Earth." },
+  source: "NASA/Bigelow BEAM (ISS)",
+});
+add("workshop", findSite(hab.x, hab.z, 30, 140, 7, 7, (x, z, d, ms) => ms * 10 + d), 7, {
+  id: "workshop_aeolis", name: { es: "Taller de vehículos", en: "Vehicle workshop" },
+  info: { es: "El polvo y las rocas afiladas desgastan todo: las ruedas de aluminio de Curiosity tienen agujeros desde 2013. Aquí se reparan los rovers sin tener que meterlos en el hábitat.", en: "Dust and sharp rocks wear everything down: Curiosity's aluminium wheels have had holes since 2013. Rovers are repaired here without bringing them into the habitat." },
+  source: "NASA/JPL (desgaste de ruedas de Curiosity)",
+});
+add("heli_pad", findSite(hab.x, hab.z, 40, 160, 4, 6, (x, z, d, ms) => ms * 20 + d), 4, {
+  id: "heli_aeolis", name: { es: "Helipuerto de exploración", en: "Scout helipad" },
+  info: { es: "Un dron como Ingenuity, que hizo 72 vuelos en Marte entre 2021 y 2024. El aire es 100 veces menos denso que en la Tierra: sus palas de 1,2 m giraban a unas 2400 rpm para sostener 1,8 kg.", en: "A drone like Ingenuity, which made 72 flights on Mars between 2021 and 2024. The air is 100 times thinner than Earth's: its 1.2 m blades spun at about 2,400 rpm to lift 1.8 kg." },
+  source: "NASA/JPL Ingenuity Mars Helicopter",
+});
+{
+  const box_ = objectives.find((o) => o.id === "obj_boxwork");
+  if (box_) add("heli_pad", findSite(box_.world.x, box_.world.z, 40, 160, 4, 6, (x, z, d, ms) => ms * 20 + d), 4, {
+    id: "heli_boxwork", name: { es: "Helipuerto avanzado", en: "Forward helipad" },
+    info: { es: "Desde aquí el dron explora las crestas del boxwork, donde el rover no puede entrar. Ingenuity hizo de explorador para Perseverance: le buscaba rutas y rocas interesantes.", en: "From here the drone scouts the boxwork ridges, where the rover cannot go. Ingenuity scouted for Perseverance, finding routes and interesting rocks." },
+    source: "NASA/JPL Ingenuity Mars Helicopter",
+  });
+}
+// extractores de agua junto a la ruta, sobre los minerales hidratados que ve CRISM
+for (const [cls, id, nm, info] of [
+  [1, "water_clay", { es: "Extractor de agua (arcillas)", en: "Water extractor (clays)" },
+    { es: "CRISM ve aquí arcillas: minerales formados en agua que todavía guardan unos pocos % de agua en su estructura. Al calentarlas, sale como vapor y se condensa.", en: "CRISM sees clays here: minerals formed in water that still hold a few % of water in their structure. Heated, it comes out as vapour and is condensed." }],
+  [2, "water_sulfate", { es: "Extractor de agua (sulfatos)", en: "Water extractor (sulfates)" },
+    { es: "CRISM ve aquí sulfatos hidratados. El yeso es un 21 % agua en masa: es de las mejores minas de agua de Marte lejos de los polos.", en: "CRISM sees hydrated sulfates here. Gypsum is 21% water by mass: one of the best water sources on Mars away from the poles." }],
+]) {
+  const site = corridor((x, z) => (spectral(x, z) === cls ? 0 : 1000) + maxSlope(x, z, 6));
+  if (site && spectral(site.x, site.z) === cls) add("water_extractor", site, 6, { id, name: nm, info, mineral: SPECTRAL_NAME[cls], source: "MRO CRISM (minerales hidratados)" });
+  else console.warn("sin sitio con clase", cls, "para", id);
+}
+{
+  const az = objectives.find((o) => o.id === "obj_azufre");
+  if (az) add("sample_cache", findSite(az.world.x, az.world.z, 40, 150, 7, 9, (x, z, d, ms) => ms * 10 + d), 7, {
+    id: "cache_1", name: { es: "Depósito de tubos de muestras", en: "Sample tube depot" },
+    info: { es: "Diez tubos sellados en el suelo, como el depósito Three Forks que Perseverance dejó en el cráter Jezero en 2022-2023 para una futura misión de retorno. Cerca de aquí Curiosity encontró en 2024 cristales de azufre puro.", en: "Ten sealed tubes on the ground, like the Three Forks depot Perseverance left in Jezero crater in 2022-23 for a future return mission. Near here, in 2024, Curiosity found crystals of pure sulfur." },
+    source: "NASA/JPL Mars 2020 (Three Forks); MSL (azufre en Gediz Vallis)",
+  });
+}
+
 // ---- 5. Balizas sobre las huellas de Curiosity, cada ~170 m ---------------------------------------
 const posts = [];
 {

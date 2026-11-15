@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "mars-survival-map/grafo/codigo/Motor web.md",
+                "file": "mars-survival-map/docs/fisiologia.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Motor web"
+              "title": "fisiologia"
             }
           }
         ]
@@ -99,7 +99,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "mars-survival-map/grafo/codigo/Motor web.md",
+                "file": "mars-survival-map/docs/fisiologia.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -172,7 +172,8 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 300,
+    "collapsed": true
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -185,30 +186,36 @@
       "bases:Create new base": false
     }
   },
-  "active": "2651d99a09c61a49",
+  "active": "fdf6d2e472c4ecda",
   "lastOpenFiles": [
     "mars-survival-map/dist/index.html",
-    "mars-survival-map/dist/assets/index-Di280CJY.css",
-    "mars-survival-map/dist/assets/index-BpfoEcQJ.js",
+    "mars-survival-map/dist/assets/index-C5Ufn45R.js",
+    "mars-survival-map/dist/assets/index-BX5r6J_D.css",
     "mars-survival-map/dist/assets",
-    "mars-survival-map/dist/assets/index-BOWvs-GO.js",
-    "mars-survival-map/dist/assets/index-BQr0zgMa.js",
-    "mars-survival-map/dist/assets/index-DptsRSHe.js",
-    "mars-survival-map/dist/assets/index-DlZv_VTe.js",
-    "mars-survival-map/dist/textures/textures.json",
+    "mars-survival-map/dist/assets/index-DrjYPhVg.js",
+    "mars-survival-map/docs/atlas.md",
+    "mars-survival-map/docs/entrega_nasa.md",
+    "mars-survival-map/dist/assets/index-CU-ssiEE.js",
     "mars-survival-map/dist/textures/normal_hd.jpg",
     "mars-survival-map/dist/textures/ao.png",
     "mars-survival-map/dist/textures/albedo_hd.jpg",
+    "mars-survival-map/src/ui/sim.js",
+    "entrega_pdf/capturas/briefing_es.png",
+    "entrega_pdf/capturas/briefing_es.jpg",
+    "entrega_pdf/capturas/briefing_en.png",
+    "entrega_pdf/capturas/briefing_en.jpg",
+    "entrega_pdf/capturas/13_final_es.png",
+    "entrega_pdf/capturas/13_final_es.jpg",
+    "entrega_pdf/capturas/13_final_en.png",
+    "entrega_pdf/capturas",
+    "entrega_pdf/DOCUMENTACION_PROPUESTA_ES.pdf",
+    "entrega_pdf/DOCUMENTACION_PROPUESTA_ES.md",
+    "entrega_pdf/DOCUMENTACION_PROPUESTA_ES.html",
+    "entrega_pdf/DOCUMENTACION_PROPUESTA_EN.pdf",
+    "entrega_pdf/DOCUMENTACION_PROPUESTA_EN.md",
+    "mars-survival-map/docs/prueba_completa.md",
     "mars-survival-map/README.md",
-    "mars-survival-map/src/engine/props.js",
     "mars-survival-map/docs/guia_supervivencia.md",
-    "mars-survival-map/docs/entrega_nasa.md",
-    "mars-survival-map/dist/layers/dem16.png",
-    "mars-survival-map/dist/layers/cost_256.png",
-    "mars-survival-map/public/textures/textures.json",
-    "mars-survival-map/public/textures/ao.png",
-    "mars-survival-map/public/textures/normal_hd.jpg",
-    "mars-survival-map/public/textures/albedo_hd.jpg",
     "mars-survival-map/grafo/capas/Ruta sugerida.md",
     "mars-survival-map/grafo/reglas/Tormenta solar.md",
     "mars-survival-map/grafo/reglas/Reglas de supervivencia.md",
@@ -226,10 +233,6 @@
     "mars-survival-map/grafo/lugares/Monte Sharp.md",
     "mars-survival-map/grafo/lugares/Hábitat Aeolis.md",
     "mars-survival-map/grafo/lugares/Gediz Vallis.md",
-    "mars-survival-map/grafo/lugares/Cráter Gale.md",
-    "mars-survival-map/grafo/equipo/M3 Datos y supervivencia.md",
-    "mars-survival-map/grafo/equipo/Raul Valverde.md",
-    "mars-survival-map/grafo/equipo/M4 Narrativa y UX.md",
-    "mars-survival-map/grafo/equipo/M2 Web y motor.md"
+    "mars-survival-map/grafo/lugares/Cráter Gale.md"
   ]
 }
