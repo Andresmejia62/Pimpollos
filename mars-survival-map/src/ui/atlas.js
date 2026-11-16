@@ -11,6 +11,7 @@ import { canvas164, TEX_SIZE } from "./tex164.js";
 import { HackFx } from "./hackfx.js";
 import { typeName, typeIcon, pointFacts } from "../structinfo.js";
 import { MARS_GEO, wrapLon, gcDistance, gcBearing, gcInterpolate, pressureAt, columnMass, boilingPointC, fmtLat, fmtLon, fmtDMS, fmtDist, num } from "../geo.js";
+import { device } from "../device.js";
 
 const $ = (id) => document.getElementById(id);
 const D2R = Math.PI / 180;
@@ -515,7 +516,8 @@ export class Atlas {
     tag(lon, Math.max(4, Math.min(this.W - 90, c.x + 6)), this.H - 46);
   }
   _resize() {
-    const r = this.cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+    // en movil y tableta, el globo WebGL respeta el limite de pixeles del perfil (escritorio: igual que siempre)
+    const r = this.cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1, device.isTouchUI ? device.dprCap : 2);
     this.W = r.width; this.H = r.height; this.dpr = dpr;
     this.cv.width = Math.round(r.width * dpr); this.cv.height = Math.round(r.height * dpr);
     if (this.g3 && r.width > 0) this.g3.setSize(r.width, r.height, dpr);

@@ -211,7 +211,8 @@ export class TouchUI {
     this.el.querySelector("#tbJump").hidden = !!st.driving;
     this.el.querySelector("#tbEmote").hidden = !!st.driving;
     if (st.driving && !this.emotes.hidden) this._emotes(false);
-    this.el.querySelector("#tcRotate").hidden = window.innerWidth >= window.innerHeight;
+    // "gira el telefono" solo en un telefono en vertical (una tableta en vertical se juega bien)
+    this.el.querySelector("#tcRotate").hidden = window.innerWidth >= window.innerHeight || !document.documentElement.classList.contains("device-mobile");
     this._layout();
   }
 
@@ -227,9 +228,34 @@ export class TouchUI {
     if (mr && mr.height) act.style.bottom = `${Math.round(box.bottom - mr.top + 10)}px`;
     // el dialogo, justo debajo del tutorial cuando este esta a la vista (si no, su sitio normal)
     const hud = document.getElementById("hud"), tut = document.getElementById("tutorial"), dlg = document.getElementById("dialog");
-    if (hud && tut && dlg) {
+    if (!hud || !tut || !dlg) return;
+    const hb = hud.getBoundingClientRect(), topRow = top.getBoundingClientRect();
+    const portrait = window.innerWidth < window.innerHeight;
+    const alerts = document.getElementById("alerts"), sim = document.getElementById("simPanel");
+    if (portrait) {
+      // telefono o tableta en vertical: tutorial, dialogo y avisos en columna bajo la fila de botones, a todo lo ancho
+      let y = topRow.bottom - hb.top + 10;
+      tut.style.top = `${Math.round(y)}px`;
       const tr = tut.hidden ? null : tut.getBoundingClientRect();
-      dlg.style.top = tr && tr.height ? `${Math.round(tr.bottom - hud.getBoundingClientRect().top + 10)}px` : "";
+      if (tr && tr.height) y = tr.bottom - hb.top + 8;
+      dlg.style.top = `${Math.round(y)}px`;
+      const dr = dlg.hidden ? null : dlg.getBoundingClientRect();
+      if (dr && dr.height) y = dr.bottom - hb.top + 8;
+      if (alerts) alerts.style.top = `${Math.round(y)}px`;
+    } else {
+      tut.style.top = "";
+      if (alerts) alerts.style.top = "";
+      // el dialogo, justo debajo del tutorial cuando este esta a la vista (si no, su sitio normal)
+      const tr = tut.hidden ? null : tut.getBoundingClientRect();
+      dlg.style.top = tr && tr.height ? `${Math.round(tr.bottom - hb.top + 10)}px` : "";
     }
+    // la telemetria (boton ⓘ) bajo la fila de botones, no encima de ellos
+    const telem = document.getElementById("telem");
+    if (telem) telem.style.top = telem.hidden ? "" : `${Math.round(topRow.bottom - hb.top + 8)}px`;
+    // la leyenda de la capa, justo encima de la fila de acciones (que a su vez esta encima del panel de mision)
+    const lg = document.getElementById("legend"), ar = act.getBoundingClientRect();
+    if (lg) lg.style.bottom = !lg.hidden && ar.height ? `${Math.round(hb.bottom - ar.top + 8)}px` : "";
+    // movil: el panel de simulacion es un cajon lateral bajo la fila de botones (se desplaza por dentro)
+    if (sim) sim.style.top = document.documentElement.classList.contains("device-mobile") && !sim.hidden ? `${Math.round(topRow.bottom - hb.top + 8)}px` : "";
   }
 }

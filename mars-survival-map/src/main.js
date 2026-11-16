@@ -13,7 +13,8 @@ import { INTERIORS, makeGround } from "./engine/interiors.js";
 import { Achievements, ACHIEVEMENTS } from "./gameplay/achievements.js";
 import { MINERALS, drawSpectrum } from "./ui/spectrum.js";
 import { Controls } from "./engine/controls.js";
-import { TOUCH } from "./device.js";
+import { TOUCH, device } from "./device.js";
+import { MobilePanels } from "./ui/mobilePanels.js";
 import { TouchUI } from "./ui/touch.js";
 import { Game } from "./gameplay/game.js";
 import { AlertSystem } from "./gameplay/alerts.js";
@@ -157,6 +158,8 @@ async function boot() {
   const touchActive = () => game.s.phase === "playing" && !paused && !intro.active && !atlas.isOpen && $("scrGuide").hidden && $("scrPlan").hidden && $("scrProfile").hidden;
   const touch = TOUCH ? new TouchUI(controls, canvas, () => touchActive()) : null;
   if (TOUCH) $("telem").hidden = true;           // en el movil la telemetria ocupa la zona del pulgar: se abre con ⓘ
+  // movil y tableta: minimapa y leyenda plegables (en escritorio no cambia nada)
+  const panels = TOUCH ? new MobilePanels() : null;
   const car = buildMarsRover(scene);
   // planetas en el cielo: posiciones reales de hoy vistas desde Gale (engine/planets.js). P = etiquetas
   // van en la escena lejana, detras del relieve real del crater (el borde y el monte Sharp los tapan)
@@ -244,7 +247,7 @@ async function boot() {
   const veinBeacons = { list: [], key: null };
 
   // ---- idioma y pantallas ----------------------------------------------------------
-  const toggleLang = () => { setLang(getLang() === "es" ? "en" : "es"); hud.applyLang(); atlas.applyLang(); explorer.applyLang(); if (touch) touch.applyLang(); skyCaption(); if (game.s.phase === "briefing") showBriefing(); if (game.s.free) sim.render(); };
+  const toggleLang = () => { setLang(getLang() === "es" ? "en" : "es"); hud.applyLang(); atlas.applyLang(); explorer.applyLang(); if (touch) touch.applyLang(); if (panels) panels.applyLang(); skyCaption(); if (game.s.phase === "briefing") showBriefing(); if (game.s.free) sim.render(); };
   hud.applyLang();
   skyCaption();
   // la carga se desvanece sobre la portada
@@ -936,7 +939,7 @@ async function boot() {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  window.__msm = { explorer, game, scene, world, path, controls, atlas, geo, car, astro, buddyAstro, sky, buddy, planner, intro, sim, soundscape, dust, weather, windfx, ach, interiors: INTERIORS, touch, touchActive }; // para depurar desde la consola
+  window.__msm = { device, explorer, game, scene, world, path, controls, atlas, geo, car, astro, buddyAstro, sky, buddy, planner, intro, sim, soundscape, dust, weather, windfx, ach, interiors: INTERIORS, touch, touchActive }; // para depurar desde la consola
 }
 
 boot().catch((e) => {

@@ -28,7 +28,8 @@ const SANITIZE = {
       gl_FragColor = vec4(clamp(col, 0.0, 48.0), 1.0);
     }`,
 };
-import { GFX, onGfx, MAX_DPR, SHADOW_SIZE } from "../gfx.js";
+import { GFX, onGfx, maxDpr, SHADOW_SIZE } from "../gfx.js";
+import { device } from "../device.js";
 
 // Dibuja las dos escenas (lejana y cercana) en el bufer del compositor, como render() sin post-proceso
 class DualRenderPass extends Pass {
@@ -562,7 +563,7 @@ export class MarsScene {
     this.world = world;
     this.data = data;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_DPR));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxDpr()));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.22;
@@ -645,6 +646,10 @@ export class MarsScene {
 
   resize() {
     const w = window.innerWidth, h = window.innerHeight;
+    // al girar o cambiar de perfil (p. ej. tableta -> movil) nunca se pasa del limite de pixeles del perfil;
+    // si el limite sube, la resolucion dinamica lo recupera poco a poco
+    const cap = Math.min(window.devicePixelRatio, maxDpr());
+    if (this.renderer.getPixelRatio() > cap + 1e-3) this.renderer.setPixelRatio(cap);
     this.renderer.setSize(w, h, false);
     if (this.composer) { const sz = this.renderer.getDrawingBufferSize(new THREE.Vector2()); this.composer.setSize(sz.x, sz.y); }
     this.camera.aspect = w / h;
@@ -711,6 +716,8 @@ export class MarsScene {
           #include <colorspace_fragment>
         }`,
     });
+    // movil: 60 % de las motas (efecto visual puro; no cambia nada de la simulacion ni de las capas)
+    if (device.kind === "mobile") geo.setDrawRange(0, Math.round(N * 0.6));
     this.dust = new THREE.Points(geo, this.dustMat);
     this.dust.frustumCulled = false;
     this.dust.renderOrder = 4;
@@ -1225,7 +1232,7 @@ export class MarsScene {
     this._adaptT = (this._adaptT || 0) + dt;
     this._goodT = this._ft < 1 / 57 ? (this._goodT || 0) + dt : 0;
     if (this._adaptT < 2) return;
-    const base = Math.min(window.devicePixelRatio, MAX_DPR), lo = Math.max(0.75, base * 0.6), pr = this.renderer.getPixelRatio();
+    const base = Math.min(window.devicePixelRatio, maxDpr()), lo = Math.max(0.75, base * 0.6), pr = this.renderer.getPixelRatio();
     let next = pr;
     if (this._ft > 1 / 42 && pr > lo + 0.01) next = Math.max(lo, pr - 0.15);
     else if (this._goodT > 8 && pr < base - 0.01) { next = Math.min(base, pr + 0.1); this._goodT = 0; }

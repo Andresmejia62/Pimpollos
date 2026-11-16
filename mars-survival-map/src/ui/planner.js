@@ -55,7 +55,20 @@ export class Planner {
     $("plan3d").onclick = () => this.set3d(!this.is3d);
     $("planStreet").onclick = () => { this.svPick = !this.svPick; this._sync3dUi(); this.render(); };
     $("planCompass").onclick = () => this.explorer && this.explorer.resetNorth();
+    // movil: rutas y detalles en un cajon sobre el mapa (abajo en vertical, a la derecha en horizontal)
+    $("planSheet").onclick = () => this._sheet(!this.sheetOpen);
+    this._sheet(false);
     if (!explorer) { $("plan3d").hidden = true; $("planStreet").hidden = true; }
+  }
+
+  _sheet(open) {
+    this.sheetOpen = open;
+    document.querySelector("#scrPlan .plan-grid").classList.toggle("sheet-open", open);
+    const b = $("planSheet");
+    b.setAttribute("aria-expanded", String(open));
+    b.querySelector("span").textContent = t(open ? L("Ver el mapa", "Show the map") : L("Rutas y detalles", "Routes and details"));
+    // el mapa cambia de tamano visible: se vuelve a dibujar
+    requestAnimationFrame(() => { if (!$("scrPlan").hidden) this.draw(); });
   }
 
   // ---- vista 3D y vista de suelo ------------------------------------------------------------------
@@ -148,6 +161,7 @@ export class Planner {
     $("planLayer").innerHTML = [["slope", L("Pendiente y rocas", "Slope and rocks")], ["radiation", L("Radiación", "Radiation")], ["thermal", L("Temperatura", "Temperature")], ["spectral", L("Minerales", "Minerals")], ["", L("Solo imagen CTX", "CTX image only")]]
       .map(([k, n]) => `<option value="${k}" ${k === this.layer ? "selected" : ""}>${t(n)}</option>`).join("");
     $("scrPlan").hidden = false;
+    this._sheet(false);
     this._compute();
     this.svPick = false;
     if (this.is3d && this.explorer) {
@@ -230,9 +244,22 @@ export class Planner {
     const span = wide ? W.size : Math.min(W.size, Math.max(400, Math.max(x1 - x0, z1 - z0) * 1.18));
     if (wide) { cx = 0; cz = 0; }
     const r = this.cv.getBoundingClientRect();
-    const asp = r.width / r.height;
+    // movil: el cajon de rutas tapa el pie (vertical) o la derecha (horizontal) del mapa; se encuadra en lo visible
+    // y el resto del lienzo sigue dibujando el mapa por debajo del cajon (misma escala)
+    const [cb, cr] = this._sheetCover(r);
+    const Wv = Math.max(80, r.width - cr), Hv = Math.max(80, r.height - cb);
+    const asp = Wv / Hv;
     const sw = asp >= 1 ? span * asp : span, sh = asp >= 1 ? span : span / asp;
-    this.v = { x0: cx - sw / 2, z0: cz - sh / 2, sw, sh, W: r.width, H: r.height };
+    this.v = { x0: cx - sw / 2, z0: cz - sh / 2, sw: (sw * r.width) / Wv, sh: (sh * r.height) / Hv, W: r.width, H: r.height };
+  }
+  // pixeles del mapa que tapa el cajon del movil: [abajo, derecha] (en escritorio y tableta, [0, 0])
+  _sheetCover(r) {
+    if (!document.documentElement.classList.contains("device-mobile")) return [0, 0];
+    const s = document.querySelector("#scrPlan .plan-side").getBoundingClientRect();
+    if (!s.height || !r.height) return [0, 0];
+    const bottom = s.left <= r.left + 2 ? Math.max(0, r.bottom - s.top) : 0;
+    const right = s.left > r.left + 2 ? Math.max(0, r.right - s.left) : 0;
+    return [Math.min(bottom, r.height * 0.6), Math.min(right, r.width * 0.6)];
   }
   toPx(x, z) { const v = this.v; return [((x - v.x0) / v.sw) * v.W, ((z - v.z0) / v.sh) * v.H]; }
   toWorld(px, py) { const v = this.v; return [v.x0 + (px / v.W) * v.sw, v.z0 + (py / v.H) * v.sh]; }

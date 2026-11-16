@@ -11,6 +11,7 @@ import { t, getLang } from "../i18n.js";
 import { cine, sfx } from "../audio.js";
 import { marsNow } from "../marsclock.js";
 import { fmtLat, fmtLon, num } from "../geo.js";
+import { device } from "../device.js";
 
 const $ = (id) => document.getElementById(id);
 const L = (es, en) => ({ es, en });
@@ -187,7 +188,7 @@ export class IntroCinematic {
     const cv = $("introCanvas");
     const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
     // 1,5x basta en pantallas retina (a 2x serian ~10 Mpx por fotograma solo para el espacio)
-    renderer.setPixelRatio(Math.min(1.5, devicePixelRatio || 1));
+    renderer.setPixelRatio(Math.min(1.5, devicePixelRatio || 1, device.dprCap));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x020103);

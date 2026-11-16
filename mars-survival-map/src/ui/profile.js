@@ -7,6 +7,7 @@ import { num } from "../geo.js";
 import * as THREE from "three";
 import { Astronaut, LOOK_OPTIONS } from "../engine/astronaut.js";
 import { DIFFS, loadDiff, saveDiff } from "../gameplay/difficulty.js";
+import { device } from "../device.js";
 
 const $ = (id) => document.getElementById(id);
 const L = (es, en) => ({ es, en });
@@ -116,7 +117,7 @@ export class ProfileScreen {
         if (!r.width) return;
         const w = Math.round(r.width), h = Math.round(r.height);
         if (el.width !== Math.round(w * pv.renderer.getPixelRatio()) || el.height !== Math.round(h * pv.renderer.getPixelRatio())) {
-          pv.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+          pv.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1, device.isTouchUI ? device.dprCap : 2));
           pv.renderer.setSize(w, h, false); pv.camera.aspect = w / h; pv.camera.updateProjectionMatrix();
         }
         if (pv.drag == null) pv.yaw += dt * 0.3;
