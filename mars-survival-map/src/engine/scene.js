@@ -41,6 +41,10 @@ class DualRenderPass extends Pass {
     r.clearDepth();
     r.render(ms.scene, ms.camera);
   }
+  // Sin bufferes propios: dibuja en el readBuffer del compositor (que este redimensiona y libera) y las escenas
+  // son de MarsScene. Por eso no hay nada que ajustar al cambiar de tamano ni que liberar.
+  setSize() {}
+  dispose() {}
 }
 
 // Ajustes de aspecto (un solo sitio para retocar la luz y la profundidad de toda la escena)
@@ -1037,12 +1041,17 @@ export class MarsScene {
     this.rockCell = null;
   }
 
-  updateRocks(px, pz) {
+  // target: otra malla instanciada (la vista de suelo del mapa) que se rellena con las mismas rocas alrededor de
+  // (px, pz) sin tocar las del jugador ni sus colisiones
+  updateRocks(px, pz, target = null) {
     const CELL = 40, RAD = 6;
     const cx = Math.floor(px / CELL), cz = Math.floor(pz / CELL);
     const key = cx + "," + cz;
-    if (key === this.rockCell) return;
-    this.rockCell = key;
+    if (!target) {
+      if (key === this.rockCell) return;
+      this.rockCell = key;
+    }
+    const mesh = target || this.rocks;
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), p = new THREE.Vector3();
     const col = new THREE.Color();
     const solid = [];
@@ -1055,7 +1064,7 @@ export class MarsScene {
         const ccx = (gx + 0.5) * CELL, ccz = (gz + 0.5) * CELL;
         const slope = this.world.inside(ccx, ccz, 10) ? this.world.slope(ccx, ccz) : 0;
         const count = Math.floor((3 + rnd() * 8) * (0.6 + Math.min(2.2, slope / 9)));
-        for (let i = 0; i < count && k < this.rockMax; i++) {
+        for (let i = 0; i < count && k < mesh.instanceMatrix.count; i++) {
           const x = (gx + rnd()) * CELL, z = (gz + rnd()) * CELL;
           if (!this.world.inside(x, z, 10)) continue;
           const big = rnd() < 0.07;
@@ -1065,12 +1074,12 @@ export class MarsScene {
           q.setFromEuler(e);
           s.set(r * (0.8 + rnd() * 0.6), r * (0.5 + rnd() * 0.45), r * (0.8 + rnd() * 0.6));
           m.compose(p, q, s);
-          this.rocks.setMatrixAt(k, m);
+          mesh.setMatrixAt(k, m);
           // las rocas medianas y grandes son obstaculos (las bajas se pisan): radio y cima aproximados
           const rad = ((s.x + s.y + s.z) / 3) * 0.9;
           if (rad >= 0.3) solid.push({ x, z, r: rad * 0.95, top: p.y + rad * 0.8 });
           col.setHSL(0.045 + rnd() * 0.035, 0.3 + rnd() * 0.2, 0.2 + rnd() * 0.16);
-          this.rocks.setColorAt(k, col);
+          mesh.setColorAt(k, col);
           k++;
         }
       }
@@ -1082,7 +1091,7 @@ export class MarsScene {
         for (let gx = cx - RAD; gx <= cx + RAD; gx++) {
           let seed = ((gx * 2654435761) ^ (gz * 40503)) >>> 0;
           const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
-          for (let i = 0; i < 26 && k < this.rockMax; i++) {
+          for (let i = 0; i < 26 && k < mesh.instanceMatrix.count; i++) {
             const x = (gx + rnd()) * CELL, z = (gz + rnd()) * CELL;
             const u = rnd(), v = rnd(), w = rnd();
             if (!this.world.inside(x, z, 10)) continue;
@@ -1095,20 +1104,20 @@ export class MarsScene {
             q.setFromEuler(e);
             s.set(r * (0.85 + rnd() * 0.4), r * (0.55 + rnd() * 0.35), r * (0.85 + rnd() * 0.4));
             m.compose(p, q, s);
-            this.rocks.setMatrixAt(k, m);
+            mesh.setMatrixAt(k, m);
             const rad = ((s.x + s.z) / 2) * 0.85;
             solid.push({ x, z, r: rad, top: p.y + s.y * 0.85, big: true });
             col.setHSL(0.04 + rnd() * 0.03, 0.28 + rnd() * 0.15, 0.17 + rnd() * 0.12);
-            this.rocks.setColorAt(k, col);
+            mesh.setColorAt(k, col);
             k++;
           }
         }
       }
     }
-    this.rocks.count = k;
-    this.colliders.rocks = solid;
-    this.rocks.instanceMatrix.needsUpdate = true;
-    if (this.rocks.instanceColor) this.rocks.instanceColor.needsUpdate = true;
+    mesh.count = k;
+    if (!target) this.colliders.rocks = solid;
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   }
 
   // ---- balizas -------------------------------------------------------------------------------

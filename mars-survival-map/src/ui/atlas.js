@@ -251,6 +251,7 @@ export class Atlas {
     $("atlasGl").hidden = !this.is3d;
     $("atlas3d").setAttribute("aria-pressed", String(this.is3d));
     $("atlasExag").hidden = !this.is3d;
+    $("atlasCompass").hidden = !this.is3d;
     this._hint();
   }
   set3d(on) {
@@ -322,6 +323,15 @@ export class Atlas {
       drag = null;
     });
     $("atlas3d").onclick = () => this.set3d(!this.is3d);
+    // Vista de suelo (ui/explore3d.js): el siguiente clic dentro de la zona EVA baja a ese punto
+    $("atlasStreet").onclick = () => { this.svPick = !this.svPick; this._syncStreetUi(); this._hint(); };
+    // brujula del globo 3D: clic = norte arriba (con la misma inclinacion)
+    $("atlasCompass").onclick = () => {
+      if (!this.on3d) return;
+      const c = this.g3.cam, h0 = ((c.heading + 540) % 360) - 180, t0 = performance.now(), id = (this._fly = (this._fly || 0) + 1);
+      const step = (now) => { if (id !== this._fly) return; const u = Math.min(1, (now - t0) / 450), e = u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2; c.heading = (h0 * (1 - e) + 360) % 360; this.dirty = true; if (u < 1 && this.isOpen) requestAnimationFrame(step); };
+      requestAnimationFrame(step);
+    };
     // paneles deslizantes en pantallas pequenas (capas, informacion, perfil): uno abierto a la vez
     document.querySelectorAll("#scrAtlas [data-drawer]").forEach((b) => { b.onclick = () => this.drawer(b.dataset.drawer); });
     $("atlasExag").onchange = (e) => { if (this.g3) this.g3.exagMode = e.target.value; this.dirty = true; };
@@ -368,6 +378,12 @@ export class Atlas {
     });
   }
 
+  _syncStreetUi() {
+    $("atlasStreet").setAttribute("aria-pressed", String(!!this.svPick));
+    $("atlasStreet").title = t(L("Vista de suelo: haz clic en un punto de la zona EVA para verlo a la altura de los ojos", "Street View: click a point in the EVA zone to see it at eye level"));
+    $("atlasCompass").title = t(L("Brújula: clic para poner el norte arriba", "Compass: click to put north up"));
+    this.cv.style.cursor = this.svPick ? "cell" : "";
+  }
   _evt(e) { const r = this.cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
 
   // desplaza la vista (dx, dy) pixeles, como si se arrastrara el mapa
@@ -644,6 +660,7 @@ export class Atlas {
   open(where = "tour") {
     this.isOpen = true;
     $("scrAtlas").hidden = false;
+    this.svPick = false; this._syncStreetUi();
     this._resize();
     this.ready.then(() => {
       if (!this._opened) { this._opened = true; const b = this.geo.bounds; this.view = { lat: (b.north_lat + b.south_lat) / 2, lon: (b.west_lon_east + b.east_lon_east) / 2, s: 4 }; this._resize(); }
@@ -752,6 +769,8 @@ export class Atlas {
       g3.setOverlay(this.show.overlay && this.game.s.layer ? this.overlays[this.game.s.layer] : null);
       g3.setIce(this.mode === "mars");
       g3.render(step, this.show.grid);
+      const nd = $("atlasCompass").querySelector(".needle");
+      if (nd) nd.style.transform = `rotate(${-g3.cam.heading}deg)`;
       if (this.show.grid) this._gratLabels3d(step);
     } else {
     ctx.imageSmoothingEnabled = v.s < 40;
@@ -1089,6 +1108,14 @@ export class Atlas {
   // ---- interaccion -------------------------------------------------------------------
   _click(p, shift) {
     const ll = this.unproject(p.x, p.y);
+    if (this.svPick) {
+      if (ll && this.geo.contains(ll.lat, ll.lon)) {
+        this.svPick = false; this._syncStreetUi(); this._hint();
+        const heading = this.on3d ? this.g3.cam.heading : 0;
+        if (this.onStreetView) this.onStreetView(ll, heading);
+      } else $("atlasHint").textContent = t(L("La vista de suelo usa el DTM de 6 m: haz clic dentro de la zona EVA (recuadro azul).", "Street View uses the 6 m DTM: click inside the EVA zone (blue box)."));
+      return;
+    }
     if ((this.measuring || shift) && ll) {
       if (!this.measure || this.measure.b) this.measure = { a: ll, b: null };
       else { this.measure.b = ll; this.profileMode = "measure"; this._profile(); }
@@ -1122,6 +1149,7 @@ export class Atlas {
 
   _hint() {
     const m = this.measure;
+    if (this.svPick) { $("atlasHint").textContent = t(L("Vista de suelo: haz clic en un punto de la zona EVA (recuadro azul)", "Street View: click a point in the EVA zone (blue box)")); return; }
     $("atlasHint").textContent = this.measuring
       ? t(!m || m.b ? L("Regla: haz clic en el punto de inicio", "Ruler: click the start point") : L("Regla: haz clic en el punto final", "Ruler: click the end point"))
       : this.is3d
@@ -1321,7 +1349,7 @@ export class Atlas {
     $("atlas3d").title = t(L("Globo 3D / mapa plano", "3D globe / flat map"));
     $("atlasMode").innerHTML = Object.entries(MODES).map(([k, v]) => `<option value="${k}" ${k === this.mode ? "selected" : ""}>${t(v)}</option>`).join("");
   }
-  applyLang() { this._buildSearch(); if (this.feat) { this._buildSide(); this._legend(); this._info(); this._hint(); this._profile(); this.dirty = true; } }
+  applyLang() { this._syncStreetUi(); this._buildSearch(); if (this.feat) { this._buildSide(); this._legend(); this._info(); this._hint(); this._profile(); this.dirty = true; } }
 
   // ---- perfil de elevacion --------------------------------------------------------------
   _profileData() {

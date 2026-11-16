@@ -148,7 +148,9 @@ button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .btnrow { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
 /* Tarjetas de mision, dato, final y guia: nunca mas altas que la ventana. Si no caben, el contenido se
    desplaza y la fila de botones se queda fija abajo, siempre a la vista. */
-.card.briefing, .card.factcard, .card.endcard, .card.guide { max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px); overflow-y: auto; overscroll-behavior: contain; padding-bottom: 0; }
+.card.briefing, .card.factcard, .card.endcard, .card.guide { max-height: calc(100vh - 48px); overflow-y: auto; overscroll-behavior: contain; padding-bottom: 0; }
+/* dvh = alto real en movil (sin la barra del navegador); sin soporte queda el vh */
+@supports (height: 100dvh) { .card.briefing, .card.factcard, .card.endcard, .card.guide { max-height: calc(100dvh - 48px); } }
 .card.briefing > .btnrow:last-child, .card.factcard > .btnrow:last-child, .card.endcard > .btnrow:last-child, .card.guide > .btnrow:last-child { position: sticky; bottom: 0; z-index: 1; margin-top: 8px; padding: 14px 0 24px; background: linear-gradient(rgba(22, 18, 26, 0), var(--hud-bg-solid) 14px); }
 .card.briefing #briefPlanNote:empty { display: none; }
 .btn { font: 700 17px var(--font-hud); letter-spacing: .05em; text-transform: uppercase; padding: 11px 20px; border-radius: 8px; border: 1px solid var(--hud-border); background: rgba(255,255,255,.06); cursor: pointer; }
@@ -352,7 +354,7 @@ button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
   background: radial-gradient(120% 80% at 50% 30%, rgba(222,160,112,.22), rgba(20,14,16,.6)); border: 1px solid var(--hud-border); }
 #pfAvatar:active { cursor: grabbing; }
 .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
-.sw { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); background: var(--c); cursor: pointer; padding: 0; }
+.sw { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); background: var(--c, transparent); cursor: pointer; padding: 0; }   /* --c: color del muestrario, en linea desde ui/profile.js */
 .sw.clear { background: linear-gradient(135deg, rgba(207,230,255,.55), rgba(207,230,255,.1)); }
 .sw[aria-pressed="true"] { border-color: var(--hud-text); box-shadow: 0 0 0 2px rgba(222,160,112,.7); }
 .sw:focus-visible { outline: 2px solid var(--mars-dust); outline-offset: 2px; }
@@ -370,7 +372,8 @@ button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 
 /* ---- Atlas ------------------------------------------------------------------------ */
 .screen.atlas { padding: 0; place-items: stretch; background: #0b0809; z-index: 20; }
-.atlas-wrap { display: grid; grid-template-columns: 250px minmax(0, 1fr) 340px; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "top top top" "side map info" "side bottom info"; height: 100vh; height: 100dvh; }
+.atlas-wrap { display: grid; grid-template-columns: 250px minmax(0, 1fr) 340px; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "top top top" "side map info" "side bottom info"; height: 100vh; }
+@supports (height: 100dvh) { .atlas-wrap { height: 100dvh; } }
 .atlas-top { grid-area: top; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; padding: 10px 14px; border-bottom: 1px solid var(--hud-border); background: var(--hud-bg-solid); }
 .atlas-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .atlas-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -577,7 +580,7 @@ button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .vol-row span { display: grid; gap: 2px; }
 .vol-row em { font-style: normal; font-size: 12.5px; color: var(--hud-text-dim); line-height: 1.4; }
 .gfx-row { grid-template-columns: minmax(0, 1fr) 28px; }
-.gfx-row input { width: 20px; height: 20px; accent-color: var(--accent, #3DDC97); justify-self: end; }
+.gfx-row input { width: 20px; height: 20px; accent-color: var(--safe); justify-self: end; }
 .vol-row input { accent-color: var(--mars-dust); width: 100%; }
 .vol-row output { font: 600 14px var(--font-hud); text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 600px) { .vol-row { grid-template-columns: 1fr 52px; } .vol-row span { grid-column: 1 / -1; } }
@@ -676,7 +679,8 @@ body.touch .alerts { bottom: auto; top: calc(var(--u) * 34); }
 /* ---- atlas: mapa a pantalla completa, herramientas en una fila y paneles deslizantes -------------------------- */
 @media (max-width: 900px), (max-height: 560px) {
   .screen.atlas { overflow: hidden; }
-  .atlas-wrap { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "top" "map"; height: 100vh; height: 100dvh; min-height: 0; }
+  .atlas-wrap { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "top" "map"; height: 100vh; min-height: 0; }
+  @supports (height: 100dvh) { .atlas-wrap { height: 100dvh; } }
   .atlas-top { flex-wrap: nowrap; padding: 6px max(8px, env(safe-area-inset-right)) 6px max(8px, env(safe-area-inset-left)); gap: 6px; }
   .atlas-title { display: none; }
   .atlas-tools { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; width: 100%; padding: 2px 0; }
@@ -793,3 +797,37 @@ body.touch .minimap .cap > span:last-child { display: none; }
 }
 /* movil estrecho: las acciones de contexto solo con icono (la fila ocupa menos y no alcanza al dialogo) */
 @media (max-width: 760px) { .tc-ctx .tbtn em { display: none; } }
+
+/* ---- exploracion 3D del mapa (ui/explore3d.js): 2D/3D, brujula y vista de suelo ---- */
+.map3d-bar { position: absolute; left: 8px; top: 8px; display: flex; gap: 6px; z-index: 2; }
+.map3d-bar .btn.sm { background: rgba(12,10,14,.82); }
+.map3d-bar .btn[aria-pressed="true"] { background: var(--caution); color: #1a0f0a; }
+.map-compass { position: absolute; right: 10px; top: 10px; z-index: 2; width: 44px; height: 44px; padding: 0; border-radius: 50%; border: 1px solid var(--hud-border); background: rgba(12,10,14,.82); cursor: pointer; display: grid; place-items: center; }
+.map-compass:hover { background: rgba(40,32,36,.92); }
+.map-compass svg { width: 38px; height: 38px; overflow: visible; }
+.map-compass .ring { fill: none; stroke: rgba(255,236,220,.25); stroke-width: 1.5; }
+.map-compass .needle { transform-origin: 20px 20px; transition: transform .08s linear; }
+.map-compass text { font: 700 8px var(--font-hud); fill: #fff; }
+.atlas-map .map-compass { top: 104px; right: 14px; z-index: 2; }
+.screen.sv { padding: 0; display: block; background: transparent; z-index: 30; }
+#svCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; outline: none; }
+#svCanvas:active { cursor: grabbing; }
+.sv-compass { top: 46px; right: max(14px, env(safe-area-inset-right)); width: 52px; height: 52px; }
+.sv-card { position: absolute; left: max(14px, env(safe-area-inset-left)); top: 46px; width: min(330px, calc(100vw - 28px)); background: var(--hud-bg); border: 1px solid var(--hud-border); border-radius: 10px; padding: 12px 14px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: grid; gap: 8px; }
+.sv-card .kv { margin: 0; }
+.sv-card .kv td { padding: 3px 4px; font-size: 13.5px; }
+.sv-card .btn { width: 100%; }
+.sv-hint { position: absolute; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); max-width: calc(100vw - 28px); background: rgba(12,10,14,.78); border-radius: 6px; padding: 6px 10px; color: var(--hud-text-dim); pointer-events: none; text-align: center; }
+/* mientras se mira desde el suelo solo queda la vista: el HUD y el resto de pantallas se ocultan sin cerrarse
+   (siguen abiertas por debajo, asi la simulacion sigue en pausa) */
+body.sv-on #hud, body.sv-on .screen:not(#scrStreet), body.sv-on .ach-toast { visibility: hidden !important; }
+@media (max-width: 760px), (max-height: 560px) {
+  .sv-card { top: auto; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 40px); padding: 8px 10px; gap: 6px; }
+  .sv-card .kv td { font-size: 12.5px; padding: 1px 3px; }
+  .sv-card .eyebrow { display: none; }
+  .sv-hint { font-size: 11.5px; }
+  .map-compass { width: 48px; height: 48px; }
+}
+@media (max-height: 560px) {
+  .sv-card { width: min(300px, 46vw); top: 46px; bottom: auto; max-height: calc(100vh - 60px); overflow: auto; }
+}

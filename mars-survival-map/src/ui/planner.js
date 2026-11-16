@@ -25,8 +25,10 @@ const VERDICT = {
 };
 
 export class Planner {
-  constructor({ game, world, path }) {
-    Object.assign(this, { game, world, path });
+  constructor({ game, world, path, explorer = null }) {
+    Object.assign(this, { game, world, path, explorer });
+    this.is3d = false;        // vista 3D orbital (ui/explore3d.js) en lugar del mapa cenital 2D
+    this.svPick = false;      // "Vista de suelo": el siguiente clic en el mapa baja a ese punto
     this.cv = $("planMap"); this.ctx = this.cv.getContext("2d");
     this.pcv = $("planProfile");
     this.img = new Image(); this.img.src = assetUrl("layers/optical.png");
@@ -50,6 +52,83 @@ export class Planner {
     };
     document.querySelectorAll("#planPick [data-pick]").forEach((b) => { b.onclick = () => { this.pick = b.dataset.pick; this.render(); }; });
     window.addEventListener("resize", () => { if (!$("scrPlan").hidden) this.render(); });
+    $("plan3d").onclick = () => this.set3d(!this.is3d);
+    $("planStreet").onclick = () => { this.svPick = !this.svPick; this._sync3dUi(); this.render(); };
+    $("planCompass").onclick = () => this.explorer && this.explorer.resetNorth();
+    if (!explorer) { $("plan3d").hidden = true; $("planStreet").hidden = true; }
+  }
+
+  // ---- vista 3D y vista de suelo ------------------------------------------------------------------
+  set3d(on) {
+    if (!this.explorer) return;
+    this.is3d = on;
+    if (on) {
+      this._view();
+      const v = this.v;
+      this.explorer.openCard(this.cv, { onClick: (hit, px, py) => this._click3d(hit, px, py) });
+      this.explorer.fit(v.x0 + v.sw / 2, v.z0 + v.sh / 2, Math.min(v.sw, v.sh), 50, 0);
+    } else this.explorer.closeCard();
+    this._sync3dUi();
+    this.render();
+  }
+  _sync3dUi() {
+    $("plan3d").setAttribute("aria-pressed", String(this.is3d));
+    $("plan3d").textContent = this.is3d ? "2D" : "3D";
+    $("plan3d").title = t(this.is3d ? L("Volver a la vista cenital 2D", "Back to the 2D top-down view") : L("Vista 3D inclinable: relieve real del monte Sharp y del cráter Gale", "Tiltable 3D view: real relief of Mount Sharp and Gale crater"));
+    $("planStreet").setAttribute("aria-pressed", String(this.svPick));
+    $("planStreet").title = tc(L("Vista de suelo: haz clic en el mapa para bajar a ese punto a la altura de los ojos (1,75 m)", "Street View: click the map to drop to that point at eye level (1.75 m)"));
+    $("planCompass").hidden = !this.is3d;
+    $("planCompass").title = t(L("Brújula: clic para orientar al norte", "Compass: click to face north"));
+    this.cv.style.cursor = this.svPick ? "cell" : this.is3d ? "grab" : "";
+  }
+  // rutas, marcadores y capa: lo mismo que el mapa 2D, pegado al relieve
+  _sync3d() {
+    const ex = this.explorer, g = this.game, tgt = g.target;
+    const routes = [];
+    const tr = ex.traversePts();
+    if (tr) routes.push({ id: "msl", pts: tr, color: "#f4f1ea", dash: true, minPx: 1.4, street: 0.25, opacity: 0.85 });
+    for (const rt of Object.values(this.routes)) if (rt) routes.push({ id: rt.kind, pts: rt.pts, color: KINDS[rt.kind].color, sel: rt.kind === this.sel, dash: rt.kind !== this.sel });
+    ex.setRoutes(routes);
+    const mk = [];
+    for (const o of Object.values(g.objectives)) mk.push({ kind: o.shelter ? "shelter" : "obj", x: o.world.x, z: o.world.z, label: o.name, color: tgt && o.id === tgt.id ? "#3DDC97" : o.shelter ? "#3DDC97" : "#fff" });
+    if (this.goal) mk.push({ kind: "goal", x: this.goal[0], z: this.goal[1], label: this.free ? L("Destino", "Destination") : null, color: "#3DDC97" });
+    this.waypoints.forEach(([x, z], i) => mk.push({ kind: "way", x, z, n: i + 1, color: "#FFC23D" }));
+    mk.push({ kind: "start", x: this.start[0], z: this.start[1], label: L("Tú", "You"), color: "#7FD1FF" });
+    ex.setMarkers(mk);
+    ex.setLayer(this.layer);
+  }
+  // punto de una ruta cercano al clic (en pixeles): la vista de suelo se puede pedir sobre una ruta planificada
+  _snapRoute(px, py, toPx) {
+    let best = null, bd = 14;
+    const order = Object.values(this.routes).filter(Boolean).sort((a, b) => (b.kind === this.sel) - (a.kind === this.sel));
+    for (const rt of order) for (const [x, z] of rt.pts) {
+      const p = toPx(x, z);
+      if (!p) continue;
+      const d = Math.hypot(p[0] - px, p[1] - py);
+      if (d < bd) { bd = d; best = [x, z]; }
+    }
+    return best;
+  }
+  _street(x, z) {
+    const ex = this.explorer;
+    this.svPick = false; this._sync3dUi();
+    // mirar hacia el destino (o a lo largo de la ruta) al llegar al suelo
+    const G = this.goal;
+    const yaw = G && Math.hypot(G[0] - x, G[1] - z) > 20 ? (Math.atan2(G[0] - x, -(G[1] - z)) / Math.PI) * 180 : this.is3d ? ex.orbit.bearing : 0;
+    if (!this.is3d) this._view();
+    this._sync3d();
+    ex.enterStreet(x, z, { from: "planner", yaw, startAlt: this.is3d ? undefined : Math.min(4000, this.v.sh * 0.6), onExit: () => this.render() });
+  }
+  _click3d(hit, px, py) {
+    if (!hit || !hit.inside) { $("planHint").textContent = t(L("Elige un punto dentro de la zona EVA (6,1 km).", "Pick a point inside the EVA zone (6.1 km).")); return; }
+    if (this.svPick) {
+      const ex = this.explorer, r = this.cv.getBoundingClientRect();
+      const snap = this._snapRoute(px, py, (x, z) => { const p = ex.project(x, ex.ground(x, z), z, r.width, r.height); return p && [p.x, p.y]; });
+      const [x, z] = snap || [hit.x, hit.z];
+      this._street(x, z);
+      return;
+    }
+    this._point(hit.x, hit.z);
   }
 
   // free = modo libre: no hay destino fijo; el clic en el mapa define el destino, la salida o un punto de paso
@@ -70,9 +149,21 @@ export class Planner {
       .map(([k, n]) => `<option value="${k}" ${k === this.layer ? "selected" : ""}>${t(n)}</option>`).join("");
     $("scrPlan").hidden = false;
     this._compute();
+    this.svPick = false;
+    if (this.is3d && this.explorer) {
+      this._view();
+      const v = this.v;
+      this.explorer.openCard(this.cv, { onClick: (hit, px, py) => this._click3d(hit, px, py) });
+      this.explorer.fit(v.x0 + v.sw / 2, v.z0 + v.sh / 2, Math.min(v.sw, v.sh), 50, 0);
+    }
+    if (this.explorer) this._sync3dUi();
     this.render();
   }
-  close() { $("scrPlan").hidden = true; this.onClose && this.onClose(); }
+  close() {
+    if (this.explorer) this.explorer.closeCard();
+    this.svPick = false;
+    $("scrPlan").hidden = true; this.onClose && this.onClose();
+  }
 
   _astar(pts) {
     const out = [];
@@ -147,6 +238,7 @@ export class Planner {
   toWorld(px, py) { const v = this.v; return [v.x0 + (px / v.W) * v.sw, v.z0 + (py / v.H) * v.sh]; }
 
   draw() {
+    if (this.is3d && this.explorer) { this._view(); this._sync3d(); return; }
     const cv = this.cv, ctx = this.ctx, dpr = Math.min(2, devicePixelRatio || 1);
     const r = cv.getBoundingClientRect();
     cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
@@ -200,7 +292,7 @@ export class Planner {
     ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(v.W - px - 28, v.H - 34, px + 18, 26);
     ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(v.W - px - 18, v.H - 14); ctx.lineTo(v.W - 18, v.H - 14); ctx.stroke();
     ctx.fillStyle = "#fff"; ctx.font = "600 12px Rajdhani, sans-serif"; ctx.fillText(fmtDist(len, getLang()), v.W - px - 18, v.H - 18);
-    ctx.fillText("N ▲", 10, 20);
+    ctx.fillText("N ▲", 10, 60);          // (debajo de los botones 3D / vista de suelo)
   }
   _label(text, x, y, color) {
     const ctx = this.ctx;
@@ -208,9 +300,15 @@ export class Planner {
     ctx.fillStyle = color; ctx.fillText(text, x, y);
   }
   _click(e) {
-    const r = this.cv.getBoundingClientRect(), [x, z] = this.toWorld(e.clientX - r.left, e.clientY - r.top);
+    if (this.is3d) return;                     // en 3D el clic lo resuelve el visor (rayo contra el relieve)
+    const r = this.cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top, [x, z] = this.toWorld(px, py);
     const h = this.world.half - 12;
     if (Math.abs(x) > h || Math.abs(z) > h) return;
+    if (this.svPick) { const snap = this._snapRoute(px, py, (a, b) => this.toPx(a, b)); this._street(...(snap || [x, z])); return; }
+    this._point(x, z);
+  }
+  // un punto elegido en el mapa (2D o 3D): destino, salida o punto de paso
+  _point(x, z) {
     if (this.world.blockedAt(x, z)) { $("planHint").textContent = t(L("Ese punto está en una pendiente de más de 25°: elige otro.", "That point is on a slope over 25°: pick another.")); return; }
     if (this.free && (this.pick === "goal" || !this.goal)) {
       // destino nuevo: se recalculan todas las rutas y los siguientes clics son puntos de paso
@@ -227,6 +325,15 @@ export class Planner {
     this.render();
   }
 
+  // ayuda de la vista 3D y del modo "Vista de suelo" (se anade a la del mapa)
+  _hint3d() {
+    const el = $("planHint");
+    if (this.svPick) { el.textContent = tc(L("Vista de suelo: clic en el mapa o sobre una ruta para bajar a ese punto · vuelve a pulsar el botón para cancelar", "Street View: click the map or a route to drop to that point · press the button again to cancel")); return; }
+    if (this.is3d) el.textContent += " · " + t(TOUCH
+      ? L("arrastra = mover · dos dedos: pellizca, gira e inclina", "drag = move · two fingers: pinch, rotate and tilt")
+      : L("arrastra = mover · botón derecho o Ctrl+arrastrar = girar e inclinar · rueda = zoom", "drag = move · right button or Ctrl+drag = rotate and tilt · wheel = zoom"));
+  }
+
   // ---- panel lateral ------------------------------------------------------------------
   // Tormenta pronosticada frente al tiempo de la ruta (segundos reales, los mismos que mide la estimacion)
   _storm(e) {
@@ -239,6 +346,7 @@ export class Planner {
   render() {
     const lang = getLang();
     $("planHint").textContent = tc(L("Clic en el mapa = punto de paso para «Tu ruta» · las estimaciones usan tu perfil físico y tu carga", "Click the map = waypoint for “Your route” · estimates use your physical profile and load"));
+    this._hint3d();
     if (this.free) {
       document.querySelectorAll("#planPick [data-pick]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.pick === this.pick)));
       $("planHint").textContent = tc({
@@ -246,6 +354,7 @@ export class Planner {
         start: L("Clic en el mapa = punto de salida: el astronauta se coloca ahí al aplicar", "Click the map = start point: the astronaut is placed there when you apply"),
         way: L("Clic en el mapa = punto de paso para «Tu ruta» · las estimaciones usan tu perfil físico y tu carga", "Click the map = waypoint for “Your route” · estimates use your physical profile and load"),
       }[this.pick]);
+      this._hint3d();
     }
     if (!this.goal || !this.routes[this.sel]) {
       // modo libre sin destino (o sin ninguna ruta posible): solo el mapa y las instrucciones

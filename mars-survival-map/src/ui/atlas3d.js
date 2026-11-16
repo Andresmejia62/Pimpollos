@@ -383,12 +383,14 @@ export class Globe3D {
   unproject(x, y, elevFn) {
     const o = this.camera.position;
     const d = this._v2.set((x / this.W) * 2 - 1, -((y / this.H) * 2 - 1), 0.5).unproject(this.camera).sub(o).normalize();
-    let r = 1, hit = null;
-    for (let it = 0; it < 3; it++) {
+    // se parte de la elevacion del foco: en el fondo de Gale (~4 km bajo el datum) una camara baja queda dentro
+    // de la esfera de radio 1 y el rayo no la cortaria por fuera
+    let r = elevFn ? 1 + (elevFn(this.cam.lat, this.cam.lon) * this.k) / R_MARS : 1, hit = null;
+    for (let it = 0; it < 4; it++) {
       const b = o.dot(d), c = o.lengthSq() - r * r, disc = b * b - c;
       if (disc < 0) return hit;
       const tt = -b - Math.sqrt(disc);
-      if (tt < 0) return hit;
+      if (tt < 0 || c < 0) return hit;
       const pnt = this._v.copy(o).addScaledVector(d, tt);
       hit = dirToLL(pnt);
       if (!elevFn) break;

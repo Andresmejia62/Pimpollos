@@ -112,6 +112,10 @@ const UI = {
   atlasProfBtn: { es: "Perfil", en: "Profile" },
   tabMars: { es: "Marte ahora", en: "Mars right now" },
   restartMission: { es: "Reiniciar misión", en: "Restart mission" },
+  map3d: { es: "3D", en: "3D" },
+  streetView: { es: "Vista de suelo", en: "Street View" },
+  svEyebrow: { es: "Vista de suelo · telemetría del punto", en: "Street View · point telemetry" },
+  svBack: { es: "Volver al mapa aéreo (Esc)", en: "Back to aerial map (Esc)" },
   confirmRestart: { es: "¿Reiniciar desde el inicio de esta misión? Perderás el avance desde el último briefing.", en: "Restart from the start of this mission? You will lose progress since the last briefing." },
 };
 export const ui = (key) => {

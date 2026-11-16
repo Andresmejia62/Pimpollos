@@ -31,6 +31,7 @@ import { loadProfile } from "./engine/physiology.js";
 import { LoadingScreen, PauseMenu } from "./ui/screens.js";
 import { SkyPlanets } from "./engine/planets.js";
 import { Planner } from "./ui/planner.js";
+import { Explorer3D } from "./ui/explore3d.js";
 import { SimPanel } from "./ui/sim.js";
 import { Companion } from "./gameplay/companion.js";
 import { IntroCinematic } from "./ui/intro.js";
@@ -126,7 +127,15 @@ async function boot() {
     const b = e.target.closest && e.target.closest(".btn, .pr-card, .pause-tabs button");
     if (b && performance.now() - lastHover > 60) { lastHover = performance.now(); sfx.hover(); }
   }, true);
-  const planner = new Planner({ game, world, path });
+  // exploracion 3D del mapa (orbital y vista de suelo) con el renderer, las mallas y las capas que ya usa el juego
+  const explorer = new Explorer3D({ scene, world, game, geo, data, hide: [astro.root, buddyAstro.root] });
+  const planner = new Planner({ game, world, path, explorer });
+  // atlas -> vista de suelo en un punto de la zona EVA; al volver, se ve otra vez el atlas
+  atlas.onStreetView = (ll, heading) => {
+    const p = geo.toWorld(ll.lat, ll.lon);
+    explorer.defaultContent();
+    explorer.enterStreet(p.x, p.z, { from: "atlas", yaw: heading || 0, startAlt: 2600, onExit: () => { atlas.dirty = true; } });
+  };
   // clima espacial: se carga en segundo plano (DONKI en vivo -> copia guardada -> evento de referencia)
   let sw = { level: "reference", flares: [], seps: [], marsHits: [], upcoming: [], source: "reference" };
   loadSpaceWeather(assetUrl).then((r) => { sw = r; pause.sw = r; if (game.s.phase === "briefing") showBriefing(); });
@@ -235,7 +244,7 @@ async function boot() {
   const veinBeacons = { list: [], key: null };
 
   // ---- idioma y pantallas ----------------------------------------------------------
-  const toggleLang = () => { setLang(getLang() === "es" ? "en" : "es"); hud.applyLang(); atlas.applyLang(); if (touch) touch.applyLang(); skyCaption(); if (game.s.phase === "briefing") showBriefing(); if (game.s.free) sim.render(); };
+  const toggleLang = () => { setLang(getLang() === "es" ? "en" : "es"); hud.applyLang(); atlas.applyLang(); explorer.applyLang(); if (touch) touch.applyLang(); skyCaption(); if (game.s.phase === "briefing") showBriefing(); if (game.s.free) sim.render(); };
   hud.applyLang();
   skyCaption();
   // la carga se desvanece sobre la portada
@@ -916,7 +925,10 @@ async function boot() {
     // la escena del juego no se dibuja mientras la tapa algo opaco: la parte espacial de la cinematica (tiene su
     // propio renderer) o el atlas. Asi la GPU no hace dos imagenes completas por fotograma.
     const covered = (intro.active && !intro.groundActive && !intro.cardShown) || atlas.isOpen;
-    if (!covered) scene.render(now, dt);
+    // vista 3D del mapa: la tarjeta del planificador se dibuja antes (el juego repinta encima en este mismo
+    // fotograma); la vista de suelo ocupa la pantalla y sustituye al fotograma del juego
+    explorer.frame(now);
+    if (!covered && !explorer.fullscreen) scene.render(now, dt);
     if (DEBUG) {
       frames++; fpsT += dt;
       if (fpsT > 0.5) { $("fps").textContent = `${Math.round(frames / fpsT)} fps · x ${s.x.toFixed(0)} z ${s.z.toFixed(0)}`; frames = 0; fpsT = 0; }
@@ -924,7 +936,7 @@ async function boot() {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  window.__msm = { game, scene, world, path, controls, atlas, geo, car, astro, buddyAstro, sky, buddy, planner, intro, sim, soundscape, dust, weather, windfx, ach, interiors: INTERIORS, touch, touchActive }; // para depurar desde la consola
+  window.__msm = { explorer, game, scene, world, path, controls, atlas, geo, car, astro, buddyAstro, sky, buddy, planner, intro, sim, soundscape, dust, weather, windfx, ach, interiors: INTERIORS, touch, touchActive }; // para depurar desde la consola
 }
 
 boot().catch((e) => {
